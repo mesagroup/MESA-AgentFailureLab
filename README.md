@@ -91,18 +91,18 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 - repeated_tool_call → Reasoning / (none)
 - timeout → Execution / controlled_retry
 
-> **Colonna Grok — segnaposto.** Non è un risultato. Si riempie eseguendo `pnpm eval` con `XAI_API_KEY` impostata.
+> **Colonna Grok — live** (`grok-3`), una passata. Errori nel denominatore: 0.
 
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
-| Accuratezza di categoria | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step esatto | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step entro ±1 | 10/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Hit del fix proposto | 4/7 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Fix non applicabile | 12 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Latenza media (ms) | 0.032 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Token in/out | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Costo USD | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Accuratezza di categoria | 4/19 | 5/19 |
+| Step esatto | 4/19 | 5/19 |
+| Step entro ±1 | 10/19 | 13/19 |
+| Hit del fix proposto | 4/7 | 7/7 |
+| Fix non applicabile | 12 | 12 |
+| Latenza media (ms) | 0.042 | 9852.200 |
+| Token in/out | n/a | 19746/1339 |
+| Costo USD | n/a | 0.045721 |
 <!-- eval-scoreboard:end -->
 
 ## Limiti noti
@@ -112,7 +112,7 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 - Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
 - L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
 - Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.
-- Senza `XAI_API_KEY` il costo di Grok è n/a. La baseline solo-regole non riporta token né costo.
+- Costo Grok riportato dal provider: 0.045721 USD (totale), token in/out 19746/1339. La baseline solo-regole non riporta token né costo.
 <!-- eval-limits:end -->
 
 Copy an app's `.env.example` to `.env` only when you need overrides. Do not commit `.env` or a Grok API key. `XAI_API_KEY` in `apps/agentservice/.env.example` is an empty placeholder.
