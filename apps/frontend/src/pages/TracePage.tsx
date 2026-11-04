@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getTrace } from "@/lib/api";
-import type { Trace, TraceStep, FaultLabel, FixKind } from "@mesa/shared";
+import { ApiError, createRun, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
+import {
+  FIX_KIND_LABELS,
+  afterFixRunBody,
+  childRunsOf,
+  firstTraceId,
+  formatCostUsd,
+  selectableFixKinds,
+  toggleFixKind,
+  type HarnessTaskResult,
+} from "@/lib/after-fix";
+import { isWorldBusy } from "@/lib/jury";
+import { adrFixForCategory, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
+import { AfterFixPanel } from "@/pages/AfterFixPanel";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -14,8 +26,7 @@ function fmt(iso: string) {
 }
 
 function fmtCost(usd: number) {
-  if (usd === 0) return "$0";
-  return usd < 0.001 ? `$${(usd * 1000).toFixed(2)}m` : `$${usd.toFixed(4)}`;
+  return formatCostUsd(usd);
 }
 
 function StatusBadge({ status }: { status: Trace["status"] }) {
@@ -41,14 +52,9 @@ function FaultCategoryBadge({ category }: { category: string }) {
 }
 
 function FixBadge({ fix }: { fix: FixKind }) {
-  const labels: Record<FixKind, string> = {
-    controlled_retry: "controlled retry",
-    pre_response_check: "pre-response check",
-    permission_guard: "permission guard",
-  };
   return (
     <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
-      {labels[fix]}
+      {FIX_KIND_LABELS[fix]}
     </span>
   );
 }
@@ -200,27 +206,114 @@ function TraceSkeleton() {
 
 export function TracePage() {
   const { traceId } = useParams<{ traceId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [trace, setTrace] = useState<Trace | null>(null);
+  const [snapshot, setSnapshot] = useState<HarnessSnapshot | null>(null);
+  const [extraTraces, setExtraTraces] = useState<Trace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFixes, setSelectedFixes] = useState<FixKind[]>([]);
+  const [replayPending, setReplayPending] = useState(false);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const [replayBusy, setReplayBusy] = useState(false);
+  const [cleanTreated, setCleanTreated] = useState(false);
+  const [replayPair, setReplayPair] = useState<HarnessTaskResult | null>(null);
+  const afterParam = searchParams.get("after");
+
+  async function load(id: string, silent = false) {
+    if (!silent) {
+      setLoading(true);
+      setReplayPair(null);
+    }
+    setError(null);
+    try {
+      const [nextTrace, nextSnapshot] = await Promise.all([getTrace(id), getHarnessSnapshot().catch(() => null)]);
+      const merged = await mergeRunSnapshot(nextTrace, nextSnapshot);
+      setTrace(nextTrace);
+      setSnapshot(merged.snapshot);
+      setExtraTraces(merged.traces);
+      if (!silent) setSelectedFixes(selectableFixKinds(nextTrace.diagnosis?.proposed_fixes));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load trace");
+      setTrace(null);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!traceId) { setLoading(false); return; }
-    setLoading(true);
-    setError(null);
-    getTrace(traceId)
-      .then(setTrace)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load trace"))
-      .finally(() => setLoading(false));
+    void load(traceId);
   }, [traceId]);
+
+  const runs = snapshot?.runs ?? [];
+  const proposed = selectableFixKinds(trace?.diagnosis?.proposed_fixes);
+  const currentRun = trace ? runs.find((item) => item.run_id === trace.run_id) ?? null : null;
+  const parentRunId = currentRun?.parent_run_id ?? (currentRun && currentRun.phase !== "after_fix" ? currentRun.run_id : null);
+  const parentRun = parentRunId ? runs.find((item) => item.run_id === parentRunId) ?? currentRun : currentRun;
+  const lineageParentId = currentRun?.phase === "after_fix"
+    ? (currentRun.parent_run_id ?? parentRunId)
+    : (currentRun?.run_id ?? trace?.run_id ?? null);
+  const linkForCurrent = snapshot?.trace_links.find((item) => item.run_id === currentRun?.run_id);
+  const linkForParent = snapshot?.trace_links.find((item) => item.run_id === lineageParentId);
+  const childIds = (currentRun?.phase === "after_fix" ? linkForParent?.child_run_ids : linkForCurrent?.child_run_ids) ?? [];
+  const childRuns = childIds.length
+    ? childIds.map((id) => runs.find((item) => item.run_id === id)).filter((item): item is Run => Boolean(item))
+    : (lineageParentId ? childRunsOf(runs, lineageParentId) : []);
+  const afterChild = afterParam
+    ? childRuns.find((item) => item.trace_ids.includes(afterParam) || item.run_id === afterParam)
+    : undefined;
+  const preferredChild = replayPair?.run
+    ?? afterChild
+    ?? (currentRun?.phase === "after_fix" ? currentRun : childRuns[0] ?? null);
+  const parentTraceView = replayPair?.parent?.trace
+    ? { trace_id: replayPair.parent.trace.trace_id, outcome: replayPair.parent.trace.outcome, totals: replayPair.parent.trace.totals }
+    : parentTraceFrom(trace, parentRun, snapshot, extraTraces);
+  const childTraceView = replayPair?.trace
+    ? { trace_id: replayPair.trace.trace_id, outcome: replayPair.trace.outcome, totals: replayPair.trace.totals }
+    : childTraceFrom(trace, preferredChild, snapshot, afterParam, extraTraces);
+
+  async function replayAfterFix() {
+    if (!trace) return;
+    const parentId = currentRun?.phase === "after_fix"
+      ? (currentRun.parent_run_id ?? trace.run_id)
+      : (currentRun?.run_id ?? trace.run_id);
+    const built = afterFixRunBody({
+      agentId: trace.agent_id,
+      parentRunId: parentId,
+      fixKinds: selectedFixes,
+      cleanTreated,
+    });
+    if (!built.ok) {
+      setReplayError(built.message);
+      setReplayBusy(false);
+      return;
+    }
+    setReplayPending(true);
+    setReplayError(null);
+    setReplayBusy(false);
+    try {
+      const results = await createRun(built.body);
+      const child = results[0] ?? null;
+      setReplayPair(child);
+      const afterId = child?.trace?.trace_id ?? firstTraceId(child?.run ?? null);
+      if (afterId) setSearchParams({ after: afterId });
+      await load(trace.trace_id, true);
+    } catch (e) {
+      setReplayBusy(isWorldBusy(e, e instanceof ApiError ? e.code : null));
+      setReplayError(e instanceof Error ? e.message : "Replay failed.");
+    } finally {
+      setReplayPending(false);
+    }
+  }
 
   if (!traceId) {
     return (
       <div className="px-5 pb-8 max-w-6xl mx-auto pt-2">
         <h1 className="text-xl font-semibold">Traces</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Ispeziona traccia — open a run to inspect its stored trace.
+          Open a run to inspect its stored trace.
         </p>
       </div>
     );
@@ -394,6 +487,25 @@ export function TracePage() {
 
         </div>
       </div>
+
+      <AfterFixPanel
+        proposed={proposed}
+        selected={selectedFixes}
+        suggested={trace.diagnosis ? adrFixForCategory(trace.diagnosis.category) : undefined}
+        onToggle={(kind) => setSelectedFixes((current) => toggleFixKind(current, kind))}
+        onReplay={() => void replayAfterFix()}
+        pending={replayPending}
+        error={replayError}
+        worldBusy={replayBusy}
+        cleanTreated={cleanTreated}
+        onCleanTreated={setCleanTreated}
+        parentRun={replayPair?.parent?.run ?? parentRun}
+        parentTrace={parentTraceView}
+        childRun={preferredChild}
+        childTrace={childTraceView}
+        childRuns={childRuns}
+        resultLinks={replayPair?.links ?? null}
+      />
     </div>
   );
 }
@@ -405,4 +517,96 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-sm font-mono font-medium mt-0.5">{value}</p>
     </div>
   );
+}
+
+function linkedTrace(snapshot: HarnessSnapshot | null, run: Run | null, extras: Trace[]) {
+  if (run) {
+    const extra = extras.find((item) => item.run_id === run.run_id);
+    if (extra) return { trace_id: extra.trace_id, outcome: extra.outcome, totals: extra.totals };
+  }
+  if (!snapshot || !run) return null;
+  const link = snapshot.trace_links.find((item) => item.run_id === run.run_id);
+  const row = link?.traces[0];
+  if (row) return { trace_id: row.trace_id, outcome: row.outcome, totals: row.totals };
+  return null;
+}
+
+function parentTraceFrom(
+  trace: Trace | null,
+  parentRun: Run | null,
+  snapshot: HarnessSnapshot | null,
+  extras: Trace[],
+) {
+  if (trace && parentRun && trace.run_id === parentRun.run_id) {
+    return { trace_id: trace.trace_id, outcome: trace.outcome, totals: trace.totals };
+  }
+  return linkedTrace(snapshot, parentRun, extras);
+}
+
+function childTraceFrom(
+  trace: Trace | null,
+  childRun: Run | null,
+  snapshot: HarnessSnapshot | null,
+  afterParam: string | null,
+  extras: Trace[],
+) {
+  if (trace && (trace.trace_id === afterParam || (childRun && trace.run_id === childRun.run_id))) {
+    return { trace_id: trace.trace_id, outcome: trace.outcome, totals: trace.totals };
+  }
+  if (afterParam) {
+    const extra = extras.find((item) => item.trace_id === afterParam);
+    if (extra) return { trace_id: extra.trace_id, outcome: extra.outcome, totals: extra.totals };
+  }
+  return linkedTrace(snapshot, childRun, extras);
+}
+
+async function mergeRunSnapshot(
+  trace: Trace,
+  snapshot: HarnessSnapshot | null,
+): Promise<{ snapshot: HarnessSnapshot | null; traces: Trace[] }> {
+  const runs = [...(snapshot?.runs ?? [])];
+  async function addRun(id: string | null | undefined) {
+    if (!id || runs.some((item) => item.run_id === id)) return;
+    try {
+      runs.push(await getRun(id));
+    } catch {
+      // The run is not in this harness session.
+    }
+  }
+  await addRun(trace.run_id);
+  const current = runs.find((item) => item.run_id === trace.run_id);
+  await addRun(current?.parent_run_id);
+  const extras: Trace[] = [];
+  const needed = new Set<string>();
+  for (const run of runs) {
+    const first = firstTraceId(run);
+    if (first && first !== trace.trace_id) needed.add(first);
+  }
+  await Promise.all(
+    [...needed].map(async (id) => {
+      try {
+        extras.push(await getTrace(id));
+      } catch {
+        // Linked trace is missing from the store.
+      }
+    }),
+  );
+  if (!snapshot && runs.length === 0) return { snapshot: null, traces: extras };
+  return {
+    snapshot: {
+      runs,
+      trace_links: snapshot?.trace_links ?? [],
+      counts: snapshot?.counts ?? {
+        scope: "harness_session",
+        agents: 0,
+        runs: runs.length,
+        queued: 0,
+        running: 0,
+        passed: 0,
+        failed: 0,
+        error: 0,
+      },
+    },
+    traces: extras,
+  };
 }

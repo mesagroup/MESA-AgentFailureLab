@@ -3,6 +3,7 @@ import type {
   AgentInstanceKind,
   AgentTask,
   FixKind,
+  InjectionPlan,
   OtelSourceConfig,
   Run,
   RunPhase,
@@ -10,6 +11,7 @@ import type {
   TraceOutcome,
   TraceTotals,
 } from "@mesa/shared";
+import { parseCreateRunResults, type HarnessTaskResult } from "./after-fix";
 import { isJuryReport, type JuryCaseDescription, type JuryCaseReport, type JuryRequestBody } from "./jury";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
@@ -153,6 +155,11 @@ export interface RunParams {
   task_ids?: string[];
   fix_kinds?: FixKind[];
   parent_run_id?: string | null;
+  /**
+   * Omit on after_fix to copy the parent injection_plan.
+   * `null` is a clean treated control.
+   */
+  injection?: InjectionPlan | "preset" | null;
 }
 
 /** One stored trace as `GET /runs` embeds it. Not a full Trace document. */
@@ -171,6 +178,10 @@ export interface RunTraceLink {
   first_trace_id: string | null;
   /** Stored traces in `trace_ids` order. A missing id is omitted. */
   traces: HarnessLinkedTrace[];
+  /** Same as `runs[i].parent_run_id`. Null when this run is not an after_fix replay. */
+  parent_run_id: string | null;
+  /** Later after_fix runs in this snapshot whose `parent_run_id` is this run. */
+  child_run_ids: string[];
 }
 
 /** In-session tallies. `scope` is always `harness_session`, not a 90-day series. */
@@ -206,20 +217,28 @@ export async function listRuns(): Promise<Run[]> {
 }
 
 export async function getRun(id: string): Promise<Run> {
-  return backendFetch<Run>(`/runs/${id}`);
+  return backendFetch<Run>(`/runs/${encodeURIComponent(id)}`);
 }
 
-export async function createRun(params: RunParams): Promise<Run[]> {
+/**
+ * `POST /runs`. Each result is `{ run, trace, parent, links }`.
+ * after_fix: `{ agent_id, phase: "after_fix", parent_run_id, fix_kinds }`.
+ * Omit `injection` to replay the parent fault. Verdict is `outcome.verifier`.
+ */
+export async function createRun(params: RunParams): Promise<HarnessTaskResult[]> {
   const body: Record<string, unknown> = { agent_id: params.agent_id, phase: params.phase };
   if (params.task_ids?.length) body.task_ids = params.task_ids;
   if (params.fix_kinds?.length) body.fix_kinds = params.fix_kinds;
   if (params.parent_run_id !== undefined) body.parent_run_id = params.parent_run_id;
-  const data = await backendFetch<{ results: Run[] }>("/runs", {
+  if (params.injection !== undefined) body.injection = params.injection;
+  const data = await backendFetch<unknown>("/runs", {
     method: "POST",
     body: JSON.stringify(body),
   });
-  return data.results;
+  return parseCreateRunResults(data);
 }
+
+export type { HarnessTaskResult };
 
 // --- Traces ---
 
@@ -229,7 +248,7 @@ export async function listTraces(): Promise<Trace[]> {
 }
 
 export async function getTrace(id: string): Promise<Trace> {
-  return backendFetch<Trace>(`/traces/${id}`);
+  return backendFetch<Trace>(`/traces/${encodeURIComponent(id)}`);
 }
 
 /** Case description. Does not start a run. `structured` feeds the form. */

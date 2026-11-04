@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
+import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 
 function PhaseBadge({ phase }: { phase: RunPhase }) {
@@ -180,10 +181,11 @@ export function RunsPage() {
                         key={run.run_id}
                         onClick={() => handleRunClick(run)}
                         className={cn(
-                          "flex items-center gap-4 pl-9 pr-5 py-3 border-b border-border/15 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer",
+                          "pl-9 pr-5 py-3 border-b border-border/15 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer",
                           run.run_id === runId && "bg-muted/40",
                         )}
                       >
+                      <div className="flex items-center gap-4">
                         <StatusDot status={run.status} />
                         <span className="font-mono text-xs text-muted-foreground/50 w-28 shrink-0 truncate">
                           {run.run_id.slice(0, 12)}…
@@ -205,6 +207,8 @@ export function RunsPage() {
                           {run.duration_ms != null ? `${(run.duration_ms / 1000).toFixed(2)}s` : "—"}
                         </span>
                       </div>
+                      <RunLineage run={run} peers={agentRuns} />
+                      </div>
                     ))}
                   </div>
                 )}
@@ -213,6 +217,59 @@ export function RunsPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
+  const parentTo = runHref(run.parent_run_id);
+  const parentPeer = peers.find((item) => item.run_id === run.parent_run_id);
+  const parentTraceTo = traceHref(firstTraceId(parentPeer));
+  const children = childRunsOf(peers, run.run_id);
+  if (!parentTo && children.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1.5 pl-6 text-xs text-muted-foreground">
+      {parentTo && (
+        <Link
+          to={parentTo}
+          onClick={(event) => event.stopPropagation()}
+          className="hover:text-foreground underline-offset-2 hover:underline font-mono"
+        >
+          parent {run.parent_run_id}
+        </Link>
+      )}
+      {parentTraceTo && (
+        <Link
+          to={parentTraceTo}
+          onClick={(event) => event.stopPropagation()}
+          className="hover:text-foreground underline-offset-2 hover:underline"
+        >
+          parent trace
+        </Link>
+      )}
+      {children.map((child) => {
+        const href = runHref(child.run_id);
+        const tHref = traceHref(firstTraceId(child));
+        return (
+          <span key={child.run_id} className="font-mono">
+            {href ? (
+              <Link to={href} onClick={(event) => event.stopPropagation()} className="hover:text-foreground underline-offset-2 hover:underline">
+                child {child.run_id.slice(0, 12)}…
+              </Link>
+            ) : (
+              `child ${child.run_id}`
+            )}
+            {tHref && (
+              <>
+                {" "}
+                <Link to={tHref} onClick={(event) => event.stopPropagation()} className="hover:text-foreground underline-offset-2 hover:underline">
+                  trace
+                </Link>
+              </>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
