@@ -1,4 +1,5 @@
-import type { AgentTaskCheck, TraceOutcome, VerifierCheck } from "@mesa/shared";
+import type { AgentTaskCheck, CheckType, TraceOutcome, VerifierCheck } from "@mesa/shared";
+import { isCheckType } from "@mesa/shared";
 import type { ShopObservation, ShopOrder, ShopSnapshot } from "../mock/snapshot.js";
 import { formatUsd, lineTotalUsd, readParamNumber, readParamString, usdEqual } from "../util.js";
 
@@ -178,28 +179,23 @@ function cancelRespectsPermission(snapshot: ShopSnapshot, input: VerifyInput): V
   );
 }
 
+/** One runner per registered check type. The task document names which ones run. */
+const CHECK_RUNNERS: Record<CheckType, (check: AgentTaskCheck, input: VerifyInput) => VerifierCheck> = {
+  catalog_read: (check, input) => catalogRead(input.snapshot, input.sessionId, check.params),
+  product_viewed: (check, input) => productViewed(input.snapshot, input.sessionId, check.params),
+  cart_contains: (check, input) => cartContains(input.snapshot, input.sessionId, check.params),
+  cart_empty: (_check, input) => cartEmpty(input.snapshot, input.sessionId),
+  order_created: (_check, input) => orderCreated(input.snapshot, input.sessionId),
+  order_total_matches: (_check, input) => orderTotalMatches(input.snapshot, input.sessionId),
+  order_status_read: (_check, input) => orderStatusRead(input.snapshot, input.sessionId, input),
+  cancel_respects_permission: (_check, input) => cancelRespectsPermission(input.snapshot, input),
+};
+
 function runCheck(check: AgentTaskCheck, input: VerifyInput): VerifierCheck {
-  const { snapshot, sessionId } = input;
-  switch (check.name) {
-    case "catalog_read":
-      return catalogRead(snapshot, sessionId, check.params);
-    case "product_viewed":
-      return productViewed(snapshot, sessionId, check.params);
-    case "cart_contains":
-      return cartContains(snapshot, sessionId, check.params);
-    case "cart_empty":
-      return cartEmpty(snapshot, sessionId);
-    case "order_created":
-      return orderCreated(snapshot, sessionId);
-    case "order_total_matches":
-      return orderTotalMatches(snapshot, sessionId);
-    case "order_status_read":
-      return orderStatusRead(snapshot, sessionId, input);
-    case "cancel_respects_permission":
-      return cancelRespectsPermission(snapshot, input);
-    default:
-      return checkResult(check.name, false, `Unknown check "${check.name}".`);
+  if (!isCheckType(check.name)) {
+    return checkResult(check.name, false, `Unknown check "${check.name}".`);
   }
+  return CHECK_RUNNERS[check.name](check, input);
 }
 
 /** Only this function writes `outcome.verifier`. It does not read assistant prose or `fault.labels`. */

@@ -14,12 +14,17 @@ import { createHarnessReplayPort, presetCategory, scoreScriptedBaseline } from "
 
 describe("harness replay", () => {
   it("uses the same base plan as the backend scripted driver", () => {
+    const agent = loadReferenceAgent();
     for (const taskId of LAB_TASK_IDS) {
-      const permissions = permissionsFor(taskId, true);
-      const orderId = taskId === "T4" || taskId === "T5" ? "ord_0001" : undefined;
-      assert.deepEqual(basePlan(taskId, { permissions, orderId }), scriptedActions(taskId, { permissions, orderId }));
+      const task = agent.tasks.find((entry) => entry.task_id === taskId);
+      assert.ok(task, taskId);
+      const permissions = permissionsFor(task, true);
+      const orderId = task.setup.orders.length > 0 ? "ord_0001" : undefined;
+      assert.deepEqual(basePlan(taskId, { permissions, orderId }), scriptedActions(task, { permissions, orderId }));
     }
-    assert.deepEqual(basePlan("T5", { permissions: permissionsFor("T5", false), orderId: "ord_0001" }), []);
+    const t5 = agent.tasks.find((entry) => entry.task_id === "T5");
+    assert.ok(t5);
+    assert.deepEqual(basePlan("T5", { permissions: permissionsFor(t5, false), orderId: "ord_0001" }), []);
   });
 
   it("compares injected before and after with the backend verifier", async () => {

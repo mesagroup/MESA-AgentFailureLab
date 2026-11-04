@@ -13,6 +13,11 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
+    proxy: {
+      "/agents": "http://127.0.0.1:3001",
+      "/runs": "http://127.0.0.1:3001",
+      "/traces": "http://127.0.0.1:3001",
+    },
   },
   preview: {
     port: 3000,
