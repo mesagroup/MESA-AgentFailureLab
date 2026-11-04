@@ -1,16 +1,9 @@
+import type { AgentRunRequest } from "@mesa/shared";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "./scripted.js";
 
-export interface AgentRunRequest {
-  agent_id: string;
-  task_id: string;
-  prompt: string;
-  session_id: string;
-  permissions: string[];
-  mock_base_url: string;
-  /** Present for tasks the harness seeded, such as T4 and T5. */
-  order_id?: string;
-}
+/** `POST /v1/tasks/run` body. Defined in `@mesa/shared`. Optional fields are added there. */
+export type { AgentRunRequest };
 
 export interface RemoteStep {
   type?: string;

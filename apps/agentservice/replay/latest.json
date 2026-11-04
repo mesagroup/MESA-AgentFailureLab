@@ -411,7 +411,7 @@
     {
       "owner": "@diamanti-sg",
       "area": "AgentRunRequest.fix_kinds",
-      "request": "Add optional fix_kinds to AgentRunRequest in apps/backend/src/agent/http.ts: fix_kinds?: Array<\"controlled_retry\" | \"pre_response_check\" | \"permission_guard\">. POST /v1/tasks/run must send that field. In apps/backend/src/harness/runner.ts, loadActions builds the request without it, and resolveFixKinds only stores the list on the Run. after_fix must copy Run.fix_kinds onto the request (and onto the object passed to callAgent). Omit the field, or send [], when the run has no fix. The scripted driver currently ignores fix_kinds."
+      "request": "AgentRunRequest in packages/shared already has optional fix_kinds?: Array<\"controlled_retry\" | \"pre_response_check\" | \"permission_guard\">, re-exported from apps/backend/src/agent/http.ts. Do not declare a second interface. POST /v1/tasks/run must send that field. In apps/backend/src/harness/runner.ts, loadActions builds the request without it, and resolveFixKinds only stores the list on the Run. after_fix must copy Run.fix_kinds onto the request (and onto the object passed to callAgent). Omit the field, or send [], when the run has no fix. The scripted driver currently ignores fix_kinds."
     },
     {
       "owner": "@diamanti-sg",

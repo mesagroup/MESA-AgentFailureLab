@@ -1,4 +1,4 @@
-import { FIX_KINDS, type FixKind } from "@mesa/shared";
+import { FIX_KINDS, type AgentRunRequest, type FixKind } from "@mesa/shared";
 import {
   isLabTaskId,
   type EmbeddedInstruction,
@@ -6,14 +6,11 @@ import {
 } from "../fixes/domain.js";
 import { applyFixesToPlan, type RefusedAction } from "../fixes/plan.js";
 
-export interface TaskRunInput {
-  agent_id: string;
-  task_id: string;
-  prompt: string;
-  session_id: string;
-  permissions: string[];
-  mock_base_url: string;
-  order_id?: string;
+/**
+ * Parsed `POST /v1/tasks/run` body.
+ * `fix_kinds` is always an array here. An omitted field on the wire becomes `[]`.
+ */
+export interface TaskRunInput extends AgentRunRequest {
   fix_kinds: FixKind[];
 }
 
@@ -33,12 +30,13 @@ export interface TaskRunPlan {
 
 /**
  * Propose tool actions for the harness.
+ * Reads `fix_kinds` from the shared `AgentRunRequest` and applies them with
+ * `applyFixesToPlan`. An omitted list is the base plan.
  * Does not call the shop and does not write `outcome.verifier` or `fault.*`.
- * Fix policy is the single `applyFixesToPlan` call below. `executed` stays
- * false so `executeAttempt` remains the only injector. `controlled_retry` does
- * not add a second action: retry belongs to the harness.
+ * `executed` stays false so `executeAttempt` remains the only injector.
+ * `controlled_retry` does not add a second action: retry belongs to the harness.
  */
-export function planTaskRun(input: TaskRunInput): TaskRunPlan {
+export function planTaskRun(input: AgentRunRequest): TaskRunPlan {
   if (!isLabTaskId(input.task_id)) {
     return { executed: false, actions: [], refused: [], embedded: [] };
   }
@@ -46,7 +44,7 @@ export function planTaskRun(input: TaskRunInput): TaskRunPlan {
     taskId: input.task_id,
     permissions: input.permissions,
     orderId: input.order_id,
-    fixes: input.fix_kinds,
+    fixes: input.fix_kinds ?? [],
     prompt: input.prompt,
   });
   return {

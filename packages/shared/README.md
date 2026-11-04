@@ -10,12 +10,24 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types. This entry does not load Ajv, so the frontend can import it.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-stub.json` — the reference agent fixture (T1–T5). The harness loads this; it is not a second schema.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
+
+## Agent run request
+
+`AgentRunRequest` is the body of `POST /v1/tasks/run`. It is a TypeScript type in `src/types.ts`, not a fourth JSON Schema. Trace, Agent, and Run stay the schema documents.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `agent_id`, `task_id`, `prompt`, `session_id`, `permissions`, `mock_base_url` | yes | The fields the harness already posts |
+| `order_id` | no | Tasks the harness seeded, such as T4 and T5 |
+| `fix_kinds` | no | `controlled_retry`, `pre_response_check`, `permission_guard`. Omit it, or send `[]`, when the run applies no fix. The reference agent reads this field and passes it to `applyFixesToPlan` |
+
+Further payload fields stay optional and are added on this interface. The reference agent ignores keys it does not know. It does not write `outcome.verifier` or `fault.*`.
 
 ## Run is not a Trace
 
