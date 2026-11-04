@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+.turbo/
+*.tsbuildinfo
+
+# local env files (examples are committed)
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test / coverage
+coverage/
+
+# editor / os
+.DS_Store
+.idea/
+
+# vite
+*.local

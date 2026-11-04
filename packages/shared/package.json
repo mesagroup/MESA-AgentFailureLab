@@ -1,0 +1,26 @@
+{
+  "name": "@mesa/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared JSON Schema contracts and TypeScript types for Agent Failure Lab",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./schemas/trace.schema.json": "./schemas/trace.schema.json",
+    "./schemas/agent.schema.json": "./schemas/agent.schema.json",
+    "./schemas/run.schema.json": "./schemas/run.schema.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/schemas.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

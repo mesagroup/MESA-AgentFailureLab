@@ -1,0 +1,1 @@
+ADRs are numbered sequentially as `NNN-kebab-title.md` in the order they are accepted (`001` is the first); this directory holds architecture decisions only, and product or contributor docs live in `docs/`.

@@ -1,0 +1,25 @@
+{
+  "name": "@mesa/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Web UI for agent registration, runs, and the trace timeline",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000 --strictPort",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview --port 3000 --strictPort"
+  },
+  "dependencies": {
+    "@mesa/shared": "workspace:*",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
+  }
+}

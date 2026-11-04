@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mesa:agent-failure-lab:agent",
+  "title": "Agent",
+  "description": "Registered agent: where it runs, where traces are stored, and the tasks whose success tests the verifier evaluates. JSON Schema is the source of truth; OpenAPI is not.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "name",
+    "created_at",
+    "updated_at",
+    "instance",
+    "test_instance",
+    "traces",
+    "docs",
+    "tasks"
+  ],
+  "properties": {
+    "agent_id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "instance": { "$ref": "#/$defs/Instance" },
+    "test_instance": { "$ref": "#/$defs/TestInstance" },
+    "traces": { "$ref": "#/$defs/TraceStore" },
+    "docs": { "$ref": "#/$defs/Docs" },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Task" }
+    }
+  },
+  "$defs": {
+    "InstanceKind": {
+      "type": "string",
+      "enum": ["reference", "external"]
+    },
+    "Instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/InstanceKind",
+          "description": "reference is the in-lab Grok agent. external is a team-supplied agent under test."
+        },
+        "base_url": { "type": "string", "minLength": 1 },
+        "runtime": {
+          "type": "string",
+          "description": "Runtime label, for example grok or a team runtime name. Not a secret."
+        }
+      }
+    },
+    "TestInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url"],
+      "description": "Endpoint the harness calls when executing this agent's tasks.",
+      "properties": {
+        "base_url": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string" }
+      }
+    },
+    "TraceStore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["store"],
+      "properties": {
+        "store": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Trace storage backend name. Examples: file, http, memory."
+        },
+        "path_or_url": { "type": "string" }
+      }
+    },
+    "ToolDoc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+    "Docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools", "constraints"],
+      "properties": {
+        "prompt_summary": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolDoc" }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "config_notes": { "type": "string" }
+      }
+    },
+    "VerifierCheckSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check_id", "description", "assertion"],
+      "properties": {
+        "check_id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "assertion": {
+          "type": "object",
+          "description": "Deterministic assertion against mock state. Interpreted only by the verifier. Not an LLM prompt. The verifier owns the assertion shape.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "SuccessTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "checks"],
+      "properties": {
+        "type": {
+          "const": "verifier_checks",
+          "description": "The only success test in this freeze. The verifier runs checks against mock state."
+        },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/VerifierCheckSpec" }
+        }
+      }
+    },
+    "Task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "title", "prompt", "success_test"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "prompt": { "type": "string" },
+        "success_test": { "$ref": "#/$defs/SuccessTest" }
+      }
+    }
+  }
+}
