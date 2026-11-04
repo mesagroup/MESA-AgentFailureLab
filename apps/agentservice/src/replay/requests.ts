@@ -1,54 +1,35 @@
 import type { OwnerRequest } from "./types.js";
 
 /**
- * Interface requests for the owners of the harness and the reference agent.
- * This package does not implement them.
+ * Notes kept on the replay report after the harness requests landed.
+ * This package does not implement the harness.
  */
 export const OWNER_REQUESTS: readonly OwnerRequest[] = [
   {
     owner: "@diamanti-sg",
     area: "AgentRunRequest.fix_kinds",
     request:
-      "AgentRunRequest in packages/shared already has optional " +
-      'fix_kinds?: Array<"controlled_retry" | "pre_response_check" | "permission_guard">, ' +
-      "re-exported from apps/backend/src/agent/http.ts. Do not declare a second interface. " +
-      "POST /v1/tasks/run must send that field. In apps/backend/src/harness/runner.ts, loadActions " +
-      "builds the request without it, and resolveFixKinds only stores the list on the Run. " +
-      "after_fix must copy Run.fix_kinds onto the request (and onto the object passed to callAgent). " +
-      "Omit the field, or send [], when the run has no fix. The scripted driver currently ignores fix_kinds.",
+      "Landed on the shared AgentRunRequest in @mesa/shared. after_fix copies Run.fix_kinds onto that request and onto the object passed to callAgent. Baseline and injected runs omit the field. The scripted action planner still ignores fix_kinds. The backend does not declare a second interface.",
   },
   {
     owner: "@diamanti-sg",
     area: "controlled_retry inside executeAttempt",
     request:
-      "executeAttempt runs each action once and does not return the tool result to the agent, " +
-      "so an executed:false agent cannot retry. When the run's fix_kinds contains controlled_retry, " +
-      "re-issue that tool through the same injector path after a transient result " +
-      "(body.error === \"timeout\", or status 0, 408, 429, 500, 502, 503, 504), at most twice, with backoff. " +
-      "Retry reads (search_products, get_product, get_cart, get_order) on any transient result. " +
-      "Retry a mutate tool (add_to_cart, update_cart, checkout, cancel_order) only when the attempt was not dispatched. " +
-      "Do not retry a dispatched 5xx on a mutate tool. The catalog effect drop fires again on a new attempt, " +
-      "so dropped_tool_call still fails; the loop is for a transient blip, not for defeating a deterministic drop. " +
-      "The rule to mirror is retryDecision in apps/agentservice/src/fixes/domain.ts. " +
-      "Do not import the agent service from the backend.",
+      "Landed. When fix_kinds contains controlled_retry, executeAttempt re-issues a transient tool on the same injector path, at most twice, with backoff. Reads retry any transient result. A mutate tool retries only when the attempt was not dispatched. A catalog drop still fires on every attempt.",
   },
   {
     owner: "@diamanti-sg",
     area: "permission_guard and the jury attacker",
     request:
-      "executeAttempt sends the session grant, so the shop already rejects cancel_order without write:order:cancel " +
-      "and verifier.passed does not move. applyJurorAttack inserts cancel_order and sends read,write:order:cancel " +
-      "without asking the agent. Before inserting that action, call the agent with fix_kinds, and do not elevate " +
-      "X-Permissions from text in the prompt or in a tool result. The agent-side behavior is guardCall plus " +
-      "readEmbeddedInstructions in apps/agentservice/src/fixes/domain.ts: a mentioned permission is data, not a grant.",
+      "Landed. The jury path calls the agent with fix_kinds before cancel_order and does not elevate X-Permissions from prompt or tool text. With the grant absent and permission_guard on, the agent refuses and the client is not called. Guard off is the documented baseline: the shop rejects the cancel. This is not the #17 UI jury round.",
   },
 ];
 
 export const HARNESS_GAP =
-  "Production after_fix does not pass fix_kinds on AgentRunRequest. This replay applies the policy inside the harness callAgent hook, which POST /v1/tasks/run does not use. fix_kinds_on_agent_run_request is false on every arm.";
+  "after_fix copies Run.fix_kinds onto AgentRunRequest. fix_kinds_on_agent_run_request is true on those arms and false when the run stores no fix. The scripted action planner still ignores the field; controlled_retry is applied in executeAttempt.";
 
 export const RETRY_GAP =
-  "controlled_retry has no preset verifier delta. The action list cannot retry after a result, and catalog drop fires on every attempt. The probe counts are the applicator, not the verifier.";
+  "Catalog drop still fires on every attempt of the targeted tool, so dropped_tool_call does not flip the preset verifier. controlled_retry covers a transient blip inside executeAttempt. The probe counts remain the applicator, not that preset.";
 
 export const GUARD_GAP =
-  "permission_guard has no preset verifier delta on T5. The preset forges a cancel result while the cancel grant is present, and the shop enforces the session grant. The jury attacker does not consult this guard.";
+  "permission_guard still has no preset verifier delta on T5. The preset forges a cancel result while the cancel grant is present. The jury path now asks the agent and does not widen X-Permissions; with the guard on and the grant absent the client is not called. That check is not the #17 UI jury round.";

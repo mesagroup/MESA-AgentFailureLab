@@ -92,7 +92,7 @@ Health reports `forbidden_write_paths` from `@mesa/shared`. This service must no
 
 `diagnosis` stays `null` on a trace until this service fills it. `diagnosis.category` is a hypothesis. Ground truth for classification is `fault.labels`, which this service returns on the trace for the harness and does not send to Grok.
 
-The backend harness records `fix_kinds` and replays the task (`Run.phase = after_fix`). A proposal is valid only when that replay's verifier passes. This service does not declare success. `AgentRunRequest.fix_kinds` is optional on the shared type. The harness does not yet copy `Run.fix_kinds` onto the body it posts ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40)); the applicator below is what the agent runs when that field arrives. See [ADR-001](../../adr/001-mock-verifier-grok.md).
+The backend harness records `fix_kinds` and replays the task (`Run.phase = after_fix`). A proposal is valid only when that replay's verifier passes. This service does not declare success. `AgentRunRequest.fix_kinds` is optional on the shared type. `after_fix` copies `Run.fix_kinds` onto that body. Baseline and injected runs omit the field. `parseTaskRun` passes the array to `applyFixesToPlan`. `controlled_retry` does not add a second action here: the harness retries inside `executeAttempt` ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). See [ADR-001](../../adr/001-mock-verifier-grok.md).
 
 ## Where code lives
 
@@ -158,7 +158,7 @@ For each of T1–T5 it runs the merged harness (`runTasks`, in-process shop, pre
 
 `passed` is `trace.outcome.verifier.passed`. Timing notes in the markdown say what `latency_ms`, token totals, and `duration_ms` are measuring. The decision number is `fix_verified`: the after arm passes and the injected arm does not, with no baseline regression.
 
-What this run cannot do yet is listed in the report under Blocked and Requests. The harness stores `fix_kinds` on the Run and does not copy them onto `AgentRunRequest`. `controlled_retry` cannot see a tool result from an action list. `permission_guard` does not change the preset T5 verifier result, because the shop already enforces the session grant and the jury attacker does not ask the agent. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
+What this run still cannot flip is listed under Blocked. `after_fix` puts `fix_kinds` on the shared `AgentRunRequest`. `controlled_retry` re-issues a transient tool inside `executeAttempt`; a catalog `drop` still fires on every attempt, so that preset does not pass. `permission_guard` does not change the preset T5 verifier result, because that preset grants `write:order:cancel` and then forges the cancel. The jury path asks the agent before `cancel_order` and does not widen `X-Permissions` from the note. With the guard on and the grant absent, the client is not called. That is separate from the #17 UI jury round. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.
 

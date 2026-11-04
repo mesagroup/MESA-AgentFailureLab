@@ -96,7 +96,7 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
 | Accuratezza di categoria | 4/19 | 5/19 |
-| Step esatto | 4/19 | 5/19 |
+| Step esatto | 5/19 | 5/19 |
 | Step entro ±1 | 10/19 | 13/19 |
 | Hit del fix proposto | 4/7 | 7/7 |
 | Fix non applicabile | 12 | 12 |

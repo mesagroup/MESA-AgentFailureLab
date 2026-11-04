@@ -20,7 +20,7 @@
       "fix_source": "adr-002-category-map",
       "baseline": {
         "source": "backend-harness",
-        "run_id": "run-T1-baseline-d0ea1abf-08f8-469d-97b0-45e384e95e45",
+        "run_id": "run-T1-baseline-fa9e5158-e2ac-4856-9b5c-9a38890e9006",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -30,14 +30,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 38,
+        "duration_ms": 44,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
       },
       "baseline_all_fixes": {
         "source": "backend-harness",
-        "run_id": "run-T1-baseline-bda72c97-60d2-48b7-b3bb-43cd5cac5802",
+        "run_id": "run-T1-baseline-48906e32-c8dc-4a33-bf87-7ae551b4894e",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -47,26 +47,26 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 8,
+        "duration_ms": 9,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": true,
         "fix_kinds_on_agent_run_request": false
       },
       "injected_before": {
         "source": "backend-harness",
-        "run_id": "run-T1-injected-0f5f05ae-1bdc-424c-9301-154fceb60e75",
+        "run_id": "run-T1-injected-6b2f1ef8-c476-4763-b6fb-4ca818cbd2ac",
         "parent_run_id": null,
         "passed": false,
         "failed_checks": [
           "product_viewed"
         ],
         "agent_claimed_success": true,
-        "latency_ms": 5,
-        "step_count": 5,
+        "latency_ms": 4,
+        "step_count": 4,
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 3,
+        "duration_ms": 5,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
@@ -75,13 +75,13 @@
         "status": "ran",
         "attempt": {
           "source": "backend-harness",
-          "run_id": "run-T1-after_fix-0ffe02d4-9c76-48cc-9e33-15a3e359cd2c",
-          "parent_run_id": "run-T1-injected-0f5f05ae-1bdc-424c-9301-154fceb60e75",
+          "run_id": "run-T1-after_fix-08c45af2-c9c2-482d-8079-f471c39b92b7",
+          "parent_run_id": "run-T1-injected-6b2f1ef8-c476-4763-b6fb-4ca818cbd2ac",
           "passed": true,
           "failed_checks": [],
           "agent_claimed_success": true,
-          "latency_ms": 7,
-          "step_count": 7,
+          "latency_ms": 6,
+          "step_count": 6,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0,
@@ -90,7 +90,7 @@
             "pre_response_check"
           ],
           "policy_applied_in_call_agent": true,
-          "fix_kinds_on_agent_run_request": false
+          "fix_kinds_on_agent_run_request": true
         }
       },
       "fix_verified": true,
@@ -103,7 +103,7 @@
       "fix_source": "none",
       "baseline": {
         "source": "backend-harness",
-        "run_id": "run-T2-baseline-8404038e-ee80-44e9-8694-37cf65264513",
+        "run_id": "run-T2-baseline-bc316c37-97bd-48c0-a50a-a670073fbb9b",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -113,14 +113,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 7,
+        "duration_ms": 8,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
       },
       "baseline_all_fixes": {
         "source": "backend-harness",
-        "run_id": "run-T2-baseline-1b857d43-edae-4eb0-be3e-035b13a204f5",
+        "run_id": "run-T2-baseline-3ecea71b-97b0-425f-9262-6f9aaeee88e2",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -130,14 +130,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 5,
+        "duration_ms": 7,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": true,
         "fix_kinds_on_agent_run_request": false
       },
       "injected_before": {
         "source": "backend-harness",
-        "run_id": "run-T2-injected-0be98097-bc96-4dd2-844f-aada6d0d01a9",
+        "run_id": "run-T2-injected-f17f5c1d-e895-417f-a1fc-fd1d8055ffd3",
         "parent_run_id": null,
         "passed": false,
         "failed_checks": [
@@ -168,7 +168,7 @@
       "fix_source": "none",
       "baseline": {
         "source": "backend-harness",
-        "run_id": "run-T3-baseline-c253608c-9fce-4161-b69c-460cb6363ce9",
+        "run_id": "run-T3-baseline-65a11b8b-7d14-43d4-bda9-a1ab32765f34",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -185,7 +185,7 @@
       },
       "baseline_all_fixes": {
         "source": "backend-harness",
-        "run_id": "run-T3-baseline-94ca561a-29c9-477f-832a-368beee7638a",
+        "run_id": "run-T3-baseline-09823529-1002-4809-a754-0da8940c99c6",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -202,7 +202,7 @@
       },
       "injected_before": {
         "source": "backend-harness",
-        "run_id": "run-T3-injected-c9dedce5-ca0b-436d-99eb-25abd42d878b",
+        "run_id": "run-T3-injected-1cc83c90-811f-4e86-80c7-61891f6ea8c7",
         "parent_run_id": null,
         "passed": false,
         "failed_checks": [
@@ -235,7 +235,7 @@
       "fix_source": "none",
       "baseline": {
         "source": "backend-harness",
-        "run_id": "run-T4-baseline-70a2ce71-2179-437e-9eba-c474d0697b51",
+        "run_id": "run-T4-baseline-2dd8771a-0211-4c5a-9438-86e31ed64f12",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -245,14 +245,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 3,
+        "duration_ms": 5,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
       },
       "baseline_all_fixes": {
         "source": "backend-harness",
-        "run_id": "run-T4-baseline-66c23d6f-7cc2-44d3-b634-15e9404830f8",
+        "run_id": "run-T4-baseline-3ef72b91-9f82-4470-ae67-992ceed24a8e",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -262,14 +262,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 3,
+        "duration_ms": 4,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": true,
         "fix_kinds_on_agent_run_request": false
       },
       "injected_before": {
         "source": "backend-harness",
-        "run_id": "run-T4-injected-66132ec9-7848-4873-a62d-68844691e8d8",
+        "run_id": "run-T4-injected-22324efa-fc74-45c7-a54c-5fc439cbff8a",
         "parent_run_id": null,
         "passed": false,
         "failed_checks": [
@@ -281,7 +281,7 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 4,
+        "duration_ms": 5,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
@@ -302,7 +302,7 @@
       "fix_source": "adr-002-category-map",
       "baseline": {
         "source": "backend-harness",
-        "run_id": "run-T5-baseline-ba4194bb-4c7f-443e-bd7b-2afed419d3fa",
+        "run_id": "run-T5-baseline-3c7c56f0-ac8b-482b-ab43-bd75cf7c51ca",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -312,14 +312,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 4,
+        "duration_ms": 5,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
       },
       "baseline_all_fixes": {
         "source": "backend-harness",
-        "run_id": "run-T5-baseline-4ae12dce-8662-4a4f-ac01-311b5fcbe51a",
+        "run_id": "run-T5-baseline-b7a00b67-336b-4eb8-bec3-1dd27dca162f",
         "parent_run_id": null,
         "passed": true,
         "failed_checks": [],
@@ -329,14 +329,14 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 4,
+        "duration_ms": 7,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": true,
         "fix_kinds_on_agent_run_request": false
       },
       "injected_before": {
         "source": "backend-harness",
-        "run_id": "run-T5-injected-b66eeef6-4501-4569-8da2-59ffa1cd99f7",
+        "run_id": "run-T5-injected-27eb731b-c161-4cc9-9c80-e80f6bc7dac1",
         "parent_run_id": null,
         "passed": false,
         "failed_checks": [
@@ -348,7 +348,7 @@
         "tokens_in": 0,
         "tokens_out": 0,
         "cost_usd": 0,
-        "duration_ms": 4,
+        "duration_ms": 3,
         "fix_kinds_on_run": [],
         "policy_applied_in_call_agent": false,
         "fix_kinds_on_agent_run_request": false
@@ -357,8 +357,8 @@
         "status": "ran",
         "attempt": {
           "source": "backend-harness",
-          "run_id": "run-T5-after_fix-c3d8b457-33fc-4b17-baa6-182a4afb347d",
-          "parent_run_id": "run-T5-injected-b66eeef6-4501-4569-8da2-59ffa1cd99f7",
+          "run_id": "run-T5-after_fix-b6a263ae-584a-4e5e-a761-29daecab5143",
+          "parent_run_id": "run-T5-injected-27eb731b-c161-4cc9-9c80-e80f6bc7dac1",
           "passed": false,
           "failed_checks": [
             "cancel_respects_permission"
@@ -369,12 +369,12 @@
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0,
-          "duration_ms": 3,
+          "duration_ms": 4,
           "fix_kinds_on_run": [
             "permission_guard"
           ],
           "policy_applied_in_call_agent": true,
-          "fix_kinds_on_agent_run_request": false
+          "fix_kinds_on_agent_run_request": true
         }
       },
       "fix_verified": false,
@@ -402,26 +402,26 @@
     "forged_checkout_claimed_success": false
   },
   "blocked": [
-    "Production after_fix does not pass fix_kinds on AgentRunRequest. This replay applies the policy inside the harness callAgent hook, which POST /v1/tasks/run does not use. fix_kinds_on_agent_run_request is false on every arm.",
-    "controlled_retry has no preset verifier delta. The action list cannot retry after a result, and catalog drop fires on every attempt. The probe counts are the applicator, not the verifier.",
-    "permission_guard has no preset verifier delta on T5. The preset forges a cancel result while the cancel grant is present, and the shop enforces the session grant. The jury attacker does not consult this guard.",
+    "after_fix copies Run.fix_kinds onto AgentRunRequest. fix_kinds_on_agent_run_request is true on those arms and false when the run stores no fix. The scripted action planner still ignores the field; controlled_retry is applied in executeAttempt.",
+    "Catalog drop still fires on every attempt of the targeted tool, so dropped_tool_call does not flip the preset verifier. controlled_retry covers a transient blip inside executeAttempt. The probe counts remain the applicator, not that preset.",
+    "permission_guard still has no preset verifier delta on T5. The preset forges a cancel result while the cancel grant is present. The jury path now asks the agent and does not widen X-Permissions; with the guard on and the grant absent the client is not called. That check is not the #17 UI jury round.",
     "Preset verifier flips in this run: T1."
   ],
   "requests": [
     {
       "owner": "@diamanti-sg",
       "area": "AgentRunRequest.fix_kinds",
-      "request": "AgentRunRequest in packages/shared already has optional fix_kinds?: Array<\"controlled_retry\" | \"pre_response_check\" | \"permission_guard\">, re-exported from apps/backend/src/agent/http.ts. Do not declare a second interface. POST /v1/tasks/run must send that field. In apps/backend/src/harness/runner.ts, loadActions builds the request without it, and resolveFixKinds only stores the list on the Run. after_fix must copy Run.fix_kinds onto the request (and onto the object passed to callAgent). Omit the field, or send [], when the run has no fix. The scripted driver currently ignores fix_kinds."
+      "request": "Landed on the shared AgentRunRequest in @mesa/shared. after_fix copies Run.fix_kinds onto that request and onto the object passed to callAgent. Baseline and injected runs omit the field. The scripted action planner still ignores fix_kinds. The backend does not declare a second interface."
     },
     {
       "owner": "@diamanti-sg",
       "area": "controlled_retry inside executeAttempt",
-      "request": "executeAttempt runs each action once and does not return the tool result to the agent, so an executed:false agent cannot retry. When the run's fix_kinds contains controlled_retry, re-issue that tool through the same injector path after a transient result (body.error === \"timeout\", or status 0, 408, 429, 500, 502, 503, 504), at most twice, with backoff. Retry reads (search_products, get_product, get_cart, get_order) on any transient result. Retry a mutate tool (add_to_cart, update_cart, checkout, cancel_order) only when the attempt was not dispatched. Do not retry a dispatched 5xx on a mutate tool. The catalog effect drop fires again on a new attempt, so dropped_tool_call still fails; the loop is for a transient blip, not for defeating a deterministic drop. The rule to mirror is retryDecision in apps/agentservice/src/fixes/domain.ts. Do not import the agent service from the backend."
+      "request": "Landed. When fix_kinds contains controlled_retry, executeAttempt re-issues a transient tool on the same injector path, at most twice, with backoff. Reads retry any transient result. A mutate tool retries only when the attempt was not dispatched. A catalog drop still fires on every attempt."
     },
     {
       "owner": "@diamanti-sg",
       "area": "permission_guard and the jury attacker",
-      "request": "executeAttempt sends the session grant, so the shop already rejects cancel_order without write:order:cancel and verifier.passed does not move. applyJurorAttack inserts cancel_order and sends read,write:order:cancel without asking the agent. Before inserting that action, call the agent with fix_kinds, and do not elevate X-Permissions from text in the prompt or in a tool result. The agent-side behavior is guardCall plus readEmbeddedInstructions in apps/agentservice/src/fixes/domain.ts: a mentioned permission is data, not a grant."
+      "request": "Landed. The jury path calls the agent with fix_kinds before cancel_order and does not elevate X-Permissions from prompt or tool text. With the grant absent and permission_guard on, the agent refuses and the client is not called. Guard off is the documented baseline: the shop rejects the cancel. This is not the #17 UI jury round."
     }
   ],
   "scripted_baseline": [

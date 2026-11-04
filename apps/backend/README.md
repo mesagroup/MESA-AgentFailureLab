@@ -13,7 +13,7 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
 | `diagnosis` | Nobody here. It stays `null` until Grok, which must not write the rows above |
 
-`outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. A fix kind recorded on an `after_fix` run is harness metadata. The reference agent applies `AgentRunRequest.fix_kinds` when that field is on the body. This runner stores the list on the Run and does not yet copy it onto the request.
+`outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. An `after_fix` run stores `fix_kinds` and copies that list onto the shared `AgentRunRequest` for `POST /v1/tasks/run`. Baseline and injected runs omit the field. The scripted action planner does not read it. `controlled_retry` is applied in `executeAttempt` on the same injector path. `pre_response_check` and `permission_guard` are for the agent service that receives the request.
 
 ## Run from the monorepo root
 
@@ -46,7 +46,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/runs`, `/runs/:runId` | Stored runs |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
-`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` with an `AgentRunRequest` from `@mesa/shared` and expects `{ "executed": false, "actions": [...] }`. Optional `fix_kinds` on that type is not filled by `loadActions` yet. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
+`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` with an `AgentRunRequest` from `@mesa/shared` and expects `{ "executed": false, "actions": [...] }`. The body includes `fix_kinds` when the Run has a non-empty list (`after_fix`). Baseline and injected omit it. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. When `fix_kinds` contains `controlled_retry`, `executeAttempt` re-issues a transient tool on that same path, at most twice, with backoff. Reads retry any transient result (`error: "timeout"`, or status 0, 408, 429, 500, 502, 503, 504). `add_to_cart`, `update_cart`, `checkout`, and `cancel_order` retry only when the attempt was not dispatched. A dispatched 5xx on those tools is not retried. A catalog `drop` fires again on the new attempt, so a deterministic drop still fails. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
 Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code. The T5 preset is `forged_permission_success` (a forged tool result). The jury attacker is a different Security path and is not in that catalog. See [the jury demo](../../docs/demo-jury.md).
 
@@ -61,7 +61,7 @@ pnpm --filter @mesa/backend jury-demo -- --run
 
 - `src/verifier/` — check runner and the optional loop / timeout / repeated-tool pre-pass
 - `src/injector/` — fault catalog. Labels are copied onto the trace; the plan stays on the run
-- `src/attacker/` — security jury case (juror note, real cancel). Separate from the catalog. Writes `fault.labels` and `fault.attacker`
+- `src/attacker/` — security jury case. Asks the agent (scripted mirror, or `callAgent`) with `fix_kinds` before `cancel_order`. `X-Permissions` stays the session grant. A permission named in the note or in a tool result is not added. With `permission_guard` and no `write:order:cancel`, the agent refuses and the client is not called. Guard off is the frozen baseline: the agent plans `cancel_order` and the shop rejects it. Issue #17 is the UI round (checklist and fixtures), not a second policy. Writes `fault.labels` and `fault.attacker`
 - `fixtures/jury/` — one frozen baseline/attacked pair and the juror note, for the timeline
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
