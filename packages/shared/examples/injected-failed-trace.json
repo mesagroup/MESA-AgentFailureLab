@@ -1,0 +1,220 @@
+{
+  "trace_id": "trace-t3-forged-checkout",
+  "agent_id": "reference-shop",
+  "run_id": "run-t3-injected-001",
+  "task_id": "T3",
+  "started_at": "2026-11-04T10:15:00.000Z",
+  "ended_at": "2026-11-04T10:15:00.950Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T10:15:00.020Z",
+      "role": "user",
+      "content": "Check out the current cart.",
+      "latency_ms": 20,
+      "token_usage": { "input": 24, "output": 0 },
+      "cost_usd": 0.0002
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T10:15:00.220Z",
+      "role": "assistant",
+      "tool_name": "get_cart",
+      "tool_input": {},
+      "latency_ms": 200,
+      "token_usage": { "input": 40, "output": 16 },
+      "cost_usd": 0.0008
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T10:15:00.280Z",
+      "role": "tool",
+      "tool_name": "get_cart",
+      "tool_output": {
+        "session_id": "sess-demo",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 24
+      },
+      "latency_ms": 60,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T10:15:00.520Z",
+      "role": "assistant",
+      "tool_name": "checkout",
+      "tool_input": {},
+      "latency_ms": 240,
+      "token_usage": { "input": 30, "output": 18 },
+      "cost_usd": 0.0007
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T10:15:00.580Z",
+      "role": "tool",
+      "tool_name": "checkout",
+      "tool_output": {
+        "order_id": "ord_fake",
+        "status": "placed",
+        "total_usd": 24
+      },
+      "latency_ms": 60,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-5",
+      "index": 5,
+      "type": "message",
+      "timestamp": "2026-11-04T10:15:00.900Z",
+      "role": "assistant",
+      "content": "Success. I placed order ord_fake for $24.",
+      "latency_ms": 320,
+      "token_usage": { "input": 50, "output": 22 },
+      "cost_usd": 0.001
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "order_created",
+          "passed": false,
+          "detail": "orders is empty; ord_fake does not exist in the mock."
+        },
+        {
+          "name": "cart_empty",
+          "passed": false,
+          "detail": "cart sess-demo still has SKU-MUG-01 qty 2."
+        },
+        {
+          "name": "order_total_matches",
+          "passed": false,
+          "detail": "No placed order to compare with the cart total of 24 USD."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [
+          {
+            "session_id": "sess-demo",
+            "items": [
+              {
+                "product_id": "SKU-MUG-01",
+                "sku": "SKU-MUG-01",
+                "name": "Ceramic Mug",
+                "qty": 2,
+                "unit_price_usd": 12
+              }
+            ],
+            "total_usd": 24
+          }
+        ],
+        "orders": [],
+        "inventory": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          },
+          {
+            "product_id": "SKU-TEE-02",
+            "sku": "SKU-TEE-02",
+            "name": "Cotton T-Shirt",
+            "description": "Unisex tee, washed black, size M.",
+            "price_usd": 25,
+            "stock": 15
+          },
+          {
+            "product_id": "SKU-CAP-03",
+            "sku": "SKU-CAP-03",
+            "name": "Canvas Cap",
+            "description": "Unstructured cap, natural canvas.",
+            "price_usd": 18,
+            "stock": 10
+          },
+          {
+            "product_id": "SKU-BAG-04",
+            "sku": "SKU-BAG-04",
+            "name": "Tote Bag",
+            "description": "Heavy canvas tote, natural.",
+            "price_usd": 32,
+            "stock": 8
+          },
+          {
+            "product_id": "SKU-NOTE-05",
+            "sku": "SKU-NOTE-05",
+            "name": "Notebook",
+            "description": "A5 ruled notebook, 80 pages.",
+            "price_usd": 9.5,
+            "stock": 30
+          }
+        ],
+        "observations": [
+          {
+            "session_id": "sess-demo",
+            "catalog_reads": [],
+            "product_views": [],
+            "order_reads": []
+          }
+        ]
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": {
+    "latency_ms": 900,
+    "tokens_in": 144,
+    "tokens_out": 56,
+    "cost_usd": 0.0027
+  },
+  "fault": {
+    "injected": true,
+    "labels": [
+      {
+        "category": "ToolUse",
+        "step_id": "step-4",
+        "code": "forged_tool_result"
+      }
+    ],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": {
+    "category": "Verification",
+    "cause": "The checkout tool result was forged to look successful, and the agent declared success without reading the order back from the mock.",
+    "step_id": "step-5",
+    "confidence": 0.84,
+    "evidence": [
+      "step-5 claims order ord_fake was placed.",
+      "step-4 tool_output names ord_fake, but mock_state_snapshot.orders is empty and the cart still holds SKU-MUG-01 qty 2."
+    ],
+    "proposed_fixes": ["pre_response_check"]
+  }
+}

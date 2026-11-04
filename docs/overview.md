@@ -13,7 +13,8 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 | Path | Team | Owns |
 | --- | --- | --- |
 | `apps/frontend` | Frontend | Registration, runs, and the trace timeline. Renders `Trace`. Before/after uses `Run` plus `outcome.verifier`. |
-| `apps/backend` | Backend | Mock e-commerce (world state), the deterministic verifier, the harness (`baseline` / `injected` / `after_fix`), and persistence. |
+| `apps/backend` | Backend | Harness scaffold (`baseline` / `injected` / `after_fix`), the deterministic verifier, and persistence. Not the shop process. |
+| `services/mock-shop` | Backend | Inspectable mock e-commerce for T1–T5. Separate package from the harness. |
 | `apps/agentservice` | AI Engineer | Grok reference agent, diagnosis, and fix proposals. Writes `Trace.diagnosis` only. |
 | `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`. |
 
@@ -25,6 +26,6 @@ JSON Schema under `packages/shared/schemas/` is the source of truth for Trace an
 - `outcome.verifier` is the only success signal. The verifier compares checks to mock state. It does not call Grok and it does not interpret the narrative trace.
 - Grok never writes `outcome.verifier` or `fault.labels` (nor `fault.injected` or `fault.attacker`). `diagnosis` stays null until Grok fills it.
 - `fault.labels` and `attacker` are ground truth from the injector on chaos runs.
-- `Run` is harness metadata (`phase`, `injection_plan_id`, `fix_*`, `trace_id`). It is a separate type. It is not nested inside `Trace`.
+- `Run` is harness metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`). It is a separate type. It is not nested inside `Trace`.
 
 Out of scope for the MVP, per ADR-001: auth, multi-run aggregation, and using an LLM as the judge of success.

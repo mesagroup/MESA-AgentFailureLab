@@ -23,7 +23,7 @@ pnpm install
 pnpm build
 ```
 
-`pnpm build` is `turbo run build`. It compiles `@mesa/shared` first, then the three apps. `pnpm typecheck` and `pnpm test` run the same graph for types and the shared schema checks.
+`pnpm build` is `turbo run build`. It compiles `@mesa/shared` first, then the apps and `@mesa/mock-shop`. `pnpm typecheck` and `pnpm test` run the same graph.
 
 ## Run one app
 
@@ -33,15 +33,17 @@ Use a filter so you do not start the other teams' dev servers:
 pnpm exec turbo run dev --filter=@mesa/frontend
 pnpm exec turbo run dev --filter=@mesa/backend
 pnpm exec turbo run dev --filter=@mesa/agentservice
+pnpm exec turbo run dev --filter=@mesa/mock-shop
 ```
 
-Root aliases: `pnpm dev:frontend`, `pnpm dev:backend`, `pnpm dev:agentservice`. `pnpm dev` starts all three.
+Root aliases: `pnpm dev:frontend`, `pnpm dev:backend`, `pnpm dev:agentservice`, `pnpm dev:mock-shop`. `pnpm dev` starts every package that has a dev script.
 
 | App | URL | Health |
 | --- | --- | --- |
 | `@mesa/frontend` | http://127.0.0.1:3000 | the page itself |
 | `@mesa/backend` | http://127.0.0.1:3001 | `GET /health` |
 | `@mesa/agentservice` | http://127.0.0.1:3002 | `GET /health` |
+| `@mesa/mock-shop` | http://127.0.0.1:8787 | `GET /health` |
 
 Each app README repeats the filter command and lists where new modules should go.
 
@@ -60,7 +62,8 @@ The dev servers also start with built-in defaults if those variables are unset.
 | You are changing… | Put it in… |
 | --- | --- |
 | UI | `apps/frontend` |
-| Mock API, verifier, harness, storage | `apps/backend` |
+| Mock shop HTTP API (catalog, cart, orders, inspect) | `services/mock-shop` |
+| Verifier, harness, storage | `apps/backend` |
 | Grok client, reference agent, diagnosis, fix proposals | `apps/agentservice` |
 | A field on Trace, Agent, or Run | `packages/shared` — edit the JSON Schema first, then the TypeScript mirror, then bump `CONTRACT_VERSION` |
 | Product or contributor docs | `docs/` |

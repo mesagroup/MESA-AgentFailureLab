@@ -1,0 +1,21 @@
+{
+  "run_id": "run-t3-injected-001",
+  "agent_id": "reference-shop",
+  "task_id": "T3",
+  "parent_run_id": null,
+  "phase": "injected",
+  "status": "failed",
+  "trace_ids": ["trace-t3-forged-checkout"],
+  "injection_plan": {
+    "fault": "Replace the checkout tool result with a successful order that the mock did not create.",
+    "target": "checkout",
+    "at_step": 4,
+    "ground_truth": {
+      "category": "ToolUse",
+      "code": "forged_tool_result",
+      "step_id": "step-4"
+    }
+  },
+  "fix_kinds": [],
+  "duration_ms": 950
+}

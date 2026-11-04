@@ -1,58 +1,83 @@
 # @mesa/shared
 
-Cross-app contracts for Agent Failure Lab. Apps depend on this package. Feature code does not live here.
+JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeScript in `src/types.ts` is a hand-written mirror. Do not treat OpenAPI as the source of truth.
 
-## Source of truth
-
-JSON Schema is the source of truth for **Trace** and **Agent**. OpenAPI is not. A future mock OpenAPI document may `$ref` these files. `Run` is a separate harness record with its own schema, and it is not a field of `Trace`.
-
-| Schema | TypeScript mirror | Id |
+| Document | Schema | What it is |
 | --- | --- | --- |
-| `schemas/trace.schema.json` | `src/trace.ts` | `urn:mesa:agent-failure-lab:trace` |
-| `schemas/agent.schema.json` | `src/agent.ts` | `urn:mesa:agent-failure-lab:agent` |
-| `schemas/run.schema.json` | `src/run.ts` | `urn:mesa:agent-failure-lab:run` |
+| Trace | [`schemas/trace.schema.json`](schemas/trace.schema.json) | One observed attempt: steps, timings, costs, verifier outcome, fault labels, optional diagnosis |
+| Agent | [`schemas/agent.schema.json`](schemas/agent.schema.json) | Registration: instance, test instance, trace location, docs, tasks |
+| Run | [`schemas/run.schema.json`](schemas/run.schema.json) | Harness record: phase, injection plan, fix kinds, links to trace ids |
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION`, `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types
-- `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`)
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types. This entry does not load Ajv, so the frontend can import it.
+- `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
+- `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 
-When a contract field changes:
+When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 
-1. Edit the JSON Schema.
-2. Update the TypeScript mirror in the same change.
-3. Bump `CONTRACT_VERSION` in `src/index.ts`.
-4. Run `pnpm --filter @mesa/shared test`.
+## Run is not a Trace
 
-`src/schemas.test.ts` locks the freeze (required fields, step shape, fault categories, run phases, and that phase/fix metadata is not inside Trace).
+`phase`, `injection_plan`, and `fix_kinds` live on the **Run**. Copying them onto a Trace fails the schema.
 
-## Freeze (0.1.0)
+| | Run | Trace |
+| --- | --- | --- |
+| `phase` | `baseline` \| `injected` \| `after_fix` | absent |
+| `injection_plan` | fault, target, optional `at_step`, `ground_truth` | absent. The injector writes the resulting labels onto `fault.labels` |
+| `fix_kinds` | `controlled_retry` \| `pre_response_check` \| `permission_guard` | absent. A diagnosis may only propose these values |
+| `trace_ids` | traces this run produced or compares | the trace has its own `trace_id` and points back with `run_id` |
+| `parent_run_id` | optional link to the run being replayed | absent |
+| `error_message`, `duration_ms` | optional harness fields | absent. Step and total timings live on the trace |
 
-**Trace.** `trace_id`, `agent_id`, `run_id`, `task_id`, `started_at`, `ended_at`, `status`, `steps`, `outcome.verifier`, `totals`, `fault`, `diagnosis`.
+Phase rules:
 
-Each step has `step_id`, `index`, `type` (`message` \| `tool_call` \| `tool_result` \| `system`), `timestamp`, `role`, `content`, plus optional `tool_name`, `tool_call_id`, `tool_input`, `tool_output`, `tool_error`, `latency_ms`, `token_usage`, and `cost_usd`.
+- `baseline`: `injection_plan` is null and `fix_kinds` is empty.
+- `injected`: `injection_plan` is an object and `fix_kinds` is empty.
+- `after_fix`: `fix_kinds` has at least one entry. `injection_plan` may repeat the original fault or be null for a clean replay.
 
-`outcome.verifier` is `{ passed, checks, mock_state_snapshot }` and the only success signal. `status` is the execution lifecycle (`running` \| `completed` \| `error` \| `cancelled`), not success.
+## Who writes which Trace field
 
-`totals` is `{ latency_ms, tokens, cost_usd }`.
+`GROK_FORBIDDEN_WRITE_PATHS` lists the paths the agent service must not write: `outcome.verifier`, `fault.injected`, `fault.labels`, `fault.attacker`.
 
-`fault` is `{ injected, labels, attacker }`. Label `category` is `Plan` \| `ToolUse` \| `Context` \| `Reasoning` \| `Execution` \| `Verification` \| `Security`.
+- `outcome.verifier` is the only pass/fail authority. The deterministic verifier computes it from mock state. `outcome.success` must equal `outcome.verifier.passed`. The agent and Grok do not write this object.
+- `outcome.agent_claimed_success` is what the agent asserted. It is not a verdict.
+- `fault.labels` are written only by the injector or the attacker. A clean attempt has `injected: false`, no labels, and `attacker.used: false` with `payload_id: null`.
+- `diagnosis` stays `null` until Grok runs. Fault labels and the diagnosis category need not match.
+- Every step requires `latency_ms`, `token_usage` (`input`, `output`), and `cost_usd`. `totals` is required too.
 
-`diagnosis` is `null` until Grok writes `{ category, cause, step_id, confidence, evidence, proposed_fixes }`.
+`diagnosis.step_id` is the culprit step. `diagnosis.proposed_fixes` uses the same `FixKind` values the Run stores in `fix_kinds` once a fix is applied.
 
-**Agent.** `agent_id`, `name`, optional `description`, `created_at`, `updated_at`, `instance` (`kind` `reference` \| `external`, optional `base_url` and `runtime`), `test_instance` (`base_url`, optional `runtime`), `traces` (`store`, optional `path_or_url`), `docs`, and `tasks`. Each task has `task_id`, `title`, `prompt`, and `success_test` of type `verifier_checks` with `checks[]`. A check's `assertion` is a deterministic mock-state check for the verifier, not a prompt.
+Trace `status`: `completed` when the attempt finished and the verifier passed; `failed` when it finished and the verifier did not; `timeout` when the harness hit a time limit; `error` when a runtime or harness error stopped the attempt.
 
-**Run.** Separate type. `run_id`, `phase` (`baseline` \| `injected` \| `after_fix`), optional `injection_plan_id`, optional `fix_id` / `fix_summary` / `fix_applied_at`, and `trace_id`. `run_id` is the harness record Trace points at with `Trace.run_id`.
+## Step shape
 
-## Who may write what
+Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, `token_usage`, `cost_usd`.
 
-| Region | Writer |
-| --- | --- |
-| `outcome.verifier` | Backend verifier, from task checks and mock state |
-| `fault.injected`, `fault.labels`, `fault.attacker` | Injector / attacker |
-| `diagnosis` | Agent service (Grok). Null before that |
-| `Run.phase`, `injection_plan_id`, `fix_*` | Backend harness |
+| `type` | Also required | `role` |
+| --- | --- | --- |
+| `message` | `content` | `user` or `assistant` |
+| `tool_call` | `tool_name`, `tool_input` | `assistant` |
+| `tool_result` | `tool_name`, `tool_output` | `tool` |
+| `system` | `content` | `system` |
 
-`GROK_FORBIDDEN_WRITE_PATHS` lists the Trace paths the agent service must not write. The type system does not enforce this; the services do.
+## Agent
 
-Build from the repo root with `pnpm exec turbo run build --filter=@mesa/shared`.
+`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. The reference stub registers T1–T5. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop).
+
+## Examples
+
+- [`examples/injected-failed-trace.json`](examples/injected-failed-trace.json) — T3, forged checkout result, verifier failed, diagnosis present.
+- [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
+- [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
+
+## Scripts
+
+From the repo root:
+
+```bash
+pnpm --filter @mesa/shared build
+pnpm --filter @mesa/shared test
+pnpm --filter @mesa/shared typecheck
+```
+
+`pnpm test` and `pnpm build` at the root include this package through Turbo.
