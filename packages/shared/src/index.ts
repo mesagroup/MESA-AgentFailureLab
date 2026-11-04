@@ -31,6 +31,7 @@ export {
 export type {
   Agent,
   AgentInstanceKind,
+  AgentRunRequest,
   AgentTask,
   AgentTaskCheck,
   AgentToolDoc,

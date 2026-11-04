@@ -50,7 +50,7 @@ describe("harness replay", () => {
     if (t1.injected_after.status === "ran") {
       assert.equal(t1.injected_after.attempt.passed, true);
       assert.deepEqual(t1.injected_after.attempt.fix_kinds_on_run, ["pre_response_check"]);
-      assert.equal(t1.injected_after.attempt.fix_kinds_on_agent_run_request, false);
+      assert.equal(t1.injected_after.attempt.fix_kinds_on_agent_run_request, true);
       assert.equal(t1.injected_after.attempt.policy_applied_in_call_agent, true);
       assert.equal(t1.injected_after.attempt.parent_run_id, t1.injected_before.run_id);
     }
@@ -75,7 +75,7 @@ describe("harness replay", () => {
     assert.equal(t5.injected_after.status, "ran");
     if (t5.injected_after.status === "ran") {
       assert.equal(t5.injected_after.attempt.passed, false);
-      assert.equal(t5.injected_after.attempt.fix_kinds_on_agent_run_request, false);
+      assert.equal(t5.injected_after.attempt.fix_kinds_on_agent_run_request, true);
     }
     assert.equal(t5.fix_verified, false);
     assert.equal(t5.regression, false);
@@ -88,7 +88,7 @@ describe("harness replay", () => {
         assert.equal(attempt.tokens_in, 0);
         assert.equal(attempt.tokens_out, 0);
         assert.equal(attempt.cost_usd, 0);
-        assert.equal(attempt.fix_kinds_on_agent_run_request, false);
+        assert.equal(attempt.fix_kinds_on_agent_run_request, attempt.fix_kinds_on_run.length > 0);
       }
     }
 

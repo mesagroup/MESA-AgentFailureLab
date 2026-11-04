@@ -1,4 +1,4 @@
-import type { Agent, FaultCategory } from "@mesa/shared";
+import type { Agent, AgentRunRequest, FaultCategory, FixKind } from "@mesa/shared";
 import { permissionsFor } from "../../backend/src/agent/scripted.js";
 import { prepareWorld } from "../../backend/src/harness/world.js";
 import { runTasks } from "../../backend/src/harness/runner.js";
@@ -18,8 +18,10 @@ import type { AttemptScore, ReplayPort } from "../src/replay/types.js";
  * Injected and after_fix arms use `injection: "preset"`, so the backend injector
  * is the only writer of fault labels. `passed` is copied from the trace the
  * verifier already wrote.
- * When fixes are non-empty, the policy runs inside the `callAgent` hook because
- * `AgentRunRequest` still has no `fix_kinds`. Production HTTP does not use this hook.
+ * When fixes are non-empty, the policy runs inside the `callAgent` hook.
+ * `after_fix` copies `Run.fix_kinds` onto the shared `AgentRunRequest`. This hook
+ * reads that field when it is present, and falls back to the replay's fix list
+ * for the baseline arm that applies every fix without storing them on the Run.
  */
 export function createHarnessReplayPort(input: {
   agent: Agent;
@@ -30,6 +32,7 @@ export function createHarnessReplayPort(input: {
   return {
     async run(request) {
       const apply = request.fixes.length > 0;
+      let carriedOnRequest = false;
       const [result] = await runTasks({
         agent: input.agent,
         store: input.store,
@@ -45,12 +48,13 @@ export function createHarnessReplayPort(input: {
         timeoutMs: 5_000,
         callAgent: apply
           ? (_baseUrl, body) => {
+              carriedOnRequest = body.fix_kinds !== undefined && body.fix_kinds.length > 0;
               const taskId = assertLabTaskId(body.task_id);
               const shaped = applyFixesToPlan({
                 taskId,
                 permissions: body.permissions,
                 orderId: body.order_id,
-                fixes: request.fixes,
+                fixes: fixesFromRequest(body, request.fixes),
                 prompt: body.prompt,
               });
               return Promise.resolve({
@@ -85,11 +89,15 @@ export function createHarnessReplayPort(input: {
         duration_ms: result.run.duration_ms ?? 0,
         fix_kinds_on_run: result.run.fix_kinds,
         policy_applied_in_call_agent: apply,
-        fix_kinds_on_agent_run_request: false,
+        fix_kinds_on_agent_run_request: carriedOnRequest,
       };
       return score;
     },
   };
+}
+
+function fixesFromRequest(body: AgentRunRequest, fallback: readonly FixKind[]): readonly FixKind[] {
+  return body.fix_kinds ?? fallback;
 }
 
 export function presetCategory(taskId: LabTaskId): FaultCategory {

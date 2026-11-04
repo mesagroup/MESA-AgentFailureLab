@@ -68,7 +68,7 @@ pnpm generate-dataset
 pnpm eval
 ```
 
-Con `XAI_API_KEY` impostata, lo stesso `pnpm eval` sostituisce il segnaposto della colonna Grok.
+Con `XAI_API_KEY` impostata, lo stesso `pnpm eval` sostituisce il segnaposto della colonna Grok. `pnpm eval:gate` riesegue solo il baseline deterministico, ignora `XAI_API_KEY`, e confronta le quattro frazioni della colonna Baseline con [`apps/agentservice/eval/baseline.json`](apps/agentservice/eval/baseline.json). La soglia `max_rate_drop` è in quel file. Dettaglio: [docs/eval.md](docs/eval.md).
 
 <!-- eval-scoreboard:start -->
 Set valutato: 19 trace, 7 categorie (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security).
@@ -98,7 +98,7 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
 | Accuratezza di categoria | 4/19 | 5/19 |
-| Step esatto | 4/19 | 5/19 |
+| Step esatto | 5/19 | 5/19 |
 | Step entro ±1 | 10/19 | 13/19 |
 | Hit del fix proposto | 4/7 | 7/7 |
 | Fix non applicabile | 12 | 12 |
