@@ -2,16 +2,13 @@ import type {
   Agent,
   AgentInstanceKind,
   AgentTask,
-  FaultCategory,
+  FixKind,
   Run,
+  RunPhase,
   Trace,
   TraceOutcome,
   TraceTotals,
 } from "@mesa/shared";
-import { ApiError } from "@/lib/errors";
-import { runRequestBody, runsFromCreateResponse, type RunParams } from "@/lib/run-request";
-
-export type { RunParams } from "@/lib/run-request";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
 
@@ -20,30 +17,25 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
   });
-  if (!res.ok) throw await apiError(res);
+  if (!res.ok) throw new Error(await errorMessage(res));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-async function apiError(res: Response): Promise<ApiError> {
-  let code: string | undefined;
-  let message = "";
+async function errorMessage(res: Response): Promise<string> {
   try {
     const body: unknown = await res.json();
     if (typeof body === "object" && body !== null) {
-      const record = body as { message?: unknown; errors?: unknown; error?: unknown };
-      if (typeof record.error === "string" && record.error.length > 0) code = record.error;
+      const record = body as { message?: unknown; errors?: unknown };
       if (Array.isArray(record.errors) && record.errors.every((entry) => typeof entry === "string")) {
-        message = record.errors.join("; ");
-      } else if (typeof record.message === "string") {
-        message = record.message;
+        return record.errors.join("; ");
       }
+      if (typeof record.message === "string" && record.message.length > 0) return record.message;
     }
   } catch {
     // The error body was not JSON.
   }
-  if (!message) message = code || res.statusText || "The request failed.";
-  return new ApiError(res.status, message, code);
+  return `${res.status} ${res.statusText}`;
 }
 
 // --- Agents ---
@@ -62,8 +54,12 @@ export async function listAgents(): Promise<Agent[]> {
   return data.agents;
 }
 
-export async function getAgent(id: string): Promise<Agent> {
-  return backendFetch<Agent>(`/agents/${encodeURIComponent(id)}`);
+export async function getAgent(id: string): Promise<Agent | undefined> {
+  try {
+    return await backendFetch<Agent>(`/agents/${id}`);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function saveAgent(draft: AgentDraft): Promise<Agent> {
@@ -110,17 +106,12 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
 
 // --- Runs ---
 
-export interface FaultCatalogEntry {
-  code: string;
-  category: FaultCategory;
-  target: string;
-  fault: string;
-  effect: string;
-}
-
-export interface FaultCatalog {
-  faults: FaultCatalogEntry[];
-  presets: Record<string, string>;
+export interface RunParams {
+  agent_id: string;
+  phase: RunPhase;
+  task_ids?: string[];
+  fix_kinds?: FixKind[];
+  parent_run_id?: string | null;
 }
 
 /** One stored trace as `GET /runs` embeds it. Not a full Trace document. */
@@ -177,23 +168,16 @@ export async function getRun(id: string): Promise<Run> {
   return backendFetch<Run>(`/runs/${id}`);
 }
 
-export async function listFaults(): Promise<FaultCatalog> {
-  return backendFetch<FaultCatalog>("/faults");
-}
-
 export async function createRun(params: RunParams): Promise<Run[]> {
-  const data = await backendFetch<unknown>("/runs", {
+  const body: Record<string, unknown> = { agent_id: params.agent_id, phase: params.phase };
+  if (params.task_ids?.length) body.task_ids = params.task_ids;
+  if (params.fix_kinds?.length) body.fix_kinds = params.fix_kinds;
+  if (params.parent_run_id !== undefined) body.parent_run_id = params.parent_run_id;
+  const data = await backendFetch<{ results: Run[] }>("/runs", {
     method: "POST",
-    body: JSON.stringify(runRequestBody(params)),
+    body: JSON.stringify(body),
   });
-  return runsFromCreateResponse(data);
-}
-
-export async function diagnoseTrace(id: string): Promise<Trace> {
-  return backendFetch<Trace>(`/traces/${encodeURIComponent(id)}/diagnose`, {
-    method: "POST",
-    body: "{}",
-  });
+  return data.results;
 }
 
 // --- Traces ---

@@ -1,133 +1,228 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Activity, ChevronDown, ChevronRight, CornerDownLeft, Info, MessageSquare, Sparkles, Wrench } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { Agent, FixKind, StepType, Trace, TraceStep } from "@mesa/shared";
-import { StatusBadge } from "@/components/badges";
-import { CodeTip, CopyIdButton } from "@/components/CodeTip";
-import { Page, PageHeader, SectionTitle } from "@/components/PageHeader";
-import { ErrorState, StateCard } from "@/components/StateCard";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDocumentTitle } from "@/hooks/use-document-title";
-import { diagnoseTrace, getAgent, getRun, getTrace } from "@/lib/api";
-import { apiErrorDetails, friendlyApiMessage } from "@/lib/errors";
-import {
-  FIX_LABEL,
-  STEP_ROLE_LABEL,
-  STEP_TYPE_LABEL,
-  categoryLabel,
-  checkLabel,
-  faultCodeLabel,
-  formatClock,
-  formatCost,
-  formatDuration,
-  formatRunLabel,
-  formatTaskLabel,
-  formatTraceTitle,
-} from "@/lib/labels";
 import { cn } from "@/lib/utils";
+import { getTrace } from "@/lib/api";
+import type { Trace, TraceStep, FaultLabel, FixKind } from "@mesa/shared";
 
-const STEP_ICON: Record<StepType, LucideIcon> = {
-  message: MessageSquare,
-  tool_call: Wrench,
-  tool_result: CornerDownLeft,
-  system: Info,
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function fmtCost(usd: number) {
+  if (usd === 0) return "$0";
+  return usd < 0.001 ? `$${(usd * 1000).toFixed(2)}m` : `$${usd.toFixed(4)}`;
+}
+
+function StatusBadge({ status }: { status: Trace["status"] }) {
+  const styles: Record<Trace["status"], string> = {
+    completed: "bg-green-500/15 text-green-500 border-green-500/20",
+    failed: "bg-red-500/15 text-red-400 border-red-500/20",
+    timeout: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+    error: "bg-red-500/15 text-red-400 border-red-500/20",
+  };
+  return (
+    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", styles[status])}>
+      {status}
+    </span>
+  );
+}
+
+function FaultCategoryBadge({ category }: { category: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono bg-amber-500/10 text-amber-500 border-amber-500/20">
+      {category}
+    </span>
+  );
+}
+
+function FixBadge({ fix }: { fix: FixKind }) {
+  const labels: Record<FixKind, string> = {
+    controlled_retry: "controlled retry",
+    pre_response_check: "pre-response check",
+    permission_guard: "permission guard",
+  };
+  return (
+    <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
+      {labels[fix]}
+    </span>
+  );
+}
+
+// ── step timeline ─────────────────────────────────────────────────────────────
+
+const STEP_COLORS: Record<TraceStep["type"], string> = {
+  message: "bg-blue-500",
+  tool_call: "bg-amber-400",
+  tool_result: "bg-green-500",
+  system: "bg-zinc-400",
 };
+
+const STEP_LABEL_COLORS: Record<TraceStep["type"], string> = {
+  message: "text-blue-400",
+  tool_call: "text-amber-400",
+  tool_result: "text-green-500",
+  system: "text-zinc-400",
+};
+
+function CollapsibleJson({ value }: { value: unknown }) {
+  const [open, setOpen] = useState(false);
+  const preview = JSON.stringify(value);
+  const short = preview.length > 60 ? preview.slice(0, 60) + "…" : preview;
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {open ? "hide" : short}
+      </button>
+      {open && (
+        <pre className="mt-1.5 text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-muted-foreground leading-relaxed">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function StepRow({ step, culpritIds }: { step: TraceStep; culpritIds: Set<string> }) {
+  const [expanded, setExpanded] = useState(false);
+  const isCulprit = culpritIds.has(step.step_id);
+  const hasContent = !!step.content;
+  const isExpandable = hasContent && (step.content?.length ?? 0) > 120;
+
+  return (
+    <div
+      className={cn(
+        "relative flex gap-3 px-5 py-3.5 border-b border-border/30 last:border-0",
+        isCulprit && "bg-amber-500/5 border-l-2 border-l-amber-400 pl-[18px]"
+      )}
+    >
+      {/* Type dot */}
+      <div className="flex flex-col items-center pt-1 shrink-0">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", STEP_COLORS[step.type])} />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn("text-xs font-mono font-medium", STEP_LABEL_COLORS[step.type])}>
+            {step.type.replace("_", " ")}
+          </span>
+          <span className="text-xs text-muted-foreground/60 font-mono">{step.role}</span>
+          {step.tool_name && (
+            <span className="text-xs font-mono bg-muted/60 px-1.5 py-0.5 rounded">{step.tool_name}</span>
+          )}
+          {isCulprit && (
+            <span className="text-xs font-mono text-amber-500 font-medium">culprit</span>
+          )}
+          <span className="text-xs font-mono text-muted-foreground/40 ml-auto">{fmt(step.timestamp)}</span>
+        </div>
+
+        {/* Message content */}
+        {hasContent && (
+          <div className="mt-1.5">
+            <p
+              className={cn("text-sm text-foreground/80 leading-relaxed", !expanded && "line-clamp-3")}
+            >
+              {step.content}
+            </p>
+            {isExpandable && (
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+              >
+                {expanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Tool input/output */}
+        {step.tool_input !== undefined && step.type === "tool_call" && (
+          <div className="mt-1">
+            <span className="text-xs text-muted-foreground/60">input</span>
+            <CollapsibleJson value={step.tool_input} />
+          </div>
+        )}
+        {step.tool_output !== undefined && step.type === "tool_result" && (
+          <div className="mt-1">
+            <span className="text-xs text-muted-foreground/60">output</span>
+            <CollapsibleJson value={step.tool_output} />
+          </div>
+        )}
+      </div>
+
+      {/* Metrics */}
+      <div className="shrink-0 text-right space-y-0.5 pt-0.5">
+        <p className="text-xs font-mono text-muted-foreground/50">{step.latency_ms}ms</p>
+        {step.cost_usd > 0 && (
+          <p className="text-xs font-mono text-muted-foreground/40">{fmtCost(step.cost_usd)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── loading skeleton ──────────────────────────────────────────────────────────
+
+function TraceSkeleton() {
+  return (
+    <div className="px-5 pb-8 max-w-6xl mx-auto space-y-4">
+      <Skeleton className="h-6 w-48 mt-4" />
+      <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex gap-3 px-5 py-3.5 border-b border-border/30 last:border-0">
+            <Skeleton className="h-2 w-2 rounded-full mt-1 shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-4 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── page ──────────────────────────────────────────────────────────────────────
 
 export function TracePage() {
   const { traceId } = useParams<{ traceId: string }>();
+  const navigate = useNavigate();
   const [trace, setTrace] = useState<Trace | null>(null);
-  const [agent, setAgent] = useState<Agent | null>(null);
-  const [loading, setLoading] = useState(Boolean(traceId));
-  const [error, setError] = useState<unknown>(null);
-  const [agentError, setAgentError] = useState<unknown>(null);
-  const [diagnosing, setDiagnosing] = useState(false);
-  const [diagnoseError, setDiagnoseError] = useState<unknown>(null);
-  const [pollError, setPollError] = useState<unknown>(null);
-  const culpritRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const task = agent?.tasks.find((item) => item.task_id === trace?.task_id);
-  const taskTitle = formatTaskLabel({ title: task?.title, task_id: trace?.task_id });
-  const title = trace ? formatTraceTitle({ taskTitle, at: trace.started_at }) : "Traces";
-  useDocumentTitle(trace ? title : traceId ? "Trace" : "Traces");
-
-  async function load(id: string) {
+  useEffect(() => {
+    if (!traceId) { setLoading(false); return; }
     setLoading(true);
     setError(null);
-    try {
-      const next = await getTrace(id);
-      setTrace(next);
-      try {
-        setAgent(await getAgent(next.agent_id));
-        setAgentError(null);
-      } catch (cause) {
-        setAgent(null);
-        setAgentError(cause);
-      }
-    } catch (cause) {
-      setTrace(null);
-      setError(cause);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!traceId) {
-      setLoading(false);
-      setTrace(null);
-      return;
-    }
-    void load(traceId);
+    getTrace(traceId)
+      .then(setTrace)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load trace"))
+      .finally(() => setLoading(false));
   }, [traceId]);
-
-  useEffect(() => {
-    if (!trace) return;
-    const runId = trace.run_id;
-    const id = trace.trace_id;
-    let timer = 0;
-    let cancelled = false;
-    async function tick() {
-      try {
-        const run = await getRun(runId);
-        if (cancelled) return;
-        if (run.status !== "queued" && run.status !== "running") return;
-        setTrace(await getTrace(id));
-        timer = window.setTimeout(() => void tick(), 3000);
-      } catch (cause) {
-        if (!cancelled) setPollError(cause);
-      }
-    }
-    void tick();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [trace?.trace_id, trace?.run_id]);
-
-  const culpritIds = new Set(trace?.fault.labels.map((label) => label.step_id).filter(Boolean) ?? []);
-  const firstCulprit = trace?.fault.labels[0]?.step_id;
-
-  useEffect(() => {
-    if (!firstCulprit) return;
-    const handle = window.setTimeout(() => {
-      culpritRef.current?.scrollIntoView({ block: "center" });
-    }, 50);
-    return () => window.clearTimeout(handle);
-  }, [trace?.trace_id, firstCulprit]);
 
   if (!traceId) {
     return (
-      <Page>
-        <PageHeader title="Traces" subtitle="Open a run to inspect its trace." />
-        <StateCard
-          icon={Activity}
-          title="No trace selected"
-          description="Launch a test, then open the run to see the timeline."
-          action={<Button size="sm" className="rounded-full" nativeButton={false} render={<Link to="/runs" />}>Go to runs</Button>}
-        />
-      </Page>
+      <div className="px-5 pb-8 max-w-6xl mx-auto pt-2">
+        <h1 className="text-xl font-semibold">Traces</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Ispeziona traccia — open a run to inspect its stored trace.
+        </p>
+      </div>
     );
   }
 
@@ -135,291 +230,170 @@ export function TracePage() {
 
   if (error || !trace) {
     return (
-      <Page>
-        <PageHeader title="Trace" subtitle="The trace could not be loaded." />
-        <ErrorState error={error ?? new Error("Trace not found.")} onRetry={() => void load(traceId)} />
-      </Page>
+      <div className="px-5 pb-8 max-w-6xl mx-auto pt-8 text-center space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {error ?? "Trace not found."}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+          Back
+        </Button>
+      </div>
     );
   }
 
-  const failedChecks = trace.outcome.verifier.checks.filter((check) => !check.passed);
-  const disagree = trace.outcome.agent_claimed_success && !trace.outcome.verifier.passed;
+  const culpritIds = new Set<string>(
+    trace.fault.labels.map((l: FaultLabel) => l.step_id).filter(Boolean)
+  );
 
-  async function handleDiagnose() {
-    setDiagnosing(true);
-    setDiagnoseError(null);
-    try {
-      setTrace(await diagnoseTrace(trace!.trace_id));
-    } catch (cause) {
-      setDiagnoseError(cause);
-    } finally {
-      setDiagnosing(false);
-    }
-  }
+  const failedChecks = trace.outcome.verifier.checks.filter((c) => !c.passed);
 
   return (
-    <Page>
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 pt-2 text-sm text-muted-foreground">
-        <Link to={`/agents/${encodeURIComponent(trace.agent_id)}`} className="hover:text-foreground">
-          {agent?.name ?? "Agent"}
-        </Link>
-        <span aria-hidden>/</span>
-        <Link to={`/runs/${encodeURIComponent(trace.run_id)}`} className="hover:text-foreground">
-          {formatRunLabel({ taskTitle, at: trace.started_at })}
-        </Link>
-        <span aria-hidden>/</span>
-        <span className="text-foreground">Trace</span>
-      </nav>
-      {agentError != null && <ErrorState error={agentError} onRetry={() => void load(trace.trace_id)} />}
-      {pollError != null && <ErrorState error={pollError} onRetry={() => void load(trace.trace_id)} />}
-      <PageHeader
-        title={title}
-        subtitle={agent?.name ?? "Trace"}
-        actions={<CopyIdButton id={trace.trace_id} label="Copy trace id" />}
-      />
+    <div className="px-5 pb-8 max-w-6xl mx-auto space-y-4">
 
-      {disagree && (
-        <div className="rounded-2xl border border-failed/30 bg-failed-soft px-4 py-3 text-sm font-medium text-failed">
-          Agent claimed success · Verifier: failed
+      {/* Back + header */}
+      <div className="flex items-center gap-3 pt-2 pb-1">
+        <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-sm font-mono font-medium truncate">{trace.trace_id}</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {trace.agent_id} · {trace.task_id}
+          </p>
+        </div>
+      </div>
+
+      {/* Fault banner */}
+      {trace.fault.injected && trace.fault.labels.length > 0 && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-2.5 flex items-center gap-3">
+          <span className="text-xs text-amber-500 font-medium">Fault injected</span>
+          <FaultCategoryBadge category={trace.fault.labels[0].category} />
+          <span className="text-xs font-mono text-amber-500/70">{trace.fault.labels[0].code}</span>
         </div>
       )}
 
-      {trace.fault.labels.length > 0 && (
-        <div className="rounded-2xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
-          <p className="font-medium">Injected faults</p>
-          <ul className="mt-2 space-y-1">
-            {trace.fault.labels.map((label) => (
-              <li key={`${label.step_id}-${label.code}`}>
-                <a href={`#step-${label.step_id}`} title={label.code} className="font-medium underline-offset-2 hover:underline">
-                  {faultCodeLabel(label.code)}
-                </a>
-                <span className="text-foreground/80"> · {categoryLabel(label.category)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+      {/* Verifier failure banner */}
       {!trace.outcome.verifier.passed && failedChecks.length > 0 && (
-        <div className="rounded-2xl border border-failed/30 bg-failed-soft px-4 py-3 text-sm text-failed">
-          <p className="font-medium">Verifier failed</p>
-          <ul className="mt-2 space-y-1">
-            {failedChecks.map((check) => (
-              <li key={check.name}>
-                <CodeTip label={checkLabel(check.name)} code={check.name} />
-                <span> — {check.detail}</span>
+        <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-2.5 space-y-1">
+          <span className="text-xs text-red-400 font-medium">Verifier failed</span>
+          <ul className="space-y-0.5">
+            {failedChecks.map((c) => (
+              <li key={c.name} className="text-xs font-mono text-red-400/70">
+                {c.name} — {c.detail}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+
+        {/* Left: summary + timeline */}
         <div className="space-y-4">
-          <section className="rounded-2xl bg-card p-5 shadow-island">
-            <div className="mb-3 flex flex-wrap items-center gap-3">
+
+          {/* Trace summary */}
+          <div className="rounded-2xl bg-card shadow-island p-5">
+            <div className="flex items-center gap-3 flex-wrap mb-3">
               <StatusBadge status={trace.status} />
-              <span className="text-sm text-muted-foreground">
-                {formatClock(trace.started_at)} – {formatClock(trace.ended_at)}
+              <span className="text-xs font-mono text-muted-foreground">
+                {fmt(trace.started_at)} → {fmt(trace.ended_at)}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Metric label="Time" value={formatDuration(trace.totals.latency_ms)} />
-              <Metric label="Cost" value={formatCost(trace.totals.cost_usd)} />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+              <Metric label="Latency" value={`${(trace.totals.latency_ms / 1000).toFixed(2)}s`} />
+              <Metric label="Cost" value={fmtCost(trace.totals.cost_usd)} />
               <Metric label="Tokens in" value={trace.totals.tokens_in.toLocaleString()} />
               <Metric label="Tokens out" value={trace.totals.tokens_out.toLocaleString()} />
             </div>
-          </section>
+          </div>
 
-          <section className="overflow-hidden rounded-2xl bg-card shadow-island">
-            <SectionTitle aside={<span className="text-xs text-muted-foreground">{trace.steps.length}</span>}>Timeline</SectionTitle>
-            <div className="relative">
-              <div className="absolute top-6 bottom-6 left-[2.15rem] w-px bg-border" aria-hidden />
-              {trace.steps.map((step, index) => (
-                <StepRow
-                  key={step.step_id}
-                  step={step}
-                  index={index}
-                  culprit={culpritIds.has(step.step_id)}
-                  culpritRef={step.step_id === firstCulprit ? culpritRef : undefined}
-                />
-              ))}
+          {/* Step timeline */}
+          <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
+              <span className="text-xs font-medium">Steps</span>
+              <span className="text-xs text-muted-foreground">{trace.steps.length}</span>
             </div>
-          </section>
+            {trace.steps.map((step) => (
+              <StepRow key={step.step_id} step={step} culpritIds={culpritIds} />
+            ))}
+          </div>
         </div>
 
+        {/* Right: diagnosis + verifier */}
         <div className="space-y-4">
-          {trace.diagnosis ? (
-            <section className="space-y-3 rounded-2xl bg-card p-5 shadow-island">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Diagnosis</h2>
-                <span className="text-xs text-muted-foreground">{Math.round(trace.diagnosis.confidence * 100)}% confidence</span>
+
+          {/* Diagnosis */}
+          {trace.diagnosis && (
+            <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">Diagnosis</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {Math.round(trace.diagnosis.confidence * 100)}% confidence
+                </span>
               </div>
-              <p className="text-sm font-medium">{categoryLabel(trace.diagnosis.category)}</p>
-              <p className="text-sm leading-relaxed">{trace.diagnosis.cause}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <FaultCategoryBadge category={trace.diagnosis.category} />
+              </div>
+              <p className="text-xs text-foreground/80 leading-relaxed">{trace.diagnosis.cause}</p>
               {trace.diagnosis.evidence.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-sm text-muted-foreground">Evidence</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">Evidence</p>
                   <ul className="space-y-1">
-                    {trace.diagnosis.evidence.map((item) => (
-                      <li key={item} className="text-sm leading-relaxed">{item}</li>
+                    {trace.diagnosis.evidence.map((e, i) => (
+                      <li key={i} className="text-xs text-muted-foreground font-mono leading-relaxed">
+                        — {e}
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
               {trace.diagnosis.proposed_fixes.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-sm text-muted-foreground">Proposed fixes</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">Proposed fixes</p>
                   <div className="flex flex-wrap gap-1.5">
                     {trace.diagnosis.proposed_fixes.map((fix) => (
-                      <FixChip key={fix} fix={fix} />
+                      <FixBadge key={fix} fix={fix} />
                     ))}
                   </div>
                 </div>
               )}
-            </section>
-          ) : (
-            <StateCard
-              icon={Sparkles}
-              title="No diagnosis yet"
-              description="Grok can suggest a cause and a fix from this trace."
-              action={
-                <div className="flex flex-col items-center gap-3">
-                  <Button size="sm" className="rounded-full" onClick={() => void handleDiagnose()} disabled={diagnosing}>
-                    {diagnosing ? "Diagnosing…" : "Diagnose with Grok"}
-                  </Button>
-                  {diagnoseError != null && <p className="text-sm text-destructive">{friendlyApiMessage(diagnoseError)}</p>}
-                  {diagnoseError != null && <DiagnosisDetails error={diagnoseError} />}
-                </div>
-              }
-            />
+            </div>
           )}
 
-          <section className="space-y-3 rounded-2xl bg-card p-5 shadow-island">
+          {/* Verifier outcome */}
+          <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Verifier</h2>
-              <span className={cn("text-sm font-medium", trace.outcome.verifier.passed ? "text-passed" : "text-failed")}>
-                {trace.outcome.verifier.passed ? "Passed" : "Failed"}
+              <span className="text-xs font-medium">Verifier</span>
+              <span className={cn(
+                "text-xs font-mono",
+                trace.outcome.verifier.passed ? "text-green-500" : "text-red-400"
+              )}>
+                {trace.outcome.verifier.passed ? "passed" : "failed"}
               </span>
             </div>
             <div className="space-y-2">
               {trace.outcome.verifier.checks.map((check) => (
                 <div key={check.name} className="space-y-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <CodeTip label={checkLabel(check.name)} code={check.name}>
-                      <span className="text-sm">{checkLabel(check.name)}</span>
-                    </CodeTip>
-                    <span className={cn("text-sm", check.passed ? "text-passed" : "text-failed")}>{check.passed ? "Passed" : "Failed"}</span>
+                    <span className="text-xs font-mono">{check.name}</span>
+                    <span className={cn(
+                      "text-xs font-mono shrink-0",
+                      check.passed ? "text-green-500" : "text-red-400"
+                    )}>
+                      {check.passed ? "✓" : "✗"}
+                    </span>
                   </div>
-                  {!check.passed && <p className="text-sm text-muted-foreground">{check.detail}</p>}
+                  {!check.passed && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">{check.detail}</p>
+                  )}
                 </div>
               ))}
             </div>
-          </section>
-        </div>
-      </div>
-    </Page>
-  );
-}
-
-function DiagnosisDetails({ error }: { error: unknown }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setOpen((value) => !value)}>
-        {open ? "Hide details" : "Show details"}
-      </button>
-      {open && apiErrorDetails(error) && <p className="mt-1 font-mono text-xs text-muted-foreground">{apiErrorDetails(error)}</p>}
-    </div>
-  );
-}
-
-function FixChip({ fix }: { fix: FixKind }) {
-  return (
-    <span className="inline-flex items-center rounded-md border border-current/15 bg-info-soft px-2 py-0.5 text-xs font-medium text-info">
-      <CodeTip label={FIX_LABEL[fix]} code={fix} />
-    </span>
-  );
-}
-
-function StepRow({
-  step,
-  index,
-  culprit,
-  culpritRef,
-}: {
-  step: TraceStep;
-  index: number;
-  culprit: boolean;
-  culpritRef?: RefObject<HTMLDivElement | null>;
-}) {
-  const Icon = STEP_ICON[step.type];
-  const [expanded, setExpanded] = useState(culprit);
-  const long = (step.content?.length ?? 0) > 280;
-  return (
-    <div
-      id={`step-${step.step_id}`}
-      ref={culpritRef}
-      className={cn("relative flex gap-3 border-b border-border/30 px-5 py-4 last:border-0", culprit && "bg-warning-soft/40")}
-    >
-      <div className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-card text-foreground ring-1 ring-border">
-        <Icon className="size-3.5" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
-          <CodeTip label={STEP_TYPE_LABEL[step.type]} code={step.type}>
-            <span className="text-sm font-medium">{STEP_TYPE_LABEL[step.type]}</span>
-          </CodeTip>
-          <CodeTip label={STEP_ROLE_LABEL[step.role]} code={step.role}>
-            <span className="text-xs text-muted-foreground">{STEP_ROLE_LABEL[step.role]}</span>
-          </CodeTip>
-          {step.tool_name && <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">{step.tool_name}</span>}
-          {culprit && (
-            <span className="rounded-md border border-current/15 bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
-              culprit step
-            </span>
-          )}
-          <span className="ml-auto text-xs text-muted-foreground">{formatClock(step.timestamp)}</span>
-        </div>
-        {step.content && (
-          <div className="mt-1.5">
-            <p className={cn("text-sm leading-relaxed", !expanded && long && "line-clamp-3")}>{step.content}</p>
-            {long && (
-              <button type="button" className="mt-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setExpanded((value) => !value)}>
-                {expanded ? "Show less" : "Show more"}
-              </button>
-            )}
           </div>
-        )}
-        {step.tool_input !== undefined && step.type === "tool_call" && (
-          <JsonBlock label="Input" value={step.tool_input} defaultOpen={culprit} />
-        )}
-        {step.tool_output !== undefined && step.type === "tool_result" && (
-          <JsonBlock label="Output" value={step.tool_output} defaultOpen={culprit} />
-        )}
-      </div>
-      <div className="shrink-0 pt-0.5 text-right">
-        <p className="text-xs text-muted-foreground">{formatDuration(step.latency_ms)}</p>
-        <p className="text-xs text-muted-foreground">{formatCost(step.cost_usd)}</p>
-      </div>
-    </div>
-  );
-}
 
-function JsonBlock({ label, value, defaultOpen }: { label: string; value: unknown; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="mt-2">
-      <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
-        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-        {label}
-      </button>
-      {open && (
-        <pre className="mt-1.5 overflow-x-auto rounded-lg bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground">
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -428,17 +402,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-mono text-sm font-medium">{value}</p>
+      <p className="text-sm font-mono font-medium mt-0.5">{value}</p>
     </div>
-  );
-}
-
-function TraceSkeleton() {
-  return (
-    <Page>
-      <Skeleton className="mt-4 h-6 w-48" />
-      <Skeleton className="h-24" />
-      <Skeleton className="h-64" />
-    </Page>
   );
 }
