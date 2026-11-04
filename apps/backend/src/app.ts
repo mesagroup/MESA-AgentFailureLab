@@ -9,6 +9,7 @@ import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
+import { sessionView } from "./harness/session.js";
 import { isRecord } from "./util.js";
 
 export interface BuildAppOptions {
@@ -75,7 +76,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     presets: TASK_FAULT_PRESETS,
   }));
 
-  app.get("/runs", async () => ({ runs: store.listRuns() }));
+  app.get("/runs", async () => {
+    const agentsNow = await agents.list();
+    return sessionView({
+      runs: store.listRuns(),
+      traces: store.listTraces(),
+      agentCount: agentsNow.length,
+    });
+  });
 
   app.get<{ Params: { runId: string } }>("/runs/:runId", async (request, reply) => {
     const run = store.getRun(request.params.runId);
