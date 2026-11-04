@@ -4,6 +4,8 @@ import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
+import { registerAgentRoutes } from "./agents/routes.js";
+import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
@@ -12,6 +14,7 @@ import { isRecord } from "./util.js";
 export interface BuildAppOptions {
   logger?: boolean;
   store?: RunStore;
+  agents?: AgentStore;
   agent?: Agent;
   mockBaseUrl?: string;
   mock?: MockShopClient;
@@ -25,6 +28,7 @@ export interface BuildAppOptions {
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
   const store = options.store ?? new MemoryStore();
+  const agents = options.agents ?? new MemoryAgentStore();
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";
   const agent = options.agent ?? loadReferenceAgent();
   const mock = options.mock ?? createHttpMockClient(mockBaseUrl);
@@ -54,8 +58,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     role: "harness",
     contract_version: CONTRACT_VERSION,
     mock_base_url: mockBaseUrl,
+    agent_store: agents.kind,
     grok_forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
+
+  registerAgentRoutes(app, agents);
 
   app.get("/faults", async () => ({
     faults: FAULT_CATALOG.map((entry) => ({

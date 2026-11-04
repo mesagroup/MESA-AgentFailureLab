@@ -54,6 +54,7 @@ Copy an app's `.env.example` to `.env` in that same directory when you need to o
 - Placeholders only. Do not commit `.env`.
 - `XAI_API_KEY` stays empty in git. Put a real key in `apps/agentservice/.env` or the host secret store.
 - There is no auth configuration. The MVP does not grow an auth stub.
+- Agent records persist when `DATABASE_URL` is set. See [Persistence](persistence.md).
 
 The dev servers also start with built-in defaults if those variables are unset.
 

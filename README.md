@@ -26,7 +26,7 @@ CHAOS.AI / Agent Failure Lab is a lab to test agents and to investigate their re
 | Path | Team | Owns |
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Scaffold today. Planned: Agent CRUD, Testa agente, Ispeziona traccia. The timeline will render `Trace`. Before/after will use `Run` + `outcome.verifier`. |
-| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. No Agent CRUD API yet. |
+| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, Agent CRUD. Agents persist in Postgres when `DATABASE_URL` is set. Runs and traces stay in memory. No auth. |
 | [`services/mock-shop`](services/mock-shop/README.md) | Backend | Demo example: stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. The harness calls `MOCK_SHOP_URL`. Own process, separate from the harness. |
 | [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference demo agent proposes T1–T5 actions (`executed: false`). Grok diagnosis writes `diagnosis` only. MVP fixes: `controlled_retry`, `pre_response_check`, `permission_guard`. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
