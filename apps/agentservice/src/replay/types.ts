@@ -5,8 +5,9 @@ import type { LabTaskId } from "../fixes/domain.js";
 /**
  * One arm scored by the backend verifier.
  * `passed` is copied from `trace.outcome.verifier.passed`. This package does not write it.
- * `fix_kinds_on_agent_run_request` stays false until the harness copies `Run.fix_kinds`
- * onto `AgentRunRequest`.
+ * `fix_kinds_on_agent_run_request` is true when the harness put a non-empty
+ * `fix_kinds` on the shared `AgentRunRequest` passed to `callAgent`.
+ * Baseline and injected runs omit it.
  */
 export interface AttemptScore {
   readonly source: "backend-harness";
@@ -23,7 +24,7 @@ export interface AttemptScore {
   readonly duration_ms: number;
   readonly fix_kinds_on_run: readonly FixKind[];
   readonly policy_applied_in_call_agent: boolean;
-  readonly fix_kinds_on_agent_run_request: false;
+  readonly fix_kinds_on_agent_run_request: boolean;
 }
 
 export type ReplayPhase = "baseline" | "injected" | "after_fix";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, FixKind, InjectionPlan, Run, RunPhase, Trace, TraceStatus } from "@mesa/shared";
 import { FIX_KINDS } from "@mesa/shared";
-import { probeAgent, runRemoteAgent, type AgentRunResponse } from "../agent/http.js";
+import { agentRunRequest, probeAgent, runRemoteAgent, type AgentRunResponse } from "../agent/http.js";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { normalizePlan, presetPlan } from "../injector/catalog.js";
 import type { MockShopClient } from "../mock/client.js";
@@ -43,6 +43,8 @@ export interface RunTasksOptions {
   /** Override the remote agent poster. Tests use this to avoid a live agent process. */
   callAgent?: (baseUrl: string, request: Parameters<typeof runRemoteAgent>[1]) => Promise<AgentRunResponse>;
   probe?: (baseUrl: string) => Promise<boolean>;
+  /** Test hook for `controlled_retry` backoff. Production waits. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface TaskRunResult {
@@ -172,6 +174,7 @@ async function runOne(
     const remote = await loadActions(
       options,
       driver,
+      running,
       prompt,
       taskId,
       sessionId,
@@ -190,6 +193,8 @@ async function runOne(
       startedMs,
       claimedSuccess: remote.claimedSuccess,
       toolHook: options.toolHook,
+      fixKinds: running.fix_kinds,
+      sleep: options.sleep,
     });
     const shopState = await options.mock.state();
     const outcome = verifyOutcome({
@@ -303,6 +308,7 @@ async function runOne(
 async function loadActions(
   options: RunTasksOptions,
   driver: "scripted" | "http",
+  run: Run,
   prompt: string,
   taskId: string,
   sessionId: string,
@@ -313,7 +319,7 @@ async function loadActions(
     return { actions: scriptedActions(taskId, { permissions, orderId }) };
   }
   const call = options.callAgent ?? runRemoteAgent;
-  const response = await call(agentBaseUrl(options.agent, options.phase), {
+  const request = agentRunRequest({
     agent_id: options.agent.agent_id,
     task_id: taskId,
     prompt,
@@ -321,7 +327,9 @@ async function loadActions(
     permissions,
     mock_base_url: options.mockBaseUrl,
     order_id: orderId,
+    fix_kinds: run.fix_kinds,
   });
+  const response = await call(agentBaseUrl(options.agent, options.phase), request);
   if (response.executed) {
     throw new Error(
       "This harness MVP mediates tool calls. The agent response must set executed to false and return actions.",

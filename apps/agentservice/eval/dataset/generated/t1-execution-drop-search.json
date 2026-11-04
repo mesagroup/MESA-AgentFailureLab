@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T1-injected-ade9c3cb-dd56-4ead-bb0e-b1a8447f5416",
+  "trace_id": "trace-T1-injected-93fbd398-57f0-4417-983c-6f72ac4ad2c0",
   "agent_id": "reference-shop",
-  "run_id": "run-T1-injected-0abd37fe-3898-4532-84b7-bc67cbac49d7",
+  "run_id": "run-T1-injected-9b145d8e-5e2e-4343-b071-5a4e5ae4fd3b",
   "task_id": "T1",
-  "started_at": "2026-11-04T12:34:13.432Z",
-  "ended_at": "2026-11-04T12:34:13.439Z",
+  "started_at": "2026-11-04T13:35:20.775Z",
+  "ended_at": "2026-11-04T13:35:20.782Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.433Z",
+      "timestamp": "2026-11-04T13:35:20.776Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.434Z",
+      "timestamp": "2026-11-04T13:35:20.777Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.435Z",
+      "timestamp": "2026-11-04T13:35:20.778Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -53,14 +53,14 @@
       "tool_name": "search_products",
       "tool_output": {
         "error": "timeout",
-        "message": "Injected execution drop before the mock was called."
+        "message": "The tool did not respond before the time limit."
       }
     },
     {
       "step_id": "step-3",
       "index": 3,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.436Z",
+      "timestamp": "2026-11-04T13:35:20.779Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -77,7 +77,7 @@
       "step_id": "step-4",
       "index": 4,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.437Z",
+      "timestamp": "2026-11-04T13:35:20.780Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -99,7 +99,7 @@
       "step_id": "step-5",
       "index": 5,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.438Z",
+      "timestamp": "2026-11-04T13:35:20.781Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -173,12 +173,12 @@
         ],
         "observations": [
           {
-            "session_id": "sT1_05e551c9ebf042e8",
+            "session_id": "sT1_252cdf90289f4f43",
             "catalog_reads": [],
             "product_views": [
               {
                 "product_id": "SKU-MUG-01",
-                "at": "2026-11-04T12:34:13.433Z"
+                "at": "2026-11-04T13:35:20.776Z"
               }
             ],
             "order_reads": []

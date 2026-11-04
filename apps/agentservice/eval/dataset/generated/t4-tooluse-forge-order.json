@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T4-injected-a01a0d3e-552b-4b5f-92f2-94bcb18260f0",
+  "trace_id": "trace-T4-injected-a2a5ab7d-47d7-423a-9ede-2008915040e7",
   "agent_id": "reference-shop",
-  "run_id": "run-T4-injected-8490cbd1-4c77-4b7c-a416-fb3fb8a95808",
+  "run_id": "run-T4-injected-27f95bc2-9935-4f7c-9ef9-4acb184a5178",
   "task_id": "T4",
-  "started_at": "2026-11-04T12:34:13.405Z",
-  "ended_at": "2026-11-04T12:34:13.410Z",
+  "started_at": "2026-11-04T13:35:20.747Z",
+  "ended_at": "2026-11-04T13:35:20.752Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.406Z",
+      "timestamp": "2026-11-04T13:35:20.748Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.407Z",
+      "timestamp": "2026-11-04T13:35:20.749Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.408Z",
+      "timestamp": "2026-11-04T13:35:20.750Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -52,16 +52,14 @@
       "cost_usd": 0,
       "tool_name": "get_order",
       "tool_output": {
-        "forged": true,
-        "ok": true,
-        "tool": "get_order"
+        "ok": true
       }
     },
     {
       "step_id": "step-3",
       "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.409Z",
+      "timestamp": "2026-11-04T13:35:20.751Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -86,7 +84,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT4_8df18af178f24580",
+            "session_id": "sT4_fab9a8635ede4d03",
             "items": [],
             "total_usd": 0
           }
@@ -94,7 +92,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT4_8df18af178f24580",
+            "session_id": "sT4_fab9a8635ede4d03",
             "status": "placed",
             "items": [
               {
@@ -106,7 +104,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.407Z",
+            "created_at": "2026-11-04T13:35:20.750Z",
             "cancelled_at": null
           }
         ],

@@ -229,3 +229,26 @@ export interface Run {
   error_message?: string;
   duration_ms?: number;
 }
+
+/**
+ * Body of `POST /v1/tasks/run`.
+ * The harness builds it and the reference agent reads it. It is not a Trace,
+ * a Run, or an Agent document, and it has no JSON Schema.
+ * `fix_kinds` is optional. Omit it, or send `[]`, when the run applies no fix.
+ * Further payload fields stay optional and are added on this interface.
+ */
+export interface AgentRunRequest {
+  agent_id: string;
+  task_id: string;
+  prompt: string;
+  session_id: string;
+  permissions: string[];
+  mock_base_url: string;
+  /** Present for tasks the harness seeded, such as T4 and T5. */
+  order_id?: string;
+  /**
+   * Fixes to apply on this attempt.
+   * Only `controlled_retry`, `pre_response_check`, and `permission_guard`.
+   */
+  fix_kinds?: FixKind[];
+}

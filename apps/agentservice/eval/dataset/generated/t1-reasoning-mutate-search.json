@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T1-injected-f8635fbd-c312-4fca-ba59-6daa44c44a05",
+  "trace_id": "trace-T1-injected-74f9f954-539a-416d-8b2e-2aabbe2b191a",
   "agent_id": "reference-shop",
-  "run_id": "run-T1-injected-90c8a6d2-4e09-4325-8691-8978341d9f01",
+  "run_id": "run-T1-injected-ad8591cd-8d6d-439e-93f3-00102ade8585",
   "task_id": "T1",
-  "started_at": "2026-11-04T12:34:13.422Z",
-  "ended_at": "2026-11-04T12:34:13.429Z",
+  "started_at": "2026-11-04T13:35:20.763Z",
+  "ended_at": "2026-11-04T13:35:20.770Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.423Z",
+      "timestamp": "2026-11-04T13:35:20.764Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.424Z",
+      "timestamp": "2026-11-04T13:35:20.765Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -35,15 +35,14 @@
       "cost_usd": 0,
       "tool_name": "search_products",
       "tool_input": {
-        "q": "mug",
-        "injected": true
+        "q": "mug-x"
       }
     },
     {
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.425Z",
+      "timestamp": "2026-11-04T13:35:20.766Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -53,23 +52,14 @@
       "cost_usd": 0,
       "tool_name": "search_products",
       "tool_output": {
-        "products": [
-          {
-            "product_id": "SKU-MUG-01",
-            "sku": "SKU-MUG-01",
-            "name": "Ceramic Mug",
-            "description": "12oz stoneware mug, speckled glaze.",
-            "price_usd": 12,
-            "stock": 20
-          }
-        ]
+        "products": []
       }
     },
     {
       "step_id": "step-3",
       "index": 3,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.426Z",
+      "timestamp": "2026-11-04T13:35:20.767Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -86,7 +76,7 @@
       "step_id": "step-4",
       "index": 4,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.427Z",
+      "timestamp": "2026-11-04T13:35:20.768Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -108,7 +98,7 @@
       "step_id": "step-5",
       "index": 5,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.428Z",
+      "timestamp": "2026-11-04T13:35:20.769Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -182,17 +172,17 @@
         ],
         "observations": [
           {
-            "session_id": "sT1_859d9082f1d540ae",
+            "session_id": "sT1_dab67761523e4d6f",
             "catalog_reads": [
               {
-                "query": "mug",
-                "at": "2026-11-04T12:34:13.423Z"
+                "query": "mug-x",
+                "at": "2026-11-04T13:35:20.764Z"
               }
             ],
             "product_views": [
               {
                 "product_id": "SKU-MUG-01",
-                "at": "2026-11-04T12:34:13.424Z"
+                "at": "2026-11-04T13:35:20.766Z"
               }
             ],
             "order_reads": []

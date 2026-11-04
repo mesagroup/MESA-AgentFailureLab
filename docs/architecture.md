@@ -31,9 +31,9 @@ Solid arrows are HTTP between the lab apps, or from the agent service to the xAI
 | frontend | `apps/frontend` | 3000 | The page itself |
 | backend harness | `apps/backend` | 3001 | `VITE_BACKEND_URL` from the UI. `BACKEND_URL` from the agent service |
 | agentservice | `apps/agentservice` | 3002 | `VITE_AGENTSERVICE_URL` from the UI. The harness drives a task at `instance.base_url` (baseline) or `test_instance.base_url` (injected and after_fix) |
-| mock-shop | `services/mock-shop` | 8787 | `MOCK_SHOP_URL` from the harness. A configured tool base URL from the agent service |
+| mock-shop | `services/mock-shop` | 8787 | `MOCK_SHOP_URL` from the harness. The harness sends that value as `mock_base_url` |
 
-`pnpm dev` binds `127.0.0.1`. The three app containers bind `0.0.0.0`. Defaults: harness `MOCK_SHOP_URL=http://127.0.0.1:8787`. The reference agent's shop URL is the same host and port (`SHOP_BASE_URL` on [#21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)).
+`pnpm dev` binds `127.0.0.1`. The four containers bind `0.0.0.0`. For `pnpm dev`, the harness default is `MOCK_SHOP_URL=http://127.0.0.1:8787`. Compose sets `http://mesa-mock-shop:8787`. The Render Blueprint sets the public shop URL. The agent service does not read a shop base URL. The harness sends `mock_base_url` from `MOCK_SHOP_URL`. There is no `SHOP_BASE_URL` env var in this repo.
 
 `instance.base_url` is the agent runtime. It is the address the harness uses to start a task. It is not the shop.
 
@@ -51,12 +51,12 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 
-The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. It does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
+The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
 Runs, traces, and the shop catalog are in memory. The MVP has no database. Restarting the shop, or `POST /internal/reset`, restores the seed catalog.
 
 ## Render
 
-The demo Blueprint ([`render.yaml`](../render.yaml)) is three free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, and agentservice. Apply steps and env vars are in [deploy.md](deploy.md).
+The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop. Apply steps and env vars are in [deploy.md](deploy.md).
 
-The shop is not on that Blueprint. A hosted shop is tracked with the reference shop agent in [#21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21). `MOCK_SHOP_URL` is unset on Render. A run that needs the shop points that variable at a shop you started (local default `http://127.0.0.1:8787`).
+`mesa-mock-shop` is that fourth service. It is still not part of `apps/backend`. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. Local `pnpm dev` keeps `http://127.0.0.1:8787`.

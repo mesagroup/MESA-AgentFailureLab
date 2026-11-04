@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T4-injected-c2d7ecca-5eb0-40eb-9611-255395380d2a",
+  "trace_id": "trace-T4-injected-003c79bb-ee3f-4d6b-9956-553c363560ab",
   "agent_id": "reference-shop",
-  "run_id": "run-T4-injected-7e976242-8b91-4b69-b7c8-bb4add1e5e2c",
+  "run_id": "run-T4-injected-76dad2aa-5738-438e-8c10-d5cef515115a",
   "task_id": "T4",
-  "started_at": "2026-11-04T12:34:13.437Z",
-  "ended_at": "2026-11-04T12:34:13.442Z",
+  "started_at": "2026-11-04T13:35:20.780Z",
+  "ended_at": "2026-11-04T13:35:20.785Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.438Z",
+      "timestamp": "2026-11-04T13:35:20.781Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.439Z",
+      "timestamp": "2026-11-04T13:35:20.782Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.440Z",
+      "timestamp": "2026-11-04T13:35:20.783Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -53,14 +53,14 @@
       "tool_name": "get_order",
       "tool_output": {
         "error": "timeout",
-        "message": "Injected execution drop before the mock was called."
+        "message": "The tool did not respond before the time limit."
       }
     },
     {
       "step_id": "step-3",
       "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.441Z",
+      "timestamp": "2026-11-04T13:35:20.784Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -85,7 +85,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT4_3d9467f0fb0a4479",
+            "session_id": "sT4_9995c8699cf44937",
             "items": [],
             "total_usd": 0
           }
@@ -93,7 +93,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT4_3d9467f0fb0a4479",
+            "session_id": "sT4_9995c8699cf44937",
             "status": "placed",
             "items": [
               {
@@ -105,7 +105,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.439Z",
+            "created_at": "2026-11-04T13:35:20.781Z",
             "cancelled_at": null
           }
         ],

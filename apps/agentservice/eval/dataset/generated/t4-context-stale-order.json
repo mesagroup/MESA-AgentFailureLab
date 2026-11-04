@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T4-injected-812d05c4-6615-4822-98c4-699e9697e2aa",
+  "trace_id": "trace-T4-injected-8d457966-57e6-484e-acce-30f64bbe4d69",
   "agent_id": "reference-shop",
-  "run_id": "run-T4-injected-c07dfed2-98e4-46e6-91bc-b15f350068fb",
+  "run_id": "run-T4-injected-c6f949c2-4c7e-4344-bb32-41ab07513dc1",
   "task_id": "T4",
-  "started_at": "2026-11-04T12:34:13.416Z",
-  "ended_at": "2026-11-04T12:34:13.421Z",
+  "started_at": "2026-11-04T13:35:20.759Z",
+  "ended_at": "2026-11-04T13:35:20.764Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.417Z",
+      "timestamp": "2026-11-04T13:35:20.760Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.418Z",
+      "timestamp": "2026-11-04T13:35:20.761Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.419Z",
+      "timestamp": "2026-11-04T13:35:20.762Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -53,7 +53,7 @@
       "tool_name": "get_order",
       "tool_output": {
         "order_id": "ord_0001",
-        "session_id": "sT4_4f96359b392a4f16",
+        "session_id": "sT4_a82f94392fb74377",
         "status": "cancelled",
         "items": [
           {
@@ -65,7 +65,7 @@
           }
         ],
         "total_usd": 24,
-        "created_at": "2026-11-04T12:34:13.420Z",
+        "created_at": "2026-11-04T13:35:20.761Z",
         "cancelled_at": null
       }
     },
@@ -73,7 +73,7 @@
       "step_id": "step-3",
       "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.420Z",
+      "timestamp": "2026-11-04T13:35:20.763Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -98,7 +98,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT4_4f96359b392a4f16",
+            "session_id": "sT4_a82f94392fb74377",
             "items": [],
             "total_usd": 0
           }
@@ -106,7 +106,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT4_4f96359b392a4f16",
+            "session_id": "sT4_a82f94392fb74377",
             "status": "placed",
             "items": [
               {
@@ -118,7 +118,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.420Z",
+            "created_at": "2026-11-04T13:35:20.761Z",
             "cancelled_at": null
           }
         ],
@@ -166,13 +166,13 @@
         ],
         "observations": [
           {
-            "session_id": "sT4_4f96359b392a4f16",
+            "session_id": "sT4_a82f94392fb74377",
             "catalog_reads": [],
             "product_views": [],
             "order_reads": [
               {
                 "order_id": "ord_0001",
-                "at": "2026-11-04T12:34:13.421Z"
+                "at": "2026-11-04T13:35:20.762Z"
               }
             ]
           }

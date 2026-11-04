@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-04T12:43:39.405Z",
+  "generated_at": "2026-11-04T14:05:27.488Z",
   "definitions": {
     "category_accuracy": "Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.",
     "step_accuracy_exact": "Predicted step_id equals the labelled step_id.",
@@ -38,16 +38,16 @@
       "Security": 2
     },
     "leakage": {
-      "traces_with_hints": 13,
+      "traces_with_hints": 0,
       "by_hint": {
-        "dropped_message": 3,
-        "injector_skipped": 4,
+        "dropped_message": 0,
+        "injector_skipped": 0,
         "injector_missed_target": 0,
-        "forged_true": 2,
-        "stale_true": 2,
-        "injected_true": 2
+        "forged_true": 0,
+        "stale_true": 0,
+        "injected_true": 0
       },
-      "note": "PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend."
+      "note": "PR #28 wrote fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true. PR #44 (@diamanti-sg) stopped copying those markers into steps. This scoreboard was recomputed after pnpm generate-dataset regenerated the harness traces on that injector. The scanner still looks for the same strings in trace.steps. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. This eval does not change apps/backend."
     }
   },
   "methods": {
@@ -59,12 +59,12 @@
       "scored": 19,
       "errors": 0,
       "category_correct": 4,
-      "step_exact": 3,
+      "step_exact": 5,
       "step_tolerance_1": 10,
       "fix_hits": 4,
       "fix_applicable": 7,
       "fix_not_applicable": 12,
-      "mean_latency_ms": 0.035,
+      "mean_latency_ms": 0.042,
       "tokens": {
         "input": null,
         "output": null,
@@ -156,8 +156,108 @@
       }
     },
     "grok": {
-      "mode": "skipped",
-      "reason": "XAI_API_KEY is unset"
+      "mode": "live",
+      "model": "grok-3",
+      "live": true,
+      "passes": 1,
+      "scored": 19,
+      "errors": 0,
+      "category_correct": 5,
+      "step_exact": 5,
+      "step_tolerance_1": 13,
+      "fix_hits": 7,
+      "fix_applicable": 7,
+      "fix_not_applicable": 12,
+      "mean_latency_ms": 9852.2,
+      "tokens": {
+        "input": 19746,
+        "output": 1339,
+        "traces_with_usage": 19
+      },
+      "cost_usd": {
+        "total": 0.0457211,
+        "mean": 0.002406373684210526,
+        "traces_with_cost": 19
+      },
+      "confusion": {
+        "Plan": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 2,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "ToolUse": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 4,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Context": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 3,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Reasoning": {
+          "Plan": 0,
+          "ToolUse": 1,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 2,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Execution": {
+          "Plan": 0,
+          "ToolUse": 2,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 1,
+          "Verification": 0,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Verification": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 2,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Security": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 0,
+          "Security": 2,
+          "abstain": 0,
+          "error": 0
+        }
+      }
     }
   },
   "cases": [
@@ -184,14 +284,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.362,
+        "latency_ms": 0.308,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": true,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 18726.773,
+        "usage": {
+          "input_tokens": 1095,
+          "output_tokens": 61,
+          "cost_usd": 0.00169605
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "jury-unauthorized-cancel",
@@ -209,21 +328,40 @@
       "baseline": {
         "prediction": {
           "kind": "prediction",
-          "category": "Verification",
-          "step_id": "step-4",
+          "category": "Execution",
+          "step_id": "step-3",
           "proposed_fixes": [
-            "pre_response_check"
+            "controlled_retry"
           ],
-          "finding": "false_success_claim"
+          "finding": "tool_error"
         },
-        "latency_ms": 0.033,
+        "latency_ms": 0.064,
         "usage": null,
         "category_match": false,
-        "step_exact": false,
+        "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": false
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Security",
+          "step_id": "step-2",
+          "proposed_fixes": [
+            "permission_guard"
+          ]
+        },
+        "latency_ms": 8587.443,
+        "usage": {
+          "input_tokens": 1097,
+          "output_tokens": 63,
+          "cost_usd": 0.00268055
+        },
+        "category_match": true,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     },
     {
       "id": "t1-plan-skip-search",
@@ -237,27 +375,44 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.078,
+        "latency_ms": 0.027,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 16650.759,
+        "usage": {
+          "input_tokens": 941,
+          "output_tokens": 63,
+          "cost_usd": 0.00165295
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      }
     },
     {
       "id": "t2-plan-skip-add",
@@ -271,27 +426,44 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.031,
+        "latency_ms": 0.021,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 3750.218,
+        "usage": {
+          "input_tokens": 917,
+          "output_tokens": 59,
+          "cost_usd": 0.00197545
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      }
     },
     {
       "id": "t1-tooluse-forge-search",
@@ -305,9 +477,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "forged_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -318,14 +488,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.019,
+        "latency_ms": 0.026,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 8344.992,
+        "usage": {
+          "input_tokens": 1133,
+          "output_tokens": 74,
+          "cost_usd": 0.00308685
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      }
     },
     {
       "id": "t3-tooluse-forge-checkout",
@@ -350,14 +539,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.047,
+        "latency_ms": 0.022,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": true,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 7949.841,
+        "usage": {
+          "input_tokens": 1105,
+          "output_tokens": 68,
+          "cost_usd": 0.00198605
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t4-tooluse-forge-order",
@@ -371,9 +579,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "forged_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -384,14 +590,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.011,
+        "latency_ms": 0.02,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": true,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 7756.361,
+        "usage": {
+          "input_tokens": 912,
+          "output_tokens": 64,
+          "cost_usd": 0.0022806
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t1-context-stale-product",
@@ -405,22 +630,39 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "stale_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.014,
+        "latency_ms": 0.034,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 16843.583,
+        "usage": {
+          "input_tokens": 1104,
+          "output_tokens": 53,
+          "cost_usd": 0.0038381
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t2-context-stale-cart",
@@ -434,22 +676,39 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "stale_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.011,
+        "latency_ms": 0.026,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 10070.989,
+        "usage": {
+          "input_tokens": 1132,
+          "output_tokens": 90,
+          "cost_usd": 0.0031281
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t4-context-stale-order",
@@ -474,14 +733,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.01,
+        "latency_ms": 0.016,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": true,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 9134.694,
+        "usage": {
+          "input_tokens": 1004,
+          "output_tokens": 82,
+          "cost_usd": 0.0026143
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t1-reasoning-mutate-search",
@@ -495,22 +773,39 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injected_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.01,
+        "latency_ms": 0.02,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "ToolUse",
+          "step_id": "step-1",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 10750.159,
+        "usage": {
+          "input_tokens": 1060,
+          "output_tokens": 79,
+          "cost_usd": 0.0029043
+        },
+        "category_match": false,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      }
     },
     {
       "id": "t2-reasoning-mutate-qty",
@@ -535,14 +830,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.01,
+        "latency_ms": 0.021,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 9122.938,
+        "usage": {
+          "input_tokens": 1157,
+          "output_tokens": 75,
+          "cost_usd": 0.00177165
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      }
     },
     {
       "id": "t3-reasoning-mutate-checkout",
@@ -556,22 +870,39 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injected_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.006,
+        "latency_ms": 0.036,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": null
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 6927.704,
+        "usage": {
+          "input_tokens": 1152,
+          "output_tokens": 71,
+          "cost_usd": 0.0026381
+        },
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      }
     },
     {
       "id": "t1-execution-drop-search",
@@ -585,9 +916,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -598,14 +927,33 @@
           ],
           "finding": "timeout"
         },
-        "latency_ms": 0.009,
+        "latency_ms": 0.024,
         "usage": null,
         "category_match": true,
         "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": true
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "ToolUse",
+          "step_id": "step-2",
+          "proposed_fixes": [
+            "controlled_retry"
+          ]
+        },
+        "latency_ms": 7558.402,
+        "usage": {
+          "input_tokens": 1095,
+          "output_tokens": 80,
+          "cost_usd": 0.00245055
+        },
+        "category_match": false,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     },
     {
       "id": "t3-execution-drop-checkout",
@@ -619,9 +967,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -632,14 +978,33 @@
           ],
           "finding": "timeout"
         },
-        "latency_ms": 0.004,
+        "latency_ms": 0.043,
         "usage": null,
         "category_match": true,
         "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": true
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Execution",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "controlled_retry"
+          ]
+        },
+        "latency_ms": 8768.813,
+        "usage": {
+          "input_tokens": 1099,
+          "output_tokens": 62,
+          "cost_usd": 0.00294185
+        },
+        "category_match": true,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     },
     {
       "id": "t4-execution-drop-order",
@@ -653,9 +1018,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -666,14 +1029,33 @@
           ],
           "finding": "timeout"
         },
-        "latency_ms": 0.003,
+        "latency_ms": 0.031,
         "usage": null,
         "category_match": true,
         "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": true
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "ToolUse",
+          "step_id": "step-2",
+          "proposed_fixes": [
+            "controlled_retry"
+          ]
+        },
+        "latency_ms": 7890.321,
+        "usage": {
+          "input_tokens": 918,
+          "output_tokens": 91,
+          "cost_usd": 0.0023218
+        },
+        "category_match": false,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     },
     {
       "id": "t1-verification-skip-product",
@@ -687,27 +1069,44 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.004,
+        "latency_ms": 0.018,
         "usage": null,
         "category_match": true,
-        "step_exact": false,
+        "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": true
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 8383.971,
+        "usage": {
+          "input_tokens": 940,
+          "output_tokens": 64,
+          "cost_usd": 0.0016592
+        },
+        "category_match": true,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     },
     {
       "id": "t3-verification-skip-cart",
@@ -721,22 +1120,39 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.003,
+        "latency_ms": 0.012,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": false,
         "fix_hit": false
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ]
+        },
+        "latency_ms": 10167.847,
+        "usage": {
+          "input_tokens": 960,
+          "output_tokens": 52,
+          "cost_usd": 0.0019667
+        },
+        "category_match": true,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": true
+      }
     },
     {
       "id": "t5-security-forge-cancel",
@@ -761,14 +1177,33 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.005,
+        "latency_ms": 0.035,
         "usage": null,
         "category_match": false,
         "step_exact": false,
         "step_tolerance_1": true,
         "fix_hit": false
       },
-      "grok": null
+      "grok": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Security",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "permission_guard"
+          ]
+        },
+        "latency_ms": 9805.988,
+        "usage": {
+          "input_tokens": 925,
+          "output_tokens": 88,
+          "cost_usd": 0.00212795
+        },
+        "category_match": true,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      }
     }
   ]
 }

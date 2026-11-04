@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T1-injected-8077cb76-ce91-445c-9f40-0f565b41cd81",
+  "trace_id": "trace-T1-injected-ec5d1138-3757-4e73-a5ad-de902ffc3ca6",
   "agent_id": "reference-shop",
-  "run_id": "run-T1-injected-135a2469-347c-464b-b62c-85551c97fa8d",
+  "run_id": "run-T1-injected-70fff22b-0815-443d-8997-7abf7c304231",
   "task_id": "T1",
-  "started_at": "2026-11-04T12:34:13.340Z",
-  "ended_at": "2026-11-04T12:34:13.346Z",
+  "started_at": "2026-11-04T13:35:20.691Z",
+  "ended_at": "2026-11-04T13:35:20.696Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.341Z",
+      "timestamp": "2026-11-04T13:35:20.692Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -24,22 +24,8 @@
     {
       "step_id": "step-1",
       "index": 1,
-      "type": "system",
-      "timestamp": "2026-11-04T12:34:13.342Z",
-      "role": "system",
-      "latency_ms": 1,
-      "token_usage": {
-        "input": 0,
-        "output": 0
-      },
-      "cost_usd": 0,
-      "content": "Injector skipped search_products."
-    },
-    {
-      "step_id": "step-2",
-      "index": 2,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.343Z",
+      "timestamp": "2026-11-04T13:35:20.693Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -53,10 +39,10 @@
       }
     },
     {
-      "step_id": "step-3",
-      "index": 3,
+      "step_id": "step-2",
+      "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.344Z",
+      "timestamp": "2026-11-04T13:35:20.694Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -75,10 +61,10 @@
       }
     },
     {
-      "step_id": "step-4",
-      "index": 4,
+      "step_id": "step-3",
+      "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.345Z",
+      "timestamp": "2026-11-04T13:35:20.695Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -152,12 +138,12 @@
         ],
         "observations": [
           {
-            "session_id": "sT1_d71d6dfc0a6744a4",
+            "session_id": "sT1_e55c91d336fb49cf",
             "catalog_reads": [],
             "product_views": [
               {
                 "product_id": "SKU-MUG-01",
-                "at": "2026-11-04T12:34:13.384Z"
+                "at": "2026-11-04T13:35:20.726Z"
               }
             ],
             "order_reads": []
@@ -168,7 +154,7 @@
     "agent_claimed_success": true
   },
   "totals": {
-    "latency_ms": 5,
+    "latency_ms": 4,
     "tokens_in": 0,
     "tokens_out": 0,
     "cost_usd": 0

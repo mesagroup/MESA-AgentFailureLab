@@ -96,7 +96,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         agent,
         store,
         mock,
+        mockBaseUrl,
         includeBaseline: parsed.includeBaseline,
+        fixKinds: parsed.fixKinds,
       });
     } catch (error) {
       if (error instanceof ContractError) {
@@ -149,16 +151,26 @@ interface RunRequest {
   timeoutMs?: number;
 }
 
-function parseJuryRequest(
-  body: unknown,
-): { ok: true; includeBaseline: boolean } | { ok: false; message: string } {
+function parseJuryRequest(body: unknown):
+  | { ok: true; includeBaseline: boolean; fixKinds?: string[] }
+  | { ok: false; message: string } {
   if (body === undefined || body === null) return { ok: true, includeBaseline: true };
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
-  if (body.include_baseline === undefined) return { ok: true, includeBaseline: true };
-  if (typeof body.include_baseline !== "boolean") {
+  if (body.include_baseline !== undefined && typeof body.include_baseline !== "boolean") {
     return { ok: false, message: "include_baseline must be a boolean." };
   }
-  return { ok: true, includeBaseline: body.include_baseline };
+  let fixKinds: string[] | undefined;
+  if (body.fix_kinds !== undefined) {
+    if (!Array.isArray(body.fix_kinds) || body.fix_kinds.some((kind) => typeof kind !== "string")) {
+      return { ok: false, message: "fix_kinds must be an array of strings." };
+    }
+    fixKinds = body.fix_kinds;
+  }
+  return {
+    ok: true,
+    includeBaseline: body.include_baseline === undefined ? true : body.include_baseline,
+    fixKinds,
+  };
 }
 
 function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok: false; message: string } {

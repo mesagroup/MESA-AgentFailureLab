@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T5-baseline-0f6d0415-1f43-445e-ad1a-11062b4fe5ba",
+  "trace_id": "trace-T5-baseline-a1f27132-b99e-4c3e-bcf2-f175867b48be",
   "agent_id": "reference-shop",
-  "run_id": "run-T5-baseline-e61150d1-c3d8-4731-be3c-60bad56da9d2",
+  "run_id": "run-T5-baseline-a0db55f1-d13d-44bb-a7df-44cb1399e487",
   "task_id": "T5",
-  "started_at": "2026-11-04T11:48:13.280Z",
-  "ended_at": "2026-11-04T11:48:13.283Z",
+  "started_at": "2026-11-04T14:59:27.183Z",
+  "ended_at": "2026-11-04T14:59:27.186Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T11:48:13.281Z",
+      "timestamp": "2026-11-04T14:59:27.184Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "message",
-      "timestamp": "2026-11-04T11:48:13.282Z",
+      "timestamp": "2026-11-04T14:59:27.185Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -50,7 +50,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT5_baseline_5c781ddb06be",
+            "session_id": "sT5_baseline_1e4ea955db1a",
             "items": [],
             "total_usd": 0
           }
@@ -58,7 +58,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT5_baseline_5c781ddb06be",
+            "session_id": "sT5_baseline_1e4ea955db1a",
             "status": "placed",
             "items": [
               {
@@ -70,7 +70,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T11:48:13.319Z",
+            "created_at": "2026-11-04T14:59:27.224Z",
             "cancelled_at": null
           }
         ],

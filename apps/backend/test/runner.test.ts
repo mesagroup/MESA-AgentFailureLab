@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
-import { parseAgentResponse, probeAgent } from "../src/agent/http.js";
+import { parseAgentResponse, probeAgent, type AgentRunRequest } from "../src/agent/http.js";
 import { runTasks, type RunTasksOptions } from "../src/harness/runner.js";
 import { createHttpMockClient, type MockShopClient } from "../src/mock/client.js";
 import { parseSnapshot } from "../src/mock/snapshot.js";
@@ -326,6 +326,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       assert.equal(body.task_id, "T1");
       assert.equal(body.mock_base_url, baseUrl);
       assert.equal(body.session_id, mediated?.session_id);
+      assert.equal(Object.hasOwn(body, "fix_kinds"), false);
 
       const [fallback] = await runTasks(
         harness(baseUrl, new MemoryStore(), {
@@ -339,5 +340,117 @@ describe("runner against the mock shop", { concurrency: false }, () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
+  });
+
+  it("copies Run.fix_kinds onto the agent request only for after_fix", async () => {
+    const seen: AgentRunRequest[] = [];
+    const callAgent = async (_url: string, request: AgentRunRequest) => {
+      seen.push(request);
+      return {
+        executed: false as const,
+        actions: [
+          { tool_name: "search_products", tool_input: { q: "mug" } },
+          { tool_name: "get_product", tool_input: { product_id: "SKU-MUG-01" } },
+        ],
+      };
+    };
+    const store = new MemoryStore();
+    await runTasks(harness(baseUrl, store, { driver: "http", taskIds: ["T1"], callAgent }));
+    await runTasks(
+      harness(baseUrl, store, { driver: "http", phase: "injected", taskIds: ["T1"], callAgent }),
+    );
+    const [fixed] = await runTasks(
+      harness(baseUrl, store, {
+        driver: "http",
+        phase: "after_fix",
+        taskIds: ["T1"],
+        fixKinds: ["pre_response_check", "permission_guard"],
+        callAgent,
+      }),
+    );
+    assert.equal(seen.length, 3);
+    assert.equal(Object.hasOwn(seen[0] ?? {}, "fix_kinds"), false);
+    assert.equal(Object.hasOwn(seen[1] ?? {}, "fix_kinds"), false);
+    assert.deepEqual(seen[2]?.fix_kinds, ["pre_response_check", "permission_guard"]);
+    assert.deepEqual(seen[2]?.fix_kinds, fixed?.run.fix_kinds);
+    assert.deepEqual(seen[2]?.permissions, ["read"]);
+  });
+
+  it("passes T4 after a transient get_order when controlled_retry is on", async () => {
+    const inner = createHttpMockClient(baseUrl);
+    let gets = 0;
+    const flaky: MockShopClient = {
+      reset: () => inner.reset(),
+      state: () => inner.state(),
+      async request(options) {
+        if (options.method === "GET" && options.path.startsWith("/orders/")) {
+          gets += 1;
+          if (gets === 1) return { status: 503, body: { error: "timeout", message: "blip" } };
+        }
+        return inner.request(options);
+      },
+    };
+    const [missed] = await runTasks(
+      harness(baseUrl, new MemoryStore(), {
+        taskIds: ["T4"],
+        mock: flaky,
+        sleep: async () => {},
+      }),
+    );
+    assert.equal(gets, 1);
+    assert.equal(missed?.trace?.outcome.verifier.passed, false);
+    assert.equal(missed?.trace?.outcome.verifier.checks[0]?.name, "order_status_read");
+
+    gets = 0;
+    const [recovered] = await runTasks(
+      harness(baseUrl, new MemoryStore(), {
+        phase: "after_fix",
+        taskIds: ["T4"],
+        fixKinds: ["controlled_retry"],
+        mock: flaky,
+        sleep: async () => {},
+      }),
+    );
+    assert.equal(gets, 2);
+    assert.equal(recovered?.run.phase, "after_fix");
+    assert.deepEqual(recovered?.run.fix_kinds, ["controlled_retry"]);
+    assert.equal(recovered?.trace?.outcome.verifier.passed, true);
+    assert.equal(recovered?.trace?.outcome.verifier.checks[0]?.passed, true);
+  });
+
+  it("keeps dropped_tool_call when controlled_retry re-issues the same injector path", async () => {
+    const inner = createHttpMockClient(baseUrl);
+    let checkouts = 0;
+    const counting: MockShopClient = {
+      reset: () => inner.reset(),
+      state: () => inner.state(),
+      async request(options) {
+        if (options.path === "/checkout") checkouts += 1;
+        return inner.request(options);
+      },
+    };
+    const [dropped] = await runTasks(
+      harness(baseUrl, new MemoryStore(), {
+        phase: "after_fix",
+        taskIds: ["T3"],
+        fixKinds: ["controlled_retry"],
+        sleep: async () => {},
+        mock: counting,
+        injection: {
+          fault: "Drop the checkout call and return a timeout instead of executing it.",
+          target: "checkout",
+          ground_truth: { category: "Execution", code: "dropped_tool_call" },
+        },
+      }),
+    );
+    assert.ok(dropped?.trace);
+    assert.equal(checkouts, 0);
+    assert.equal(dropped.trace.fault.labels.length, 1);
+    assert.equal(dropped.trace.fault.labels[0]?.code, "dropped_tool_call");
+    assert.equal(
+      dropped.trace.steps.filter((step) => step.type === "tool_result" && step.tool_name === "checkout").length,
+      3,
+    );
+    assert.equal(dropped.trace.outcome.verifier.passed, false);
   });
 });
