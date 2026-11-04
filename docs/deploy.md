@@ -44,6 +44,8 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 
 `MOCK_SHOP_URL` is read only by the backend harness. `GET /health` on the backend reports it as `mock_base_url` and does not call the shop. The harness copies that value into `mock_base_url` on `POST /v1/tasks/run`. The agent service does not read `MOCK_SHOP_URL`, `SHOP_BASE_URL`, or any other shop base URL. It proposes actions and does not call the shop. There is no shop env var to set on `mesa-agentservice`.
 
+The backend allows one mock writer per process. `POST /runs` and `POST /attacker/jury-case` take that gate and answer HTTP 409 `world_busy` when it is already held. Keep a single `mesa-backend` instance pointed at the demo shop. A second instance can reset the same shop during a live run. `GET /agents`, `GET /runs`, and `GET /traces` stay available on the busy instance. The gate leaves lab rows in place. The limit is described in [architecture.md](architecture.md#one-writer-for-the-mock-world).
+
 The Dockerfiles do not declare `ARG` for `XAI_API_KEY` or `NODE_ENV`. Render passes service env vars in as Docker build args. An `ARG` with a secret name would store the secret in the image. `NODE_ENV=production` during `pnpm install` would also skip the devDependencies the build needs.
 
 Copy examples when you need overrides. Do not commit the copies.

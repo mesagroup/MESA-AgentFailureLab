@@ -45,9 +45,9 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `PUT` | `/agents/:agent_id` | Replace. Server sets `updated_at`. Omitted `created_at` keeps the stored value. 404 if absent, 400 if invalid |
 | `DELETE` | `/agents/:agent_id` | 204. 404 if absent. `reference-shop` returns 409 |
 | `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
-| `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. See [POST /runs](#post-runs) |
-| `GET` | `/attacker/jury-case` | Juror note, the security plan, and the structured request fields. Does not start a run |
-| `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id` |
+| `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. 409 `world_busy` when this process already holds the mock-world gate. See [POST /runs](#post-runs) |
+| `GET` | `/attacker/jury-case` | Juror note, the security plan, and the structured request fields. Does not start a run. Stays available while the mock-world gate is held |
+| `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
@@ -59,6 +59,18 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 The server loads that agent and runs its `tasks`, in document order, when `task_ids` is omitted. `phase` defaults to `baseline`. A `task_ids` entry that is not on that agent is 400, including a demo task id that only another agent has. An edited `reference-shop` is the document in the store, not a fresh read of the fixture.
 
 Success is 200 `{ "results": [ { "run", "trace", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged.
+
+A second `POST /runs` or `POST /attacker/jury-case`, while this process is between reset and result save, is HTTP 409:
+
+```json
+{
+  "error": "world_busy",
+  "message": "The mock world is busy with another run on this process. Retry after that run finishes. This is not a verifier failure."
+}
+```
+
+The gate is in-process and covers the whole request: every task in the batch, and both jury attempts. The same request may re-enter it, so the jury case can call the runner. A busy response is rejected, and the harness does not queue the caller. A verifier failure remains HTTP 200 with `outcome.verifier.passed` false. An agent id that already exists is a different 409, `error: "conflict"`, from `POST /agents`. `GET` routes stay available. A second backend process, or `POST /internal/reset` on the shop, is outside this gate. See [architecture](../../docs/architecture.md#one-writer-for-the-mock-world).
+
 ### CORS
 
 Browser calls from the UI send `Content-Type: application/json`, so the browser preflights with `OPTIONS` before GET, POST, PUT, and DELETE. This app registers `@fastify/cors`. There is no `*` origin.
