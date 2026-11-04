@@ -181,7 +181,7 @@ describe("eval gate command", () => {
     const written = loadBaseline(target);
     assert.equal(written.description, committed.description);
     assert.deepEqual(written.threshold, committed.threshold);
-    assert.equal(written.metrics.find((metric) => metric.id === "step_accuracy_exact")?.hits, 4);
+    assert.equal(written.metrics.find((metric) => metric.id === "step_accuracy_exact")?.hits, 5);
     assert.match(stdout.join(""), /wrote/);
   });
 
@@ -197,7 +197,7 @@ describe("eval gate command", () => {
     assert.equal(code, 1);
     assert.match(stderr.join(""), /cannot be combined/);
     const still = loadBaseline(baselinePath);
-    assert.equal(still.metrics.find((metric) => metric.id === "step_accuracy_exact")?.hits, 4);
+    assert.equal(still.metrics.find((metric) => metric.id === "step_accuracy_exact")?.hits, 5);
   });
 });
 
