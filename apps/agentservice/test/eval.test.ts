@@ -10,7 +10,7 @@ import { DATASET_PLAN } from "../src/eval/dataset-plan.js";
 import { METRIC_DEFINITIONS, evaluateDataset, scoreJudgement } from "../src/eval/evaluate.js";
 import { loadDataset } from "../src/eval/load-dataset.js";
 import { MANIFEST_PATH } from "../src/eval/dataset-plan.js";
-import { markerBody, formatMs } from "../src/eval/report.js";
+import { GROK_PLACEHOLDER, ITALIAN_METRIC_DEFINITIONS, formatMs, limitsBody, markerBody } from "../src/eval/report.js";
 import { repoRoot } from "../src/eval/repo-root.js";
 import { LEAKAGE_NOTE, baselineMappingLines, hintsInSteps, rulesBaseline } from "../src/eval/rules.js";
 
@@ -245,28 +245,40 @@ describe("published numbers", () => {
     const latestMd = readFileSync(new URL("../eval/results/latest.md", import.meta.url), "utf8");
     const latestJson: unknown = JSON.parse(readFileSync(new URL("../eval/results/latest.json", import.meta.url), "utf8"));
     assert.equal(markerBody(readme), markerBody(latestMd));
+    assert.equal(limitsBody(readme), limitsBody(latestMd));
     const board = markerBody(readme);
+    const limits = limitsBody(readme);
+    const scored = fresh.methods.baseline.scored;
     for (const line of [
-      `Scored traces: ${fresh.dataset.scored_count}`,
-      `Categories: ${fresh.dataset.categories.length} (${fresh.dataset.categories.join(", ")})`,
-      `Baseline category accuracy: ${fresh.methods.baseline.category_correct}/${fresh.methods.baseline.scored}`,
-      `Baseline step accuracy exact: ${fresh.methods.baseline.step_exact}/${fresh.methods.baseline.scored}`,
-      `Baseline step accuracy tolerance 1: ${fresh.methods.baseline.step_tolerance_1}/${fresh.methods.baseline.scored}`,
-      `Baseline proposed-fix hits: ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable}`,
-      `Traces with injector hints: ${fresh.dataset.leakage.traces_with_hints}/${fresh.dataset.scored_count}`,
+      `Set valutato: ${fresh.dataset.scored_count} trace, ${fresh.dataset.categories.length} categorie (${fresh.dataset.categories.join(", ")}).`,
+      `| Accuratezza di categoria | ${fresh.methods.baseline.category_correct}/${scored} |`,
+      `| Step esatto | ${fresh.methods.baseline.step_exact}/${scored} |`,
+      `| Step entro ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} |`,
+      `| Hit del fix proposto | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} |`,
+      GROK_PLACEHOLDER,
     ]) {
       assert.ok(board.includes(line), line);
     }
-    for (const text of Object.values(METRIC_DEFINITIONS)) {
+    for (const text of Object.values(ITALIAN_METRIC_DEFINITIONS)) {
       assert.ok(board.includes(text));
+    }
+    for (const text of Object.values(METRIC_DEFINITIONS)) {
+      assert.ok(latestMd.includes(text));
     }
     for (const line of baselineMappingLines()) {
       assert.ok(board.includes(line));
     }
+    assert.ok(limits.includes(`${fresh.dataset.leakage.traces_with_hints}/${fresh.dataset.scored_count}`));
+    assert.ok(limits.includes("@diamanti-sg"));
+    assert.ok(limits.includes("PR #21"));
+    assert.ok(limits.includes("#15"));
+    assert.ok(limits.includes("ADR-001"));
+    assert.ok(limits.includes("n/a"));
+    assert.ok(readme.includes("## Dataset e risultati"));
+    assert.ok(readme.includes("## Limiti noti"));
     assert.ok(latestMd.includes(LEAKAGE_NOTE));
-    assert.ok(readme.includes("@diamanti-sg"));
     const storedLatency = readNumber(latestJson, ["methods", "baseline", "mean_latency_ms"]);
-    assert.ok(board.includes(`Baseline mean latency ms: ${formatMs(storedLatency)}`));
+    assert.ok(board.includes(`| Latenza media (ms) | ${formatMs(storedLatency)} |`));
     assert.equal(readNumber(latestJson, ["methods", "baseline", "category_correct"]), fresh.methods.baseline.category_correct);
     assert.equal(readNumber(latestJson, ["methods", "baseline", "step_exact"]), fresh.methods.baseline.step_exact);
     assert.equal(readNumber(latestJson, ["methods", "baseline", "step_tolerance_1"]), fresh.methods.baseline.step_tolerance_1);

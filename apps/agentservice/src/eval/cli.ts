@@ -6,9 +6,12 @@ import { parseDiagnosisConfig } from "../grok/config.js";
 import { MANIFEST_PATH, RESULTS_DIR } from "./dataset-plan.js";
 import { FAKE_MODEL_NAME, evaluateDataset, fakeDiagnosisModel, type GrokRun } from "./evaluate.js";
 import {
+  LIMITS_END,
+  LIMITS_START,
   SCOREBOARD_END,
   SCOREBOARD_START,
   renderDetails,
+  renderLimits,
   renderScoreboard,
   spliceMarked,
 } from "./report.js";
@@ -35,13 +38,25 @@ async function main(): Promise<void> {
   const outDir = path.resolve(root, args.outDir ?? RESULTS_DIR);
   mkdirSync(outDir, { recursive: true });
   const board = renderScoreboard(report);
-  const markdown = `${SCOREBOARD_START}\n${board}\n${SCOREBOARD_END}\n\n${renderDetails(report)}\n`;
+  const limits = renderLimits(report);
+  const markdown = [
+    SCOREBOARD_START,
+    board,
+    SCOREBOARD_END,
+    "",
+    LIMITS_START,
+    limits,
+    LIMITS_END,
+    "",
+    renderDetails(report),
+    "",
+  ].join("\n");
   writeFileSync(path.join(outDir, "latest.json"), `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(path.join(outDir, "latest.md"), markdown);
   if (args.readme) {
     const readmePath = path.join(root, "README.md");
-    const current = readFileSync(readmePath, "utf8");
-    writeFileSync(readmePath, spliceMarked(current, SCOREBOARD_START, SCOREBOARD_END, board));
+    const withBoard = spliceMarked(readFileSync(readmePath, "utf8"), SCOREBOARD_START, SCOREBOARD_END, board);
+    writeFileSync(readmePath, spliceMarked(withBoard, LIMITS_START, LIMITS_END, limits));
   }
   const grokReport = report.methods.grok;
   if (grokReport.mode === "live" && grokReport.errors > 0) {

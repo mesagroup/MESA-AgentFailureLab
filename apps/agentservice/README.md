@@ -114,4 +114,4 @@ pnpm eval               # rules baseline, and Grok when XAI_API_KEY is set
 pnpm --filter @mesa/agentservice test
 ```
 
-`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The scoreboard, metric definitions, and baseline numbers are in the root [README](../../README.md). The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
+`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.

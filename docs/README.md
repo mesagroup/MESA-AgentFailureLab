@@ -6,4 +6,5 @@ Product and contributor docs live here. Architecture Decision Records do not —
 - [Architecture](architecture.md) — four processes; mock-shop is a stand-alone HTTP target
 - [Getting started](getting-started.md) — install, run one app, where each team writes code
 - [Jury demo](demo-jury.md) — attacker round, baseline comparison, limitations
+- [Eval](eval.md) — dataset etichettato, metriche, baseline solo-regole, limiti noti
 - [Deploy](deploy.md) — Docker images, Compose, Render project `mesa-agent-failure-lab` / `demo`, secrets

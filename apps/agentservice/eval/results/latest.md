@@ -1,34 +1,53 @@
 <!-- eval-scoreboard:start -->
-Definitions
+Set valutato: 19 trace, 7 categorie (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security).
+
+Provenienza: 2 fixture già nel repository (`packages/shared/examples/injected-failed-trace.json`, `apps/backend/fixtures/jury/attacked-trace.json`) e 17 trace del harness scriptato. Rigenerare le trace del harness e il manifest con `pnpm generate-dataset` (mock in loopback, driver `scripted`, fault del catalogo). Poi `pnpm eval` riscrive questa sezione.
+
+Il ground truth è l'unica etichetta in `fault.labels`. Se `fault.attacker.used` è true, la fonte nel manifest è `fault.attacker`: quell'oggetto non ha una categoria e ADR-002 attribuisce l'etichetta all'attaccante. Il valutatore legge `fault`. Il prompt di Grok no.
+
+### Definizioni
+- `category_accuracy`: La categoria predetta è uguale all'unica categoria in `fault.labels`. Astensione e diagnosi fallita contano come errori. Il denominatore è ogni trace del set.
+- `step_accuracy_exact`: Lo `step_id` predetto è uguale allo `step_id` dell'etichetta.
+- `step_accuracy_tolerance_1`: La differenza assoluta di `step.index` fra predizione ed etichetta è al massimo 1, incluso l'esatto. Uno `step_id` che non è sulla trace è un errore.
+- `proposed_fix_hit_rate`: `proposed_fixes` contiene il fix ADR-002 della categoria etichettata: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`. Plan, ToolUse, Context e Reasoning non hanno un fix MVP e restano fuori dal denominatore. Un fix in più non annulla l'hit. Non è il replay del verificatore.
+- `mean_latency_ms`: Media aritmetica di una sola passata, dopo che la trace è già caricata. Non è una mediana e non è un benchmark.
+- `tokens_and_cost`: Token e `cost_usd` sono solo quelli riportati dal provider. Se l'usage manca il valore resta assente. I token non vengono convertiti in un prezzo.
+
+La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest'ordine. Senza finding il metodo si astiene.
+- false_success_claim → Verification / pre_response_check
+- tool_error → Execution / controlled_retry
+- repeated_tool_call → Reasoning / (none)
+- timeout → Execution / controlled_retry
+
+> **Colonna Grok — segnaposto.** Non è un risultato. Si riempie eseguendo `pnpm eval` con `XAI_API_KEY` impostata.
+
+| Metrica | Baseline (solo regole) | Grok |
+| --- | --- | --- |
+| Accuratezza di categoria | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Step esatto | 3/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Step entro ±1 | 10/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Hit del fix proposto | 4/7 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Fix non applicabile | 12 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Latenza media (ms) | 0.035 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Token in/out | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Costo USD | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+<!-- eval-scoreboard:end -->
+
+<!-- eval-limits:start -->
+- Hint dell'iniettore in 13/19 trace. I marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivano a Grok. Follow-up del backend (@diamanti-sg). Questo eval non modifica `apps/backend`.
+- Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
+- L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
+- Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.
+- Senza `XAI_API_KEY` il costo di Grok è n/a. La baseline solo-regole non riporta token né costo.
+<!-- eval-limits:end -->
+
+## Definitions (en)
 - `category_accuracy`: Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.
 - `step_accuracy_exact`: Predicted step_id equals the labelled step_id.
 - `step_accuracy_tolerance_1`: Absolute difference of step.index between the prediction and the labelled step is at most 1, including an exact match. A predicted step_id that is not on the trace is a miss.
 - `proposed_fix_hit_rate`: The ADR-002 fix for the labelled category appears in proposed_fixes. Execution → controlled_retry, Verification → pre_response_check, Security → permission_guard. Plan, ToolUse, Context, and Reasoning have no MVP fix and are excluded. Extra proposed fixes do not cancel a hit. This is a proposal match, not a verifier replay.
 - `mean_latency_ms`: Arithmetic mean of one pass over the scored traces. The timer wraps rulesBaseline or diagnoseTrace after the trace is already loaded. This is a description of that pass, not a tuned benchmark and not a median of repeated trials.
 - `tokens_and_cost`: Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.
-
-Rules baseline mapping. The first diagnosis finding in repair priority is the prediction. No finding abstains.
-- false_success_claim → Verification / pre_response_check
-- tool_error → Execution / controlled_retry
-- repeated_tool_call → Reasoning / (none)
-- timeout → Execution / controlled_retry
-
-Scores
-- Scored traces: 19
-- Categories: 7 (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security)
-- Baseline category accuracy: 4/19
-- Baseline step accuracy exact: 3/19
-- Baseline step accuracy tolerance 1: 10/19
-- Baseline proposed-fix hits: 4/7
-- Baseline proposed-fix not applicable: 12
-- Traces with injector hints: 13/19
-- Grok: skipped (XAI_API_KEY is unset)
-
-Timing (one pass; latency describes that pass and is not a tuned benchmark)
-- Baseline mean latency ms: 0.033
-- Baseline tokens in/out: n/a
-- Baseline cost usd: n/a
-<!-- eval-scoreboard:end -->
 
 ## Measurement
 - Passes: 1
@@ -37,7 +56,7 @@ Timing (one pass; latency describes that pass and is not a tuned benchmark)
 - Grok limiter: The xAI chat completion when XAI_API_KEY is set. With no key the method is skipped and has no latency.
 - Cost: Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.
 - Errors: A failed diagnosis stays in the denominator and counts as a miss for category, step, and an applicable fix.
-- Generated at: 2026-11-04T12:34:17.791Z
+- Generated at: 2026-11-04T12:43:39.405Z
 
 ## Leakage
 PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message "Injected execution drop before the mock was called.", system text "Injector skipped" and "Injector target … was not called.", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend.
