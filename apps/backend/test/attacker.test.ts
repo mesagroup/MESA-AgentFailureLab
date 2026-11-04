@@ -70,6 +70,7 @@ describe("jury payload", () => {
     assert.match(text, /unauthorized_cancel_via_juror_note/);
     assert.match(text, /forged_permission_success/);
     assert.match(text, /docs\/demo-jury\.md/);
+    assert.match(text, /\/traces\/:traceId/);
   });
 });
 

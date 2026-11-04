@@ -27,7 +27,7 @@ On `main` today:
 
 - Contracts for Agent, Task, Run, and Trace, plus the shopping reference stub.
 - The demo shop (`services/mock-shop`, port 8787) and the reference agent (`POST /v1/tasks/run` on port 3002). The agent returns actions with `executed: false`. The harness executes them.
-- Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker for one security case on demo task T5. Runs and traces persist in Postgres when `DATABASE_URL` is set, and stay in memory otherwise. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
+- Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker. `POST /attacker/jury-case` takes a note, a task (default T5), and a session grant, returns `outcome.verifier` with a baseline comparison and `links.attacked_trace`, and can replay with `permission_guard`. Runs and traces persist in Postgres when `DATABASE_URL` is set, and stay in memory otherwise. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
 - Lab dashboard snapshot. `GET /agents` lists registered agents (`agent_id`, `instance.kind`, task count = `tasks.length`). `GET /runs` lists stored runs, newest start first, with `trace_ids`, the first trace id, and `outcome.verifier` from each linked trace. `counts.scope` is `harness_session`: agents and run statuses in the store this process has open. With Postgres those rows survive a restart. See the [backend README](../apps/backend/README.md#dashboard-snapshot).
 - A deterministic verifier. It is the only writer of `outcome.verifier`. On the demo it reads mock state (`GET /internal/state`) and the task checks. It does not call Grok.
 - Grok diagnosis (`POST /diagnose`) and the three MVP fix policies in the agent service. A replay in that service scores the demo tasks with the backend verifier (`apps/agentservice/replay/latest.md`). A live `after_fix` run records `fix_kinds` and does not yet send them on the agent run request ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)).
@@ -52,14 +52,14 @@ The web UI dashboard, agent registration, the runs list, and the trace timeline 
 These areas are still being shaped. Some lab machinery already exists. The screens and the remaining scope do not.
 
 - **Production.** Import a real trace, mark it as production (no `fault.labels`), and ask for a diagnosis. How that trace gets an outcome is still open ([#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51)).
-- **Jury.** One attacker case and a written checklist exist ([demo-jury.md](demo-jury.md)). A structured jury (note, task, permissions, outcome, replay with `permission_guard`) is planned ([#55](https://github.com/mesagroup/MESA-AgentFailureLab/issues/55)).
+- **Jury.** The harness launch is on main ([demo-jury.md](demo-jury.md#frontend-contract-issue-55)). The form that posts the note, task, and permissions, and the click that opens Ispeziona traccia, are still the frontend ([#55](https://github.com/mesagroup/MESA-AgentFailureLab/issues/55), trace page [#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)).
 - **Regression.** The demo replay records whether the baseline still passes after a fix. A suite per agent, a comparison with the last baseline, and whether the suite is T1–T5 or custom are open ([#54](https://github.com/mesagroup/MESA-AgentFailureLab/issues/54)).
 - **Eval.** The CLI scoreboard is in the README. A screen for it is a stretch and does not block the jury demo ([#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57)).
 
 ## Open points
 
 - UX for choosing proposed fixes (#53): one fix or several, who confirms.
-- Structured jury, as above.
+- Jury form. The harness fields are in [demo-jury.md](demo-jury.md#frontend-contract-issue-55). The trace page already loads `GET /traces/:traceId`.
 - Regression content: the demo task list versus a custom suite.
 - Extra screens beyond Agent CRUD, Testa agente, and Ispeziona traccia.
 
