@@ -33,7 +33,7 @@ Compose sets the four DNS names on `mesa-backend`. The backend image also sets `
 
 On Render, `render.yaml` sets the four variables on `mesa-backend` to the public `https://` origins. `NODE_ENV=production` refuses a loopback value (`localhost`, `127.0.0.1`, or `::1`) and the process exits instead of storing it. When a variable is missing in production, the fallback is the intended public host in the table, never a loopback address. Those fallbacks live in `PRODUCTION_SEED_URLS` and match `render.yaml`. A test reads both and fails if they diverge.
 
-The reference agent's default driver is still `scripted`, so `POST /runs` without `driver` does not call agentservice. `driver: http` and `driver: auto` do. `external-library` is `kind: external`, so a run with no `driver` uses `auto`: it probes `{LIBRARY_AGENT_URL}/health` and calls `POST /v1/tasks/run` when that responds.
+`POST /runs` with no `driver` uses `auto` for every registered agent, including `reference-shop`. The lab UI does not send a driver. `auto` probes `{base}/health` and, when that answers, calls `POST {base}/v1/tasks/run`. Baseline uses `instance.base_url`. Injected and after_fix use `test_instance.base_url`. A probe that fails uses the scripted sequence, so a down runtime still returns a trace. An explicit `driver: scripted` does not call the runtime. `pnpm generate-dataset` passes `driver: scripted`. `pnpm eval:gate` scores the frozen dataset and does not take this default.
 
 ## When a stored row changes
 

@@ -157,7 +157,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     try {
       const runMockUrl = mockBaseUrlForAgent(registered, mockBaseUrl);
       const runMock = runMockUrl === mockBaseUrl ? mock : createHttpMockClient(runMockUrl);
-      const driver = parsed.value.driver ?? (registered.instance.kind === "external" ? "auto" : undefined);
+      // The lab UI omits driver. auto probes /health and POSTs /v1/tasks/run when
+      // the runtime answers. A missed probe uses the scripted sequence.
+      // generate-dataset passes scripted and does not use this default.
+      const driver = parsed.value.driver ?? "auto";
       const results = await runTasks({
         agent: registered,
         store,
