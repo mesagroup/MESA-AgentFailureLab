@@ -29,6 +29,11 @@ const BANNED_KEYS = new Set([
   "mock_state_snapshot",
   "success",
   "diagnosis",
+  "trace_id",
+  "run_id",
+  "agent_id",
+  "phase",
+  "injection_plan",
 ]);
 
 describe("diagnoseTrace", () => {
@@ -80,6 +85,44 @@ describe("diagnoseTrace", () => {
     }
     assert.equal(seen[0]?.system.includes("culprit_step_id"), false);
     assert.equal(seen[0]?.system.includes("suggested_fix_ids"), false);
+  });
+
+  it("does not send harness phase ids to the model", async () => {
+    const uuid = "6f1e2d3c-4b5a-6789-abcd-ef0123456789";
+    const input = pending("injected-failed-trace.json");
+    input.trace_id = `trace-T3-baseline-${uuid}`;
+    input.run_id = `run-T3-injected-${uuid}`;
+    input.agent_id = `agent-T3-after_fix-${uuid}`;
+    const trace = mustTrace(input);
+    const seen: ModelCompletionRequest[] = [];
+    const output = await diagnoseTrace(trace, {
+      model: scripted(seen, {
+        category: "Verification",
+        cause: "The agent claimed success from the checkout tool result.",
+        step_id: "step-5",
+        confidence: 0.8,
+        evidence: ["step-5 claims the order was placed."],
+        proposed_fixes: ["pre_response_check"],
+      }),
+      modelName: config.modelName,
+    });
+    const request = seen[0]!;
+    const packet = `${request.system}\n${request.user}`;
+    for (const phase of ["baseline", "injected", "after_fix"]) {
+      assert.equal(packet.includes(phase), false, phase);
+    }
+    assert.equal(packet.includes("injection_plan"), false);
+    assert.equal(packet.includes(uuid), false);
+    const view: unknown = JSON.parse(request.user);
+    assert.ok(isRecord(view));
+    assert.equal(Object.hasOwn(view, "trace_id"), false);
+    assert.equal(Object.hasOwn(view, "run_id"), false);
+    assert.equal(Object.hasOwn(view, "agent_id"), false);
+    assert.equal(view.task_id, "T3");
+    assert.equal(output.run_id, trace.run_id);
+    assert.equal(output.trace_id, trace.trace_id);
+    assert.equal(output.agent_id, trace.agent_id);
+    assert.equal(output.fault, trace.fault);
   });
 
   it("hides fault labels, the attacker, and verifier details from the model", async () => {
@@ -255,6 +298,36 @@ describe("diagnoseTrace", () => {
     assert.equal(input.fault, frozenFault);
     assert.equal(input.outcome.verifier, frozenVerifier);
     assert.equal(input.diagnosis, null);
+  });
+
+  it("dedupes proposed fixes and clamps confidence into 0..1", async () => {
+    const input = loadTrace("tool-error-trace.json");
+    const output = await diagnoseTrace(input, {
+      model: scripted([], {
+        category: "ToolUse",
+        cause: "Checkout returned an error.",
+        step_id: "step-2",
+        confidence: 1.8,
+        evidence: ["step-2 failed."],
+        proposed_fixes: ["controlled_retry", "controlled_retry", "pre_response_check"],
+      }),
+      modelName: config.modelName,
+    });
+    assert.equal(output.diagnosis.confidence, 1);
+    assert.deepEqual(output.diagnosis.proposed_fixes, ["controlled_retry", "pre_response_check"]);
+
+    const low = await diagnoseTrace(input, {
+      model: scripted([], {
+        category: "ToolUse",
+        cause: "Checkout returned an error.",
+        step_id: "step-2",
+        confidence: -0.4,
+        evidence: ["step-2 failed."],
+        proposed_fixes: [],
+      }),
+      modelName: config.modelName,
+    });
+    assert.equal(low.diagnosis.confidence, 0);
   });
 
   it("does not record usage when the model omits it", async () => {

@@ -20,6 +20,8 @@ Equivalent root script: `pnpm dev:agentservice`.
 
 Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally. `.env` is gitignored. `XAI_API_KEY=` in the example stays empty.
 
+`dev` and `start` load that file when it is present (`tsx watch --env-file-if-exists=.env` and `node --env-file-if-exists=.env`). Turbo runs those scripts in `apps/agentservice`, so the path is the package directory. A missing `.env` is fine: the process still boots, and `POST /diagnose` returns 503 until a key is set in the environment. Tests do not read `.env`.
+
 `GROK_MODEL` is the chat model sent on the diagnosis call (`grok-3` in the example). The call path receives that string from config. `XAI_BASE_URL` defaults to `https://api.x.ai/v1`. `GROK_TIMEOUT_MS` is the per-attempt timeout (default 30000). A timeout, a connection failure, or HTTP 408/429/500/502/503/504 is tried once more. Other statuses are not retried.
 
 `turbo run dev` builds `@mesa/shared` first.
@@ -52,11 +54,13 @@ The prompt is an allow-list, not a copy of the trace with a few keys deleted.
 Omitted:
 
 - The whole `fault` object. `labels` carry category, step id, and the machine code (`forged_tool_result` on the T3 example). `injected` and `attacker.payload_id` are the same ground truth. Sending `injected: false` on clean runs and omitting it on chaos runs would itself mark which runs were planted, so the key is never sent.
+- `trace_id`, `run_id`, and `agent_id`. The harness builds `run-${taskId}-${phase}-uuid` and `trace-${taskId}-${phase}-uuid`, so those strings contain `baseline`, `injected`, or `after_fix`. The response trace still has the original ids.
 - `outcome.verifier` (`passed`, `checks`, `mock_state_snapshot`). Check text and the snapshot restate the injected effect. On the shared T3 trace the check says the fake order does not exist while the tool result says it was placed.
 - `outcome.success`, because the schema defines it as equal to `verifier.passed`.
 - Any `diagnosis` already stored on the trace.
+- `injection_plan` and `phase`. Those are Run fields. They are not copied onto the prompt.
 
-Kept: identity fields, `status`, `steps` (including tool inputs and outputs the agent saw), `totals`, `agent_claimed_success`, and the pre-pass findings.
+Kept: `task_id`, timestamps, `status`, `steps` (including tool inputs and outputs the agent saw), `totals`, `agent_claimed_success`, and the pre-pass findings.
 
 `status` still tells the model whether the attempt completed, failed, timed out, or errored. That is the harness class, not the check narrative.
 
@@ -73,7 +77,7 @@ Findings are sent to the model and appended to `diagnosis.evidence`. Category, c
 | `repeated_tool_call` | The same `tool_name` and the same JSON input appear on at least two `tool_call` steps, adjacent or not | Those tool calls |
 | `timeout` | `status` is `timeout`, or a tool result output says timeout | Last step, or that tool result |
 
-Evidence strings from the model that do not contain a real `step_id` are dropped. If the model's `step_id` is not in the trace, it is replaced from the pre-pass in the order false success, tool error, repeated call, timeout. Either repair caps `confidence` at 0.4. If there is no real step to use, the call is rejected. A provider failure does not become a diagnosis invented from the pre-pass alone.
+Evidence strings from the model that do not contain a real `step_id` are dropped. If the model's `step_id` is not in the trace, it is replaced from the pre-pass in the order false success, tool error, repeated call, timeout. Either repair caps `confidence` at 0.4. Confidence is then clamped to `0..1`, and duplicate `proposed_fixes` are removed, before the schema check. If there is no real step to use, the call is rejected. A provider failure does not become a diagnosis invented from the pre-pass alone.
 
 ## Boundaries
 

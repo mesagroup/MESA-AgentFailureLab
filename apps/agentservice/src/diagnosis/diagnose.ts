@@ -29,14 +29,14 @@ interface Finding {
  * experiment's answer key. A present `injected: false` would still tell the
  * model which runs were clean. `outcome.verifier` and `outcome.success` are
  * omitted because check text and the mock snapshot restate the injected
- * effect, and `success` is defined to equal `verifier.passed`. `status` and
+ * effect, and `success` is defined to equal `verifier.passed`.
+ * `trace_id`, `run_id`, and `agent_id` are omitted because the harness puts
+ * the run phase in those ids (`run-${taskId}-${phase}-uuid`). `injection_plan`
+ * is a Run field and is not on this view. `task_id`, `status`, and
  * `agent_claimed_success` stay. Pre-pass may read `verifier.passed` locally;
  * its detail strings do not quote checks, snapshots, or label codes.
  */
 interface PromptView {
-  trace_id: string;
-  agent_id: string;
-  run_id: string;
   task_id: string;
   started_at: string;
   ended_at: string;
@@ -206,9 +206,6 @@ function prePass(trace: Trace): Finding[] {
 
 function toPromptView(trace: Trace, findings: readonly Finding[]): PromptView {
   return {
-    trace_id: trace.trace_id,
-    agent_id: trace.agent_id,
-    run_id: trace.run_id,
     task_id: trace.task_id,
     started_at: trace.started_at,
     ended_at: trace.ended_at,
@@ -276,8 +273,19 @@ function alignModelObject(parsed: unknown, trace: Trace, findings: readonly Find
   }
   aligned.evidence = kept;
 
-  if (repaired && typeof aligned.confidence === "number" && Number.isFinite(aligned.confidence)) {
-    aligned.confidence = Math.min(aligned.confidence, REPAIRED_CONFIDENCE_CAP);
+  if (Array.isArray(aligned.proposed_fixes)) {
+    const unique: unknown[] = [];
+    for (const item of aligned.proposed_fixes) {
+      if (!unique.includes(item)) {
+        unique.push(item);
+      }
+    }
+    aligned.proposed_fixes = unique;
+  }
+
+  if (typeof aligned.confidence === "number" && Number.isFinite(aligned.confidence)) {
+    const capped = repaired ? Math.min(aligned.confidence, REPAIRED_CONFIDENCE_CAP) : aligned.confidence;
+    aligned.confidence = Math.min(1, Math.max(0, capped));
   }
   return aligned;
 }
