@@ -106,9 +106,34 @@ describe("security payload catalog and hook", () => {
     });
     assert.equal(plan.executed, false);
     assert.deepEqual(plan.actions, [{ tool_name: "cancel_order", tool_input: { order_id: "ord_0001" } }]);
+    assert.deepEqual(plan.refused, []);
     assert.equal("fault" in plan, false);
     assert.equal("outcome" in plan, false);
     assert.equal("claimed_success" in plan, false);
+  });
+
+  it("refuses cancel_order when permission_guard is on and the grant is only read", () => {
+    const task = reference.tasks.find((entry) => entry.task_id === "T5");
+    assert.ok(task);
+    const plan = planTaskRun({
+      agent_id: reference.agent_id,
+      task_id: "T5",
+      prompt: `${task.prompt}\n\n${SECURITY_ORDER_NOTE}`,
+      session_id: "sT5",
+      permissions: ["read"],
+      mock_base_url: "http://127.0.0.1:8787",
+      order_id: "ord_0001",
+      fix_kinds: ["permission_guard"],
+    });
+    assert.equal(plan.executed, false);
+    assert.deepEqual(plan.actions, []);
+    assert.deepEqual(plan.refused, [{ tool_name: "cancel_order", required: "write:order:cancel" }]);
+    assert.equal(
+      plan.embedded.some((entry) => entry.kind === "permission" && entry.value === "write:order:cancel"),
+      true,
+    );
+    assert.equal("fault" in plan, false);
+    assert.equal("outcome" in plan, false);
   });
 });
 
@@ -184,28 +209,83 @@ describe("security attacker run", { concurrency: false }, () => {
     assert.equal(first.trace?.fault.attacker.payload_id, second.trace?.fault.attacker.payload_id);
   });
 
-  it("leaves the order placed when the agent emits no cancel", async () => {
-    const client = recording(createHttpMockClient(baseUrl));
-    const result = await runSecurityAttack({
+  it("fails T5 with permission_guard off and passes the same attack on the after_fix replay", async () => {
+    const store = new MemoryStore();
+    const failedClient = recording(createHttpMockClient(baseUrl));
+    const failed = await runSecurityAttack({
       agent: reference,
-      store: new MemoryStore(),
-      mock: client,
+      store,
+      mock: failedClient,
       mockBaseUrl: baseUrl,
-      emitCancel: false,
     });
-    const trace = result.trace;
-    assert.ok(trace);
-    assert.equal(trace.fault.injected, true);
-    assert.equal(trace.fault.labels[0]?.category, "Security");
-    assert.equal(trace.fault.attacker.used, true);
-    assert.equal(trace.fault.attacker.payload_id, SECURITY_PAYLOAD_ID);
-    assert.equal(trace.outcome.success, true);
-    assert.equal(trace.outcome.verifier.passed, true);
-    assert.equal(orderStatus(trace, result.order_id ?? ""), "placed");
-    assert.equal(trace.steps.some((step) => step.tool_name === "cancel_order"), false);
-    assert.equal(client.calls.some((call) => call.path.endsWith("/cancel")), false);
-    assert.equal(userText(trace).includes(SECURITY_ORDER_NOTE), true);
-    assert.equal(trace.steps.some((step) => step.role === "system"), false);
+    const passedClient = recording(createHttpMockClient(baseUrl));
+    const passed = await runSecurityAttack({
+      agent: reference,
+      store,
+      mock: passedClient,
+      mockBaseUrl: baseUrl,
+      fixKinds: ["permission_guard"],
+      parentRunId: failed.run.run_id,
+    });
+
+    const failedTrace = failed.trace;
+    const passedTrace = passed.trace;
+    assert.ok(failedTrace);
+    assert.ok(passedTrace);
+    assert.equal(failed.order_id, passed.order_id);
+    assert.deepEqual(failed.permissions, ["read"]);
+    assert.deepEqual(passed.permissions, ["read"]);
+
+    assert.equal(failed.run.phase, "injected");
+    assert.deepEqual(failed.run.fix_kinds, []);
+    assert.equal(failed.run.injection_plan?.ground_truth.code, "forged_permission_success");
+    assert.equal(failedTrace.fault.injected, true);
+    assert.equal(failedTrace.fault.labels.length, 1);
+    assert.equal(failedTrace.fault.labels[0]?.category, "Security");
+    assert.equal(failedTrace.fault.labels[0]?.code, "forged_permission_success");
+    assert.equal(failedTrace.fault.attacker.used, true);
+    assert.equal(failedTrace.fault.attacker.payload_id, SECURITY_PAYLOAD_ID);
+    assert.equal(failedTrace.diagnosis, null);
+    assert.equal(failedTrace.outcome.success, failedTrace.outcome.verifier.passed);
+    assert.equal(failedTrace.outcome.verifier.passed, false);
+    assert.equal(failedTrace.outcome.verifier.checks[0]?.name, "cancel_respects_permission");
+    assert.equal(orderStatus(failedTrace, failed.order_id ?? ""), "cancelled");
+    const failedLabel = failedTrace.steps.find((step) => step.step_id === failedTrace.fault.labels[0]?.step_id);
+    assert.equal(failedLabel?.type, "tool_result");
+    assert.equal(failedLabel?.tool_name, "cancel_order");
+    const failedCancel = failedClient.calls.filter((call) => call.path.endsWith("/cancel"));
+    assert.equal(failedCancel.length, 1);
+    assert.deepEqual(failedCancel[0]?.permissions, [...SECURITY_WIRE_PERMISSIONS]);
+
+    assert.equal(passed.run.phase, "after_fix");
+    assert.equal(passed.run.parent_run_id, failed.run.run_id);
+    assert.deepEqual(passed.run.fix_kinds, ["permission_guard"]);
+    assert.equal(passed.run.injection_plan?.ground_truth.code, "forged_permission_success");
+    assert.equal(passedTrace.fault.injected, true);
+    assert.equal(passedTrace.fault.labels[0]?.category, "Security");
+    assert.equal(passedTrace.fault.labels[0]?.code, "forged_permission_success");
+    assert.equal(passedTrace.fault.attacker.used, true);
+    assert.equal(passedTrace.fault.attacker.payload_id, SECURITY_PAYLOAD_ID);
+    assert.equal(passedTrace.diagnosis, null);
+    assert.equal(passedTrace.outcome.success, passedTrace.outcome.verifier.passed);
+    assert.equal(passedTrace.outcome.verifier.passed, true);
+    assert.equal(passedTrace.outcome.verifier.checks[0]?.name, "cancel_respects_permission");
+    assert.match(passedTrace.outcome.verifier.checks[0]?.detail ?? "", /still placed/);
+    assert.equal(orderStatus(passedTrace, passed.order_id ?? ""), "placed");
+    assert.equal(passedTrace.steps.some((step) => step.tool_name === "cancel_order"), false);
+    assert.equal(passedClient.calls.some((call) => call.path.endsWith("/cancel")), false);
+    assert.equal(passedTrace.fault.labels.length, 1);
+    const passedLabel = passedTrace.steps.find((step) => step.step_id === passedTrace.fault.labels[0]?.step_id);
+    assert.equal(passedLabel?.type, "message");
+    assert.equal(passedLabel?.role, "assistant");
+
+    for (const trace of [failedTrace, passedTrace]) {
+      assert.equal(userText(trace).includes(SECURITY_ORDER_NOTE), true);
+      assert.equal(userText(trace).includes(SECURITY_PAYLOAD_ID), false);
+      assert.equal(trace.steps.some((step) => step.role === "system"), false);
+      assert.equal(trace.steps.filter((step) => step.role === "user").length, 1);
+      assert.deepEqual(spoilerMarkersIn(trace.steps), []);
+    }
   });
 
   it("writes no Security label when the attacker is not used", async () => {
