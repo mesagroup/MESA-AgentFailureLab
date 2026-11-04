@@ -7,18 +7,19 @@ import {
   AgentConflictError,
   AgentNotFoundError,
   ProtectedAgentError,
-  REFERENCE_AGENT_ID,
   agentFromCreate,
   agentFromReplace,
   importedAgent,
+  isSeededAgentId,
   rawAgentId,
   readableStoredAgents,
   readStoredAgent,
-  referenceSeed,
-  referenceSeedRewriteReason,
+  seedFixtures,
+  seedRewriteReason,
   storedTimestamp,
-  warnReferenceSeedRewritten,
+  warnSeedRewritten,
   type AgentStore,
+  type SeedReport,
   type SeedResult,
 } from "./store.js";
 
@@ -213,27 +214,17 @@ export class PostgresAgentStore implements AgentStore {
   }
 
   async delete(agentId: string): Promise<void> {
-    if (agentId === REFERENCE_AGENT_ID) throw new ProtectedAgentError();
+    if (isSeededAgentId(agentId)) throw new ProtectedAgentError(agentId);
     const result = await this.pool.query("DELETE FROM agents WHERE agent_id = $1", [agentId]);
     if ((result.rowCount ?? 0) === 0) throw new AgentNotFoundError(agentId);
   }
 
-  async seedIfMissing(): Promise<SeedResult> {
-    const fixture = referenceSeed();
-    const stored = await this.readRaw(REFERENCE_AGENT_ID);
-    if (stored === undefined) {
-      const inserted = await this.pool.query(
-        `INSERT INTO agents (agent_id, document, created_at, updated_at)
-         VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
-         ON CONFLICT (agent_id) DO NOTHING`,
-        [fixture.agent_id, JSON.stringify(fixture), fixture.created_at, fixture.updated_at],
-      );
-      if ((inserted.rowCount ?? 0) > 0) return "inserted";
-      const raced = await this.readRaw(REFERENCE_AGENT_ID);
-      if (raced === undefined) throw new AgentNotFoundError(REFERENCE_AGENT_ID);
-      return this.rewriteReferenceSeedIfNeeded(raced, fixture);
+  async seedIfMissing(): Promise<SeedReport> {
+    const report: Record<string, SeedResult> = {};
+    for (const fixture of seedFixtures()) {
+      report[fixture.agent_id] = await this.seedOne(fixture);
     }
-    return this.rewriteReferenceSeedIfNeeded(stored, fixture);
+    return report;
   }
 
   async upsertImported(agent: Agent): Promise<"inserted" | "updated"> {
@@ -269,7 +260,9 @@ export class PostgresAgentStore implements AgentStore {
   }
 
   async deleteAgentsExceptSeed(): Promise<number> {
-    const result = await this.pool.query("DELETE FROM agents WHERE agent_id <> $1", [REFERENCE_AGENT_ID]);
+    const result = await this.pool.query("DELETE FROM agents WHERE NOT (agent_id = ANY($1::text[]))", [
+      seedFixtures().map((agent) => agent.agent_id),
+    ]);
     return result.rowCount ?? 0;
   }
 
@@ -302,10 +295,27 @@ export class PostgresAgentStore implements AgentStore {
     return result.rows[0]?.document;
   }
 
-  private async rewriteReferenceSeedIfNeeded(stored: unknown, fixture: Agent): Promise<SeedResult> {
-    const reason = referenceSeedRewriteReason(stored, fixture);
+  private async seedOne(fixture: Agent): Promise<SeedResult> {
+    const stored = await this.readRaw(fixture.agent_id);
+    if (stored === undefined) {
+      const inserted = await this.pool.query(
+        `INSERT INTO agents (agent_id, document, created_at, updated_at)
+         VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
+         ON CONFLICT (agent_id) DO NOTHING`,
+        [fixture.agent_id, JSON.stringify(fixture), fixture.created_at, fixture.updated_at],
+      );
+      if ((inserted.rowCount ?? 0) > 0) return "inserted";
+      const raced = await this.readRaw(fixture.agent_id);
+      if (raced === undefined) throw new AgentNotFoundError(fixture.agent_id);
+      return this.rewriteSeedIfNeeded(raced, fixture);
+    }
+    return this.rewriteSeedIfNeeded(stored, fixture);
+  }
+
+  private async rewriteSeedIfNeeded(stored: unknown, fixture: Agent): Promise<SeedResult> {
+    const reason = seedRewriteReason(stored, fixture);
     if (reason === undefined) return "kept";
-    warnReferenceSeedRewritten(reason);
+    warnSeedRewritten(fixture.agent_id, reason);
     const updated = await this.pool.query(
       `UPDATE agents
        SET document = $2::jsonb,

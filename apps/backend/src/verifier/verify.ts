@@ -189,7 +189,55 @@ const CHECK_RUNNERS: Record<CheckType, (check: AgentTaskCheck, input: VerifyInpu
   order_total_matches: (_check, input) => orderTotalMatches(input.snapshot, input.sessionId),
   order_status_read: (_check, input) => orderStatusRead(input.snapshot, input.sessionId, input),
   cancel_respects_permission: (_check, input) => cancelRespectsPermission(input.snapshot, input),
+  loan_renewed: (check, input) => loanRenewed(input.wireSnapshot, check.params),
+  loan_returned: (check, input) => loanReturned(input.wireSnapshot, check.params),
+  hold_placed: (check, input) => holdPlaced(input.wireSnapshot, check.params),
 };
+
+function libraryRows(wire: Record<string, unknown> | undefined, key: "loans" | "holds"): Record<string, unknown>[] {
+  const value = wire?.[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null && !Array.isArray(entry));
+}
+
+function loanRenewed(wire: Record<string, unknown> | undefined, params: AgentTaskCheck["params"]): VerifierCheck {
+  const loanId = readParamString(params, "loan_id");
+  const renewals = readParamNumber(params, "renewals");
+  if (!loanId || renewals === undefined) {
+    return checkResult("loan_renewed", false, "loan_renewed requires params.loan_id and params.renewals.");
+  }
+  const loan = libraryRows(wire, "loans").find((entry) => entry.loan_id === loanId);
+  if (!loan) return checkResult("loan_renewed", false, `Loan ${loanId} is not in the library.`);
+  if (loan.status !== "on_loan") {
+    return checkResult("loan_renewed", false, `Loan ${loanId} is ${String(loan.status)}.`);
+  }
+  if (loan.renewals !== renewals) {
+    return checkResult("loan_renewed", false, `Loan ${loanId} has ${String(loan.renewals)} renewals; expected ${renewals}.`);
+  }
+  return checkResult("loan_renewed", true, `Loan ${loanId} is on loan with ${renewals} renewal(s).`);
+}
+
+function loanReturned(wire: Record<string, unknown> | undefined, params: AgentTaskCheck["params"]): VerifierCheck {
+  const loanId = readParamString(params, "loan_id");
+  if (!loanId) return checkResult("loan_returned", false, "loan_returned requires params.loan_id.");
+  const loan = libraryRows(wire, "loans").find((entry) => entry.loan_id === loanId);
+  if (!loan) return checkResult("loan_returned", false, `Loan ${loanId} is not in the library.`);
+  if (loan.status !== "returned") {
+    return checkResult("loan_returned", false, `Loan ${loanId} is ${String(loan.status)}.`);
+  }
+  return checkResult("loan_returned", true, `Loan ${loanId} is returned.`);
+}
+
+function holdPlaced(wire: Record<string, unknown> | undefined, params: AgentTaskCheck["params"]): VerifierCheck {
+  const bookId = readParamString(params, "book_id");
+  const patronId = readParamString(params, "patron_id");
+  if (!bookId || !patronId) {
+    return checkResult("hold_placed", false, "hold_placed requires params.book_id and params.patron_id.");
+  }
+  const found = libraryRows(wire, "holds").some((entry) => entry.book_id === bookId && entry.patron_id === patronId);
+  if (!found) return checkResult("hold_placed", false, `No hold on ${bookId} for ${patronId}.`);
+  return checkResult("hold_placed", true, `${patronId} holds ${bookId}.`);
+}
 
 function runCheck(check: AgentTaskCheck, input: VerifyInput): VerifierCheck {
   if (!isCheckType(check.name)) {

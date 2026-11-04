@@ -24,6 +24,12 @@ export function shopStateFrom(value: unknown): ShopState {
   if (!isRecord(value)) {
     throw new Error("Mock /internal/state did not return an object.");
   }
+  if (Array.isArray(value.loans) && Array.isArray(value.holds) && Array.isArray(value.books)) {
+    return {
+      raw: value,
+      parsed: { carts: [], orders: [], inventory: [], observations: [] },
+    };
+  }
   return { raw: value, parsed: parseSnapshot(value) };
 }
 
@@ -84,6 +90,24 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
       const orderId = stringInput(input, "order_id");
       if (!orderId) throw new Error("cancel_order requires order_id.");
       return { method: "POST", path: `/orders/${encodeURIComponent(orderId)}/cancel` };
+    }
+    case "renew_loan":
+    case "return_loan": {
+      const loanId = stringInput(input, "loan_id");
+      if (!loanId) throw new Error(`${toolName} requires loan_id.`);
+      const action = toolName === "renew_loan" ? "renew" : "return";
+      return { method: "POST", path: `/loans/${encodeURIComponent(loanId)}/${action}` };
+    }
+    case "get_loan": {
+      const loanId = stringInput(input, "loan_id");
+      if (!loanId) throw new Error("get_loan requires loan_id.");
+      return { method: "GET", path: `/loans/${encodeURIComponent(loanId)}` };
+    }
+    case "place_hold": {
+      const bookId = stringInput(input, "book_id");
+      const patronId = stringInput(input, "patron_id");
+      if (!bookId || !patronId) throw new Error("place_hold requires book_id and patron_id.");
+      return { method: "POST", path: "/holds", body: { book_id: bookId, patron_id: patronId } };
     }
     default:
       throw new Error(`Unknown tool ${toolName}.`);

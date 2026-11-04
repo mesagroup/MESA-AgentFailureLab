@@ -32,8 +32,8 @@ Do not pass both. Import and reset require DATABASE_URL. They do not print the U
 
 import validates every document, upserts, and keeps the created_at already stored for that id.
 A missing id is inserted with the created_at from the file. Rows absent from the file stay.
-reset deletes runs, traces, and agents other than reference-shop.
-A valid seed that is not older than the fixture is kept. An invalid or older seed is rewritten from the fixture.
+reset deletes runs, traces, and agents other than reference-shop and external-library.
+A valid seed that is not older than its fixture is kept. An invalid or older seed is rewritten from its fixture.
 There is no HTTP reset route.`;
 
 interface ParsedArgs {
@@ -132,13 +132,20 @@ function formatImport(counts: ImportCounts): string {
 }
 
 function formatReset(counts: ResetCounts, target: string): string {
-  const seed =
-    counts.seed === "kept"
-      ? "Kept reference-shop. A valid seed that is not older than the fixture is not rewritten."
-      : counts.seed === "refreshed"
-        ? "Rewrote reference-shop from the fixture because the stored row was invalid or older than the fixture."
-        : "Inserted reference-shop because that id was missing.";
+  const seed = Object.entries(counts.seed)
+    .map(([agentId, result]) => formatSeedLine(agentId, result))
+    .join("\n");
   return `Deleted ${counts.agents_deleted} agents, ${counts.runs_deleted} runs, and ${counts.traces_deleted} traces on ${target}.\n${seed}`;
+}
+
+function formatSeedLine(agentId: string, result: ResetCounts["seed"][string]): string {
+  if (result === "kept") {
+    return `Kept ${agentId}. A valid seed that is not older than the fixture is not rewritten.`;
+  }
+  if (result === "refreshed") {
+    return `Rewrote ${agentId} from the fixture because the stored row was invalid or older than the fixture.`;
+  }
+  return `Inserted ${agentId} because that id was missing.`;
 }
 
 async function withStores<T>(
@@ -255,7 +262,7 @@ async function runImport(
     return imported;
   });
   io.stdout(
-    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop is present (inserted when missing; rewritten when the stored row is invalid or older than the fixture).`,
+    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop and external-library are present (inserted when missing; rewritten when the stored row is invalid or older than the fixture).`,
   );
   return 0;
 }
@@ -273,12 +280,12 @@ async function runReset(args: ParsedArgs, env: NodeJS.ProcessEnv, io: CliIo): Pr
   const target = databaseTargetLabel(url);
   if (!args.yes) {
     throw new Error(
-      `Refusing to reset ${target} without --yes. This deletes every run, every trace, and every agent except reference-shop. The seed row is kept. Export first.`,
+      `Refusing to reset ${target} without --yes. This deletes every run, every trace, and every agent except reference-shop and external-library. Those seed rows are kept. Export first.`,
     );
   }
   if (isRenderPostgresUrl(url)) {
     io.stderr(
-      `DATABASE_URL points at a Render host (${target}). Free Render Postgres has no backups. This deletes hosted rows. The reference-shop row is kept.`,
+      `DATABASE_URL points at a Render host (${target}). Free Render Postgres has no backups. This deletes hosted rows. The reference-shop and external-library rows are kept.`,
     );
   }
   const counts = await withStores(env, false, ({ agents, runs }) => resetKeepingSeed(agents, runs));

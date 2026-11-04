@@ -8,6 +8,17 @@
 
 export const CONTRACT_VERSION = "0.2.0";
 
+/**
+ * Demo agents inserted at startup.
+ * Both are editable. A valid row that is not older than its fixture is kept.
+ * `DELETE` of either id is rejected, and `db:reset` keeps both rows.
+ */
+export const SEEDED_AGENT_IDS = ["reference-shop", "external-library"] as const;
+
+export function isSeededAgentId(agentId: string): boolean {
+  return (SEEDED_AGENT_IDS as readonly string[]).includes(agentId);
+}
+
 /** Trace paths Grok must not write. The harness and verifier own them. */
 export const GROK_FORBIDDEN_WRITE_PATHS = [
   "outcome.verifier",
@@ -39,6 +50,7 @@ export {
 export type { CheckParamField, CheckParamType, CheckType, CheckTypeSpec } from "./checks.js";
 
 export { planShopTask, taskNeedsOrderId } from "./shop-plan.js";
+export { planLibraryTask } from "./library-plan.js";
 
 export type { ShopPlanAction, ShopPlanResult } from "./shop-plan.js";
 
@@ -50,6 +62,7 @@ export type {
   AgentTaskCartLine,
   AgentTaskCheck,
   AgentTaskSeedOrder,
+  LibrarySeedLoan,
   AgentTaskSetup,
   AgentToolDoc,
   Diagnosis,

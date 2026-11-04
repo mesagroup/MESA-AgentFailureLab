@@ -10,6 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
 import { createRun, deleteAgent, listAgents, saveAgent, updateAgent, type AgentDraft, type RunParams } from "@/lib/api";
 import type { Agent, AgentInstanceKind, AgentTask, RunPhase } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
@@ -228,26 +229,26 @@ export function AgentsPage() {
                     <Button size="icon-sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
                       <Play className="h-3.5 w-3.5" />
                     </Button>
-                    {!isReference && (
-                      <>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          onClick={() => openEdit(agent)}
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          onClick={() => setDeleteTarget(agent)}
-                          title="Delete"
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
+                    {canEditAgent(agent.agent_id) && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => openEdit(agent)}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {canDeleteAgent(agent.agent_id) && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => setDeleteTarget(agent)}
+                        title="Delete"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -287,20 +288,17 @@ export function AgentsPage() {
                 <label className="text-sm font-medium">Kind</label>
                 <div className="flex gap-1 mt-1">
                   {(["external", "reference"] as AgentInstanceKind[]).map((k) => {
-                    const isReference = editing?.instance.kind === "reference";
                     const active = form.instance_kind === k;
                     return (
                       <button
                         key={k}
                         type="button"
-                        disabled={isReference}
-                        onClick={() => !isReference && setField("instance_kind", k)}
+                        onClick={() => setField("instance_kind", k)}
                         className={cn(
                           "px-3 py-1 rounded-full text-sm border transition-colors",
                           active
                             ? "bg-foreground text-background border-foreground"
-                            : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
-                          isReference && "opacity-50 cursor-not-allowed"
+                            : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
                         )}
                       >
                         {k}

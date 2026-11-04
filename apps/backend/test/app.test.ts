@@ -126,7 +126,7 @@ describe("harness HTTP API", { concurrency: false }, () => {
       assert.deepEqual(body.trace_links[1].traces[0].outcome.verifier, passed.trace.outcome.verifier);
       assert.equal(body.trace_links[1].traces[0].outcome.verifier.passed, true);
       assert.equal(body.counts.scope, "harness_session");
-      assert.equal(body.counts.agents, 1);
+      assert.equal(body.counts.agents, 2);
       assert.equal(body.counts.runs, 2);
       assert.equal(body.counts.passed, 1);
       assert.equal(body.counts.failed, 1);

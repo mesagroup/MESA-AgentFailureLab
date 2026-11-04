@@ -18,7 +18,8 @@
     "./schemas/trace.schema.json": "./schemas/trace.schema.json",
     "./schemas/agent.schema.json": "./schemas/agent.schema.json",
     "./schemas/run.schema.json": "./schemas/run.schema.json",
-    "./examples/agent-reference-stub.json": "./examples/agent-reference-stub.json"
+    "./examples/agent-reference-stub.json": "./examples/agent-reference-stub.json",
+    "./examples/agent-library-desk.json": "./examples/agent-library-desk.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

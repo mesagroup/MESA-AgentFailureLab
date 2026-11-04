@@ -4,7 +4,14 @@ import type { Agent, AgentTask, AgentTaskCheck } from "./types.js";
  * Shop permissions a task may grant the agent.
  * The same four strings are the mock shop's `X-Permissions` vocabulary.
  */
-export const TASK_PERMISSIONS = ["read", "write:cart", "write:order", "write:order:cancel"] as const;
+export const TASK_PERMISSIONS = [
+  "read",
+  "write:cart",
+  "write:order",
+  "write:order:cancel",
+  "write:loan",
+  "write:hold",
+] as const;
 
 export type TaskPermission = (typeof TASK_PERMISSIONS)[number];
 
@@ -18,6 +25,9 @@ export const CHECK_TYPES = [
   "order_total_matches",
   "order_status_read",
   "cancel_respects_permission",
+  "loan_renewed",
+  "loan_returned",
+  "hold_placed",
 ] as const;
 
 export type CheckType = (typeof CHECK_TYPES)[number];
@@ -99,6 +109,29 @@ export const CHECK_REGISTRY: Record<CheckType, CheckTypeSpec> = {
     name: "cancel_respects_permission",
     summary: "The seeded order is cancelled only when write:order:cancel was granted.",
     params: [],
+  },
+  loan_renewed: {
+    name: "loan_renewed",
+    summary: "A library loan is still on loan and has been renewed the required number of times.",
+    params: [
+      { name: "loan_id", type: "string", required: true, description: "Loan that must still be on loan." },
+      { name: "renewals", type: "integer", required: true, description: "Exact renewal count on that loan." },
+    ],
+  },
+  loan_returned: {
+    name: "loan_returned",
+    summary: "A library loan has been returned.",
+    params: [
+      { name: "loan_id", type: "string", required: true, description: "Loan whose status must be returned." },
+    ],
+  },
+  hold_placed: {
+    name: "hold_placed",
+    summary: "A patron has a hold on a book.",
+    params: [
+      { name: "book_id", type: "string", required: true, description: "Book the hold is for." },
+      { name: "patron_id", type: "string", required: true, description: "Patron who placed the hold." },
+    ],
   },
 };
 
