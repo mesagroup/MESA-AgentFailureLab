@@ -1,0 +1,120 @@
+# MESA Agent Failure Lab — Render Blueprint.
+# Applying this file creates project mesa-agent-failure-lab / environment demo
+# and the three web services inside it. Do not also declare those services at
+# the root, or they land loose on the workspace.
+# Preview environments and per-service PR previews stay off.
+# This file does not contain secret values. XAI_API_KEY is sync: false.
+
+previews:
+  generation: off
+
+projects:
+  - name: mesa-agent-failure-lab
+    environments:
+      - name: demo
+        envVarGroups:
+          - name: mesa-shared
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: HOST
+                value: 0.0.0.0
+        services:
+          - type: web
+            name: mesa-frontend
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./apps/frontend/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - apps/frontend/**
+                - packages/shared/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 3000
+              # Public URLs baked into the Vite bundle at image build time.
+              # Replace them if Render assigns a different onrender.com hostname,
+              # then redeploy mesa-frontend. See docs/deploy.md.
+              - key: VITE_BACKEND_URL
+                value: https://mesa-backend.onrender.com
+              - key: VITE_AGENTSERVICE_URL
+                value: https://mesa-agentservice.onrender.com
+
+          - type: web
+            name: mesa-backend
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./apps/backend/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - apps/backend/**
+                - packages/shared/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 3001
+              - key: AGENTSERVICE_URL
+                value: https://mesa-agentservice.onrender.com
+              - key: FRONTEND_URL
+                value: https://mesa-frontend.onrender.com
+
+          - type: web
+            name: mesa-agentservice
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./apps/agentservice/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - apps/agentservice/**
+                - packages/shared/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 3002
+              - key: XAI_API_KEY
+                sync: false
+              - key: XAI_BASE_URL
+                value: https://api.x.ai/v1
+              - key: GROK_MODEL
+                value: grok-3
+              - key: BACKEND_URL
+                value: https://mesa-backend.onrender.com
+              - key: FRONTEND_URL
+                value: https://mesa-frontend.onrender.com

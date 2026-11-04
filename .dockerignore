@@ -1,0 +1,29 @@
+# Build context is the repository root:
+#   docker build -f apps/<app>/Dockerfile .
+# Docker reads only the .dockerignore next to that context. A file beside the
+# Dockerfile is not applied.
+
+.git
+.github
+
+node_modules
+**/node_modules
+
+dist
+**/dist
+
+.turbo
+**/.turbo
+
+# Local env files stay out of the context. Examples are not secrets.
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+coverage
+*.log
+**/*.log
+.DS_Store
+*.tsbuildinfo
+**/*.tsbuildinfo

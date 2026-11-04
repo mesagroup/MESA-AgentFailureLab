@@ -28,7 +28,9 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, or `MOCK_SHOP_URL`. Do not commit `.env`.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, or the agent-service URL. Do not commit `.env` or a database URL.
+
+Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
 `turbo run dev` builds `@mesa/shared` first. JSON Schema is the source of truth for Trace, Agent, and Run.
 

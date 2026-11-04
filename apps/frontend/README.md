@@ -21,6 +21,8 @@ Equivalent root script: `pnpm dev:frontend`.
 
 Copy `apps/frontend/.env.example` to `apps/frontend/.env` to point the UI at other hosts. Only `VITE_` variables are exposed to the browser. There is no auth config in this scaffold.
 
+Container image, from the repo root: `docker build -f apps/frontend/Dockerfile -t mesa-frontend .` The image listens on port 3000 and answers `GET /health`. `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL` are baked in at build time. See [docs/deploy.md](../../docs/deploy.md).
+
 ## Where later code goes
 
 - `src/pages/` — registration, run list, trace timeline
