@@ -28,10 +28,20 @@ import {
 import { friendlyApiMessage } from "@/lib/errors";
 import { FIX_DESCRIPTION, FIX_LABEL, KIND_LABEL, PHASE_DESCRIPTION, PHASE_LABEL, faultCodeLabel, fixKindsInOrder, formatTaskLabel } from "@/lib/labels";
 import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
+import {
+  emptyOtelDraft,
+  otelDraftFromAgent,
+  otelSourceErrors,
+  otelSourceFromDraft,
+  otelSourceHasErrors,
+  type OtelSourceDraft,
+  type OtelSourceFieldError,
+} from "@/lib/otel";
 import { blankTasks, taskFieldErrors, tasksHaveErrors, type TaskFieldError } from "@/lib/tasks";
 import type { RunInjection } from "@/lib/run-request";
 import { cn } from "@/lib/utils";
 import { AgentTasksEditor } from "@/pages/AgentTasksEditor";
+import { OtelImportPanel } from "@/pages/OtelImportPanel";
 
 interface FormState {
   name: string;
@@ -40,6 +50,7 @@ interface FormState {
   test_instance_base_url: string;
   instance_kind: AgentInstanceKind;
   tasks: AgentTask[];
+  otel: OtelSourceDraft;
 }
 
 interface FormErrors {
@@ -55,6 +66,7 @@ const EMPTY_FORM: FormState = {
   test_instance_base_url: "",
   instance_kind: "external",
   tasks: [],
+  otel: emptyOtelDraft(),
 };
 
 const PHASES: RunPhase[] = ["baseline", "injected", "after_fix"];
@@ -66,6 +78,12 @@ type LoadState =
   | { phase: "error"; error: unknown }
   | { phase: "ready"; agents: Agent[] };
 
+function evalsetSummary(caseCount: number): string {
+  if (caseCount === 0) return "Evalset, no cases";
+  if (caseCount === 1) return "Evalset, 1 case";
+  return `Evalset, ${caseCount} cases`;
+}
+
 function agentToForm(agent: Agent): FormState {
   return {
     name: agent.name,
@@ -74,6 +92,7 @@ function agentToForm(agent: Agent): FormState {
     test_instance_base_url: agent.test_instance.base_url,
     instance_kind: agent.instance.kind,
     tasks: structuredClone(agent.tasks),
+    otel: otelDraftFromAgent(agent.otel),
   };
 }
 
@@ -87,6 +106,7 @@ export function AgentsPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [taskErrors, setTaskErrors] = useState<TaskFieldError[]>([]);
+  const [otelErrors, setOtelErrors] = useState<OtelSourceFieldError>({});
   const [showErrors, setShowErrors] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [deleteError, setDeleteError] = useState<unknown>(null);
@@ -122,9 +142,10 @@ export function AgentsPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, tasks: blankTasks() });
+    setForm({ ...EMPTY_FORM, tasks: blankTasks(), otel: emptyOtelDraft() });
     setErrors({});
     setTaskErrors([]);
+    setOtelErrors({});
     setShowErrors(false);
     setFormStep("agent");
     setSheetOpen(true);
@@ -135,6 +156,7 @@ export function AgentsPage() {
     setForm(agentToForm(agent));
     setErrors({});
     setTaskErrors([]);
+    setOtelErrors({});
     setShowErrors(false);
     setFormStep("agent");
     setSheetOpen(true);
@@ -164,10 +186,12 @@ export function AgentsPage() {
     if (!form.name.trim()) nextErrors.name = "Name is required.";
     if (!form.instance_base_url.trim()) nextErrors.instance_base_url = "Endpoint is required.";
     const nextTaskErrors = taskFieldErrors(form.tasks);
+    const nextOtelErrors = otelSourceErrors(form.otel);
     setErrors(nextErrors);
     setTaskErrors(nextTaskErrors);
+    setOtelErrors(nextOtelErrors);
     setShowErrors(true);
-    if (Object.keys(nextErrors).length > 0) {
+    if (Object.keys(nextErrors).length > 0 || otelSourceHasErrors(nextOtelErrors)) {
       setFormStep("agent");
       return;
     }
@@ -182,6 +206,7 @@ export function AgentsPage() {
       test_instance_base_url: form.test_instance_base_url.trim(),
       instance_kind: form.instance_kind,
       tasks: form.tasks,
+      otel: otelSourceFromDraft(form.otel) ?? null,
     };
     try {
       if (editing) await updateAgent(editing.agent_id, draft);
@@ -203,9 +228,17 @@ export function AgentsPage() {
           showErrors={showErrors}
           errors={errors}
           taskErrors={taskErrors}
+          otelErrors={otelErrors}
           nameRef={nameRef}
           onStep={setFormStep}
           onField={setField}
+          onOtel={(key, value) => {
+            setForm((current) => {
+              const otel = { ...current.otel, [key]: value };
+              if (showErrors) setOtelErrors(otelSourceErrors(otel));
+              return { ...current, otel };
+            });
+          }}
           onTasks={(tasks) => {
             setForm((current) => ({ ...current, tasks }));
             if (showErrors) setTaskErrors(taskFieldErrors(tasks));
@@ -356,9 +389,11 @@ function AgentForm({
   showErrors,
   errors,
   taskErrors,
+  otelErrors,
   nameRef,
   onStep,
   onField,
+  onOtel,
   onTasks,
   onCancel,
   onSave,
@@ -369,9 +404,11 @@ function AgentForm({
   showErrors: boolean;
   errors: FormErrors;
   taskErrors: TaskFieldError[];
+  otelErrors: OtelSourceFieldError;
   nameRef: RefObject<HTMLInputElement | null>;
   onStep: (step: "agent" | "tasks") => void;
   onField: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  onOtel: <K extends keyof OtelSourceDraft>(key: K, value: OtelSourceDraft[K]) => void;
   onTasks: (tasks: AgentTask[]) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -469,6 +506,7 @@ function AgentForm({
             />
           </FormField>
           <p className="text-sm text-muted-foreground sm:col-span-2">The test URL falls back to the instance URL when it is empty.</p>
+          <OtelSourceFields draft={form.otel} errors={otelErrors} showErrors={showErrors} onChange={onOtel} />
         </div>
       ) : (
         <AgentTasksEditor tasks={form.tasks} errors={taskErrors} showErrors={showErrors} onChange={onTasks} />
@@ -479,6 +517,7 @@ function AgentForm({
 
 function AgentDetails({ agent }: { agent: Agent }) {
   return (
+    <>
     <section className="space-y-3 rounded-2xl bg-card px-5 py-5 shadow-island">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -491,15 +530,124 @@ function AgentDetails({ agent }: { agent: Agent }) {
         <span className="text-muted-foreground">Endpoint </span>
         <span className="font-mono text-xs">{agent.instance.base_url}</span>
       </p>
+      <p className="text-sm">
+        <span className="text-muted-foreground">OTel </span>
+        {agent.otel ? (
+          <span>
+            <span className="font-mono text-xs">{agent.otel.endpoint}</span>
+            <span className="text-muted-foreground">
+              {" "}
+              · {agent.otel.auth.type === "bearer" ? `bearer ${agent.otel.auth.token_env ?? ""}` : "no auth"}
+              {agent.otel.service_name ? ` · ${agent.otel.service_name}` : ""}
+            </span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">No source. Import still accepts a span batch.</span>
+        )}
+      </p>
       <ul className="space-y-1.5">
         {agent.tasks.map((task) => (
-          <li key={task.task_id} className="flex items-center gap-2 text-sm">
+          <li key={task.task_id} className="flex flex-wrap items-center gap-2 text-sm">
             <span>{formatTaskLabel(task)}</span>
             <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{task.task_id}</span>
+            {task.evalset ? (
+              <span className="text-xs text-muted-foreground">{evalsetSummary(task.evalset.cases.length)}</span>
+            ) : null}
           </li>
         ))}
       </ul>
     </section>
+    <OtelImportPanel agentId={agent.agent_id} />
+    </>
+  );
+}
+
+function OtelSourceFields({
+  draft,
+  errors,
+  showErrors,
+  onChange,
+}: {
+  draft: OtelSourceDraft;
+  errors: OtelSourceFieldError;
+  showErrors: boolean;
+  onChange: <K extends keyof OtelSourceDraft>(key: K, value: OtelSourceDraft[K]) => void;
+}) {
+  return (
+    <div className="space-y-3 sm:col-span-2">
+      <label className="flex items-start gap-2 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={draft.enabled}
+          onCheckedChange={(checked) => onChange("enabled", checked === true)}
+        />
+        <span>
+          <span className="font-medium">OTel source</span>
+          <span className="mt-1 block text-muted-foreground">
+            Documents where spans come from. The importer does not call this endpoint. A bearer token stays in the named env var and is not stored here. Version 1.
+          </span>
+        </span>
+      </label>
+      {draft.enabled && (
+        <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+          <FormField label="OTLP traces URL" error={showErrors ? errors.endpoint : undefined} required>
+            <Input
+              value={draft.endpoint}
+              onChange={(event) => onChange("endpoint", event.target.value)}
+              placeholder="https://otel.example.com/v1/traces"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.endpoint)}
+            />
+          </FormField>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" id="otel-auth-label">Auth</label>
+            <Select
+              value={draft.authType}
+              onValueChange={(value) => {
+                if (value === "none" || value === "bearer") onChange("authType", value);
+              }}
+            >
+              <SelectTrigger aria-labelledby="otel-auth-label">
+                <SelectValue>
+                  {(value: string | null) => (value === "bearer" ? "Bearer env var" : "None")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="bearer">Bearer env var</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {draft.authType === "bearer" && (
+            <FormField
+              label="Token env var"
+              error={showErrors ? errors.token_env : undefined}
+              required
+              hint="Name only, such as OTEL_SOURCE_TOKEN. Do not paste the token."
+            >
+              <Input
+                value={draft.tokenEnv}
+                onChange={(event) => onChange("tokenEnv", event.target.value)}
+                placeholder="OTEL_SOURCE_TOKEN"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono text-xs"
+                aria-invalid={showErrors && Boolean(errors.token_env)}
+              />
+            </FormField>
+          )}
+          <FormField label="Service name" error={showErrors ? errors.service_name : undefined} hint="Optional. When set, every imported item must use this name.">
+            <Input
+              value={draft.serviceName}
+              onChange={(event) => onChange("serviceName", event.target.value)}
+              placeholder="reference-shop"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.service_name)}
+            />
+          </FormField>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -766,11 +914,13 @@ function FormField({
   label,
   error,
   required,
+  hint,
   children,
 }: {
   label: string;
   error?: string;
   required?: boolean;
+  hint?: string;
   children: ReactNode;
 }) {
   return (
@@ -780,6 +930,7 @@ function FormField({
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </label>
       {children}
+      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

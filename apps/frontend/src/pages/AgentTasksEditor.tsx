@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { CHECK_REGISTRY, CHECK_TYPES, TASK_PERMISSIONS, isCheckType, type AgentTask } from "@mesa/shared";
+import { CHECK_REGISTRY, CHECK_TYPES, TASK_EVALSET_VERSION, TASK_PERMISSIONS, isCheckType, type AgentTask } from "@mesa/shared";
 import { CodeTip } from "@/components/CodeTip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { checkLabel, paramLabel, permissionLabel } from "@/lib/labels";
-import { blankTask, checkOf, nextTaskId, type TaskFieldError } from "@/lib/tasks";
+import { appendEvalCase, blankTask, checkOf, nextTaskId, removeEvalCase, writeEvalCase, type TaskFieldError } from "@/lib/tasks";
 
 export function AgentTasksEditor({
   tasks,
@@ -46,6 +46,7 @@ export function AgentTasksEditor({
   if (!task) return null;
   const field = errors?.[index];
   const show = Boolean(showErrors);
+  const evalCases = task.evalset && Array.isArray(task.evalset.cases) ? task.evalset.cases : [];
 
   return (
     <div className="space-y-4">
@@ -331,6 +332,93 @@ export function AgentTasksEditor({
                 );
               })}
             </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Evalset</p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => patch(index, (next) => appendEvalCase(next))}
+                >
+                  Add case
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Helps Grok judge this task&apos;s Trace or Run. It does not replace the verifier. Pass and fail still come from the checks above.
+              </p>
+              {task.evalset ? (
+                <p className={cn("text-xs", task.evalset.version === TASK_EVALSET_VERSION ? "text-muted-foreground" : "text-destructive")}>
+                  Version {task.evalset.version}
+                </p>
+              ) : null}
+              {show && field?.evalset && <p className="text-xs text-destructive">{field.evalset}</p>}
+              {evalCases.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {task.evalset
+                    ? "No cases yet. Version 1 with an empty list is valid."
+                    : "No cases. Add a case to store an evalset. Removing the last case omits the field, so the next update drops it."}
+                </p>
+              ) : (
+                evalCases.map((entry, caseIndex) => {
+                  const caseError = field?.eval_cases[caseIndex];
+                  return (
+                    <div key={caseIndex} className="grid gap-3 rounded-xl bg-card px-3 py-3 shadow-island">
+                      <div className="flex items-end gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Field label="Case id" error={show ? caseError?.case_id : undefined}>
+                            <Input
+                              value={entry.case_id}
+                              aria-invalid={show && Boolean(caseError?.case_id)}
+                              className="font-mono text-xs"
+                              onChange={(event) =>
+                                patch(index, (next) => writeEvalCase(next, caseIndex, { case_id: event.target.value }))
+                              }
+                            />
+                          </Field>
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Remove evalset case ${entry.case_id || caseIndex + 1}`}
+                          onClick={() => patch(index, (next) => removeEvalCase(next, caseIndex))}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                      <Field label="Expectation" error={show ? caseError?.expectation : undefined}>
+                        <Textarea
+                          value={entry.expectation}
+                          rows={2}
+                          aria-invalid={show && Boolean(caseError?.expectation)}
+                          placeholder="What should Grok look for in the Trace or Run?"
+                          onChange={(event) =>
+                            patch(index, (next) => writeEvalCase(next, caseIndex, { expectation: event.target.value }))
+                          }
+                        />
+                      </Field>
+                      <Field
+                        label="Rubric (optional)"
+                        error={show ? caseError?.rubric : undefined}
+                        hint="How to score the expectation. This does not change the verifier."
+                      >
+                        <Textarea
+                          value={entry.rubric ?? ""}
+                          rows={2}
+                          aria-invalid={show && Boolean(caseError?.rubric)}
+                          placeholder="Optional. Leave blank to omit."
+                          onChange={(event) =>
+                            patch(index, (next) => writeEvalCase(next, caseIndex, { rubric: event.target.value }))
+                          }
+                        />
+                      </Field>
+                    </div>
+                  );
+                })
+              )}
+            </div>
       </div>
     </div>
   );
@@ -339,7 +427,13 @@ export function AgentTasksEditor({
 function taskHasError(error: TaskFieldError | undefined): boolean {
   if (!error) return false;
   return Boolean(
-    error.task_id || error.title || error.prompt || Object.keys(error.cart).length > 0 || Object.keys(error.checks).length > 0,
+    error.task_id ||
+      error.title ||
+      error.prompt ||
+      error.evalset ||
+      Object.keys(error.cart).length > 0 ||
+      Object.keys(error.checks).length > 0 ||
+      Object.keys(error.eval_cases).length > 0,
   );
 }
 

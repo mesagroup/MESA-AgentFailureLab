@@ -69,7 +69,7 @@ A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what 
 
 The reference shop seed puts that case on T1. T2–T5 omit `evalset`. The library desk tasks omit it too. A stored agent that omits the field still validates, including a row written before this field existed, when that row is otherwise valid and not older than its fixture.
 
-The Agents page does not edit `evalset`. A save sends the task objects the form already holds. A task loaded from `GET /agents/:agent_id` keeps `evalset` because the editor clones the task. A task added in the form does not include the field. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
+The Agents create and edit form edits `evalset` on the task step. Each case has `case_id`, `expectation`, and an optional `rubric`. The form writes `version` `1` and does not offer another version. A new task omits `evalset`. Adding a case stores `{ "version": 1, "cases": [...] }`. Removing the last case deletes the field, so `PUT /agents/:agent_id` drops a stored evalset. An evalset loaded as `version` `1` with `cases: []` stays that way until a case is added. There is no generate-evalset control. A task loaded from `GET /agents/:agent_id` keeps its evalset because the editor clones the task. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
 
 Seeding the cart uses `write:cart`. Checking out uses `write:order`. Those calls are harness setup. They are not agent steps and they are not injected.
 
