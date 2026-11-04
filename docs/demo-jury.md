@@ -1,4 +1,4 @@
-> Part of the [demo script](demo-script.md), step 8. This page is the deep-dive of the **security** case. It is not the shop HTTP experiment. The azione A runbook (command, busy gate, memory vs Postgres, real offline results) is in [demo-script.md](demo-script.md#runbook-giuria).
+> Part of the [demo script](demo-script.md), step 8. This page is the deep-dive of the **security** case. It is not the shop HTTP experiment. The azione A runbook (command, busy gate, memory vs Postgres, real offline and live Grok results) is in [demo-script.md](demo-script.md#runbook-giuria).
 
 # Jury demo — attacker round
 

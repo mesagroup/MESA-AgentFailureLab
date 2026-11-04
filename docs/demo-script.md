@@ -45,7 +45,9 @@ Processi, URL e health (stack `pnpm dev` o Compose). Dettaglio porte: [getting-s
 La chiave sta in `apps/agentservice/.env` in locale, o nel secret store della piattaforma in deploy (`XAI_API_KEY`, `sync: false` su Render). Placeholder in git: stringa vuota. Non metterla in un documento Agent, in un argomento CLI, in uno screenshot, o in un log.
 
 - Offline: modello fixture esplicito, **zero** chiamate provider, anche se `XAI_API_KEY` è presente nell’ambiente.
-- Live: `pnpm demo:shop -- --mode live --backend-url … --agent-id …`. Health live deve avere `grok_configured: true`. Diagnosi sempre tramite `POST /traces/:id/diagnose` sul backend, poi rilettura della Trace salvata. Nessun fallback silenzioso al fixture.
+- Live: `pnpm demo:shop -- --mode live --backend-url … --agent-id … --diagnosis-service-url …`. Health live deve avere `grok_configured: true`. Diagnosi sempre tramite `POST /traces/:id/diagnose` sul backend, poi rilettura della Trace salvata. Nessun fallback silenzioso al fixture.
+
+Il report live scrive `diagnosis.model` / `usage` = **n/a**: il contratto backend non li restituisce. Il modello è il `GROK_MODEL` dell’agentservice (default `grok-3`, letto in `apps/agentservice/src/grok/config.ts`). Token e costo stanno nel log dell’agentservice, riga `"msg":"diagnosis usage"` (`input_tokens`, `output_tokens`, `cost_usd` in `diagnosis_usage`), una per chiamata riuscita (`apps/agentservice/src/app.ts`). `Trace.totals` non è l’uso della diagnosi.
 
 ### Quale agente e quale task
 
@@ -77,7 +79,31 @@ Flag, timeout, `--output`, `--fix` (intervento **umano** dichiarato): [shop-expe
 
 Stdout: una riga JSON con `mode`, `verdict`, `fix_verified`, `exit_code`, `json`, `markdown`. I file stanno in `demo-results/` (gitignored), nomi `shop-<uuid>.json` e `.md`, scrittura esclusiva (non sovrascrivono report precedenti). Recupero run/trace: campi `attempts[].run.run_id` e `attempts[].trace.trace_id` nel JSON, poi `GET /runs/:id` e `GET /traces/:id` sul backend **di quella esecuzione**. L’offline ha già chiuso i listener: gli id restano nel report.
 
-Struttura attesa del report (offline felice): 13 bracci, contrasto principale pass → fail → pass, cinque coppie di controllo pulite tutte pass, `selection.source: offline_model`, `selection.applied: ["pre_response_check"]`, `diagnosis.model` / usage / costo: **n/a**, `code.backend_commit`: **n/a** (health non espone il commit). `Trace.totals.latency_ms` è sintetico; `Run.duration_ms` è wall time del harness.
+Struttura attesa del report (offline felice): 13 bracci, contrasto principale pass → fail → pass, cinque coppie di controllo pulite tutte pass, `selection.source: offline_model`, `selection.applied: ["pre_response_check"]`, `diagnosis.model` / usage / costo: **n/a**, `code.backend_commit`: **n/a** (health non espone il commit). `Trace.totals.latency_ms` è sintetico; `Run.duration_ms` è wall time del harness. `code.client_commit` viene da `git rev-parse HEAD` nel processo CLI (`apps/agentservice/scripts/demo-shop.ts`): eseguire dal clone git, non da un export/archivio, altrimenti il campo è `null` (lo SHA si può annotare a mano, come nel collaudo live).
+
+### Comando live (Grok) — locale, store memory
+
+Un mock-shop dedicato, un backend, un agentservice con la chiave. Il collaudo autorizzato del 2026-11-04 ha usato `node dist/index.js` con env espliciti (nessun file `.env`). Il percorso `pnpm dev:*` sotto è quello degli script del repo: **derivato** da `turbo.json` / `package.json`, non eseguito in quel collaudo. L’inoltro env è stato verificato senza chiave (nessuna chiamata provider).
+
+Dopo `pnpm install --frozen-lockfile && pnpm build`, copiare `apps/backend/.env.example` in `apps/backend/.env` (i default puntano già a `MOCK_SHOP_URL=http://127.0.0.1:8787` e `AGENTSERVICE_URL=http://127.0.0.1:3002`; lasciare `DATABASE_URL` commentato per lo store memory) e mettere `XAI_API_KEY` in `apps/agentservice/.env`. Per il live, nel `.env` del backend impostare anche `DIAGNOSIS_TIMEOUT_MS` sopra `2 × GROK_TIMEOUT_MS` + 5 s (es. `65000`); i default del codice non si cambiano da questo runbook. Poi da tre terminali:
+
+```bash
+pnpm dev:mock-shop        # :8787
+pnpm dev:agentservice     # :3002
+pnpm dev:backend          # :3001
+```
+
+Non passare `MOCK_SHOP_URL` / `AGENTSERVICE_URL` / `PORT` inline davanti a `pnpm dev:*`: turbo (env mode strict) inoltra al task `dev` solo `DATABASE_URL` (`turbo.json`). Verifica senza chiave: `MOCK_SHOP_URL=http://r1-turbo.invalid:9 PORT=13001 pnpm dev:backend` ha ascoltato su `:3001` con `mock_base_url` di default `http://127.0.0.1:8787`; la stessa coppia via `pnpm --filter @mesa/backend dev` arriva al processo. Usare i file `.env` dei pacchetti (`tsx --env-file-if-exists=.env`), oppure `pnpm --filter @mesa/<pkg> dev` senza turbo. Equivalente al collaudo: `node dist/index.js` con env espliciti dopo `pnpm build`.
+
+Controllare `GET :3002/health` → `grok_configured: true` e `GET :3001/health` → `run_store: memory`, `mock_base_url` = lo shop dedicato. Poi registrare la fixture (201; 409 = esiste già):
+
+```bash
+curl -s -X POST http://127.0.0.1:3001/agents -H 'content-type: application/json' \
+  --data @apps/agentservice/scenarios/shop-readback-v1/agent.json
+pnpm demo:shop -- --mode live --backend-url http://127.0.0.1:3001 --agent-id shop-readback-demo-v1 --diagnosis-service-url http://127.0.0.1:3002
+```
+
+La CLI non deve ereditare `XAI_API_KEY` (né `DATABASE_URL`): la chiave resta solo nel processo agentservice. Con store memory un riavvio del backend perde anche l’Agent registrato: registrarlo di nuovo prima di rilanciare. Atteso: come offline, ma `selection.source: diagnosis`. Il gate CI resta l’offline: nessuna chiave live in CI.
 
 ### Topologia, busy, reset mock
 
@@ -89,7 +115,7 @@ Un harness, un mock dedicato. Il gate #97 è **in-process**: un secondo `POST /r
 
 **Prima.** `pnpm install --frozen-lockfile`. Health dei servizi che si useranno (offline: nessuno da tenere acceso). Non `db:reset`. Se serve una copia del lab Postgres: `db:export`. Decidere a voce: “questa esecuzione è offline (fixture) / live (Grok)”.
 
-**Durante.** Lanciare il comando sopra. Mostrare stdout, il Markdown, i tre bracci principali e un controllo. Spiegazione breve:
+**Durante.** Lanciare il comando offline o live della sezione sopra. Mostrare stdout, il Markdown, i tre bracci principali e un controllo. Spiegazione breve:
 
 1. Il planner di riferimento è **deterministico** (`POST /v1/tasks/run`, `executed: false`). HTTP verso l’agentservice **non** è una decisione Grok.
 2. Grok (o il fixture offline) scrive solo `diagnosis`.
@@ -102,32 +128,54 @@ Un harness, un mock dedicato. Il gate #97 è **in-process**: un secondo `POST /r
 
 Piani free: il primo request dopo idle può richiedere circa un minuto. Aspettare `GET /health` = 200 **prima** di lanciare live. Non resettare il database né cambiare Agent/fault per “sbloccare” un cold start: si cambia l’esperimento. 409 `world_busy` → riprovare dopo, non in parallelo. 503 `grok_not_configured` / `diagnosis_not_configured` o timeout → errore esplicito, Trace originale intatta, niente diagnosi finta. Un POST live scaduto lato client può comunque finire sul server: ispezionare prima di rilanciare.
 
+`504 diagnosis_timeout` dal backend non significa che l’agentservice si sia fermato: con i default (`DIAGNOSIS_TIMEOUT_MS` 45 s in `apps/backend`, due tentativi da `GROK_TIMEOUT_MS` 30 s in agentservice) il provider può lavorare fino a ~60 s. È un disallineamento reale dei default (`.env.example` del backend chiede già di stare sopra il budget retry, ma il valore `45000` lo viola). Workaround operatore, senza cambiare i default nel codice: impostare `DIAGNOSIS_TIMEOUT_MS` nel `.env` del backend (o nell’env del processo) sopra `2 × GROK_TIMEOUT_MS` + 5 s (es. `65000`). Un nuovo `POST /traces/:id/diagnose` dopo un timeout è una nuova chiamata a pagamento.
+
 ### Caso canonico vs caso nuovo
 
 Canonico = scenario `shop-readback-v1` + fixture `shop-readback-demo-v1` + task `read-product`. Caso nuovo = altro `task_id` del **medesimo** agente (suite di controllo completa) o un Agent registrato esplicitamente con check già supportati. Non mescolare i due in un unico “successo”. Non promettere efficacia generale da una run.
 
 ### Risultati reali di questo collaudo
 
-Campi non misurati: **n/a**. Nessun numero inventato. **Live Grok non eseguito** in questa run: nessuna chiave è stata fornita; il DoD live dell’epica #96 resta non spuntato.
+Campi non misurati: **n/a**. Nessun numero inventato. Una run non è una stima di efficacia. Il **gate CI** resta l’offline (`pnpm test`, `pnpm eval:gate` con `XAI_API_KEY` vuota). Nessuna chiave live in CI.
 
-| Campo | Valore |
-| --- | --- |
-| Data (UTC) | 2026-11-04T22:47:19.525Z (`ended_at` 2026-11-04T22:47:19.712Z) |
-| Commit client (campo del report) | `e014a7666004e1b53b8935c18ca1c1000db7e503` (dopo rebase su `main` #125) |
-| Dirty | `false` |
-| Mode | `offline` |
-| Comando | `pnpm demo:shop -- --mode offline` (questa esecuzione ha usato `--output /tmp/a5-demo-results-rebase` solo per non scrivere in-tree) |
-| Exit code | `0` |
-| `fix_verified` / verdict | `true` / `verified` (13 bracci; contrasto pass → fail → pass; controlli completi, nessuna regressione) |
-| `selection.source` / applied | `offline_model` / `["pre_response_check"]` |
-| `report_id` | `shop-e234b786-d1c4-4cff-87bd-f17466269c96` |
-| Report | JSON/MD gitignored; non committati come “nuova esecuzione” |
-| Baseline | run `run-read-product-baseline-ccf3cc9d-a8b3-4ca1-b708-0261e49b3836` · trace `trace-read-product-baseline-1ad35c58-644f-44ab-82f0-aff2663403db` |
-| Injected | run `run-read-product-injected-0b53209e-91dc-4ed6-afcb-a74c24462173` · trace `trace-read-product-injected-fc7d912b-d7b6-4529-9752-9406c14df7f4` |
-| After_fix | run `run-read-product-after_fix-70cf39a6-d7a4-4b90-8006-102fb2b0c039` · trace `trace-read-product-after_fix-e9b92660-a3dd-4000-a7fa-6d28d11ab220` |
-| Provider model / tokens / cost | n/a |
-| Backend/planner commit | n/a |
-| Live Grok | non eseguito |
+Live Grok eseguito il 2026-11-04T23:00:33Z (00:00 CET del 5/11) su `main` `76f5572fbc1b39023357d9f69b6b838593f35791`, backend/agentservice/mock-shop locali, store memory, una sola esecuzione del comando: exit `0`, `verified`, `fix_verified: true`, 13 bracci, pass → fail → pass, `selection.source: diagnosis`, applied `["pre_response_check"]`, diagnosi `Verification` su `step-3` (= ground truth), confidence 0.9. Modello `grok-3`, 940 token in / 58 out, $0.0023681 (log agentservice, riga `diagnosis usage`). Report `shop-3279e153-0d4e-4cd2-bc1f-23ab11e661ca`.
+
+| Campo | Offline (gate CI) | Live Grok |
+| --- | --- | --- |
+| Data (UTC) | `started_at` 2026-11-04T22:47:19.525Z · `ended_at` 2026-11-04T22:47:19.712Z | `started_at` 2026-11-04T23:00:33.994Z · `ended_at` 2026-11-04T23:00:44.562Z |
+| Data (Europe/Rome) | 2026-11-04 23:47:19 CET → 23:47:19 CET | 2026-11-05 00:00:33 CET → 00:00:44 CET |
+| Commit annotato | `e014a7666004e1b53b8935c18ca1c1000db7e503` (report `code.client_commit`, dopo rebase su `main` #125) | `76f5572fbc1b39023357d9f69b6b838593f35791` (`main`, merge PR #133; annotato a mano) |
+| `code.client_commit` | `e014a7666004e1b53b8935c18ca1c1000db7e503` | n/a (`null`: copia senza `.git`) |
+| Dirty | `false` | `false` |
+| Mode | `offline` | `live` |
+| Comando | `pnpm demo:shop -- --mode offline` (quella esecuzione ha usato `--output /tmp/a5-demo-results-rebase` solo per non scrivere in-tree) | `pnpm demo:shop -- --mode live --backend-url http://127.0.0.1:3001 --agent-id shop-readback-demo-v1 --diagnosis-service-url http://127.0.0.1:3002` (`--output` fuori repo) |
+| Exit code | `0` | `0` |
+| `fix_verified` / verdict | `true` / `verified` (13 bracci; contrasto pass → fail → pass; controlli completi, nessuna regressione) | `true` / `verified` (13 bracci, tutti `status: ran`, `driver: http`; contrasto pass → fail → pass) |
+| `selection.source` / applied | `offline_model` / `["pre_response_check"]` | `diagnosis` / `["pre_response_check"]` |
+| `report_id` | `shop-e234b786-d1c4-4cff-87bd-f17466269c96` | `shop-3279e153-0d4e-4cd2-bc1f-23ab11e661ca` |
+| Report | JSON/MD gitignored; non committati come “nuova esecuzione” | JSON/MD fuori repo; store memory: gli id non restano dopo lo stop del backend |
+| Baseline | run `run-read-product-baseline-ccf3cc9d-a8b3-4ca1-b708-0261e49b3836` · trace `trace-read-product-baseline-1ad35c58-644f-44ab-82f0-aff2663403db` | run `run-read-product-baseline-3a9e51d6-70b5-48ff-be5c-a04b9960520c` · trace `trace-read-product-baseline-5cbc604c-8e9f-4f91-98e3-6f76ee9b778c` |
+| Injected | run `run-read-product-injected-0b53209e-91dc-4ed6-afcb-a74c24462173` · trace `trace-read-product-injected-fc7d912b-d7b6-4529-9752-9406c14df7f4` | run `run-read-product-injected-afb9cc36-3b56-4fee-935b-6a60a916f587` · trace `trace-read-product-injected-8a62b44c-0b8b-438d-9f36-1dfc23fb19d3` |
+| After_fix | run `run-read-product-after_fix-70cf39a6-d7a4-4b90-8006-102fb2b0c039` · trace `trace-read-product-after_fix-e9b92660-a3dd-4000-a7fa-6d28d11ab220` | run `run-read-product-after_fix-5f26ebe7-ba84-4af9-ad87-1b57f7b9c465` · trace `trace-read-product-after_fix-237d7463-cae5-4efb-ad27-f473de92c4c8` |
+| Provider model / tokens / cost | n/a | report n/a; log agentservice: `grok-3` · 940 in · 58 out · $0.0023681 |
+| Backend/planner commit | n/a | n/a |
+
+Offline rieseguito sullo stesso commit del live (`76f5572f`): exit `0`, `verified`, 13 bracci, `selection.source: offline_model`, report `shop-6e87f0f2-c238-4cf0-92f2-343792a1a0fa` (`started_at` 2026-11-04T23:03:37.601Z). Unica differenza sostanziale col live: chi sceglie il fix (fixture vs Grok). Il giudizio resta del verifier backend.
+
+Bracci di controllo della run live (tutti passed):
+
+| Braccio | task | run_id | trace_id |
+| --- | --- | --- | --- |
+| control_baseline | read-product | `run-read-product-baseline-5c77f632-f508-431d-a3a6-6ec1c138d010` | `trace-read-product-baseline-33f84c5c-8b3d-4457-a92a-a181c089f71b` |
+| control_treated | read-product | `run-read-product-after_fix-2bfdc0f8-ab6a-42df-a804-9f9e615af538` | `trace-read-product-after_fix-1b4c2d4f-c037-4c02-853b-b5b20012f52f` |
+| control_baseline | add-mugs | `run-add-mugs-baseline-e649fbc9-e49d-4234-a8c3-b52a5feb6d95` | `trace-add-mugs-baseline-7f62bb14-a325-4282-b37b-0bf431cfa8b5` |
+| control_treated | add-mugs | `run-add-mugs-after_fix-b6cb7e8f-26ca-421c-bd86-7d1bf029b4c5` | `trace-add-mugs-after_fix-1525a1a5-d898-4082-abce-a746ca7ae0c6` |
+| control_baseline | checkout-cart | `run-checkout-cart-baseline-ca40be9e-c26d-4d85-b5b8-2ef8f87ca72f` | `trace-checkout-cart-baseline-c047f661-33eb-4336-9271-f291a42881ea` |
+| control_treated | checkout-cart | `run-checkout-cart-after_fix-13dc2703-b356-4d7c-a34d-4525088f7b5e` | `trace-checkout-cart-after_fix-4107c653-9f6f-47b0-bcaa-49cae88ee7e3` |
+| control_baseline | track-order | `run-track-order-baseline-9dde2552-375a-43f7-9a27-48a4ab321afc` | `trace-track-order-baseline-e710d56d-bd84-4a03-bc23-f4c54cab1d64` |
+| control_treated | track-order | `run-track-order-after_fix-830034cd-b359-432f-840c-ec881ed8c232` | `trace-track-order-after_fix-b44cc13e-e1eb-43b9-8854-971df57f9d3c` |
+| control_baseline | cancel-order | `run-cancel-order-baseline-a31a25a8-e121-4b75-8543-c942a01dc7e2` | `trace-cancel-order-baseline-6115dbc3-0bc2-4c03-a58f-4bcaa03423c6` |
+| control_treated | cancel-order | `run-cancel-order-after_fix-00cbbacf-e240-42c0-b87d-6d3761a05dc7` | `trace-cancel-order-after_fix-1498a5f4-105e-4dce-87dc-d91a25ca19e9` |
 
 Matrice minima (esiti di questo collaudo): vedi la PR che referenzia #101. Coverage automatica: `apps/agentservice/test/demo-shop.test.ts`, `canonical-scenario.test.ts`, `fix-verification.test.ts`, `acceptance-a5.test.ts`; backend `diagnosis.test.ts`, `world-gate.test.ts`, `runs-postgres.test.ts` (quest’ultimo skip in CI senza `TEST_DATABASE_URL`).
 
