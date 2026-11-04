@@ -73,6 +73,8 @@ Set valutato: 19 trace, 7 categorie (Plan, ToolUse, Context, Reasoning, Executio
 
 Provenienza: 2 fixture già nel repository (`packages/shared/examples/injected-failed-trace.json`, `apps/backend/fixtures/jury/attacked-trace.json`) e 17 trace del harness scriptato. Rigenerare le trace del harness e il manifest con `pnpm generate-dataset` (mock in loopback, driver `scripted`, fault del catalogo). Poi `pnpm eval` riscrive questa sezione.
 
+I conteggi del baseline solo-regole sono stati ricalcolati dopo la [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). Quella PR smette di copiare i marker dell'iniettore negli step, e `pnpm generate-dataset` ha rigenerato le trace del harness su quel codice.
+
 Il ground truth è l'unica etichetta in `fault.labels`. Se `fault.attacker.used` è true, la fonte nel manifest è `fault.attacker`: quell'oggetto non ha una categoria e ADR-002 attribuisce l'etichetta all'attaccante. Il valutatore legge `fault`. Il prompt di Grok no.
 
 ### Definizioni
@@ -94,11 +96,11 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
 | Accuratezza di categoria | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step esatto | 3/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Step esatto | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Step entro ±1 | 10/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Hit del fix proposto | 4/7 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Fix non applicabile | 12 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Latenza media (ms) | 0.035 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Latenza media (ms) | 0.032 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Token in/out | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Costo USD | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 <!-- eval-scoreboard:end -->
@@ -106,7 +108,7 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 ## Limiti noti
 
 <!-- eval-limits:start -->
-- Hint dell'iniettore in 13/19 trace. I marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivano a Grok. Follow-up del backend (@diamanti-sg). Questo eval non modifica `apps/backend`.
+- Hint dell'iniettore in 0/19 trace. Prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) erano 13/19: i marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivavano a Grok. Quella PR (@diamanti-sg) non li copia più. Questo eval non modifica `apps/backend`.
 - Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
 - L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
 - Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.

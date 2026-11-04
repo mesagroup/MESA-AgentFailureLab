@@ -40,9 +40,11 @@ describe("dataset", () => {
     assert.equal(shared?.truth.source, "fault.labels");
     assert.deepEqual(shared?.hints, []);
     const dropped = loaded.find((item) => item.id === "t3-execution-drop-checkout");
-    assert.ok(dropped?.hints.includes("dropped_message"));
-    assert.ok(loaded.some((item) => item.hints.includes("forged_true")));
-    assert.ok(loaded.some((item) => item.hints.length === 0));
+    assert.deepEqual(dropped?.hints, []);
+    assert.equal(
+      loaded.every((item) => item.hints.length === 0),
+      true,
+    );
   });
 });
 
@@ -214,8 +216,9 @@ describe("evaluate", () => {
     assert.equal(grok.cost_usd.total, 0.5 * report.cases.length);
     assert.equal(seen.length, report.cases.length);
     const packet = seen.map((request) => request.user).join("\n");
-    assert.ok(packet.includes("Injected execution drop before the mock was called."));
-    assert.ok(packet.includes('"forged":true'));
+    assert.equal(packet.includes("Injected execution drop before the mock was called."), false);
+    assert.equal(packet.includes('"forged":true'), false);
+    assert.equal(packet.includes("Injector skipped "), false);
     const secrets = new Set<string>();
     for (const item of report.cases) {
       secrets.add(item.truth.code);
@@ -241,8 +244,8 @@ describe("published numbers", () => {
       grok: { mode: "skipped", reason: "XAI_API_KEY is unset" },
       generatedAt: "2026-11-04T00:00:00.000Z",
     });
-    const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
-    const latestMd = readFileSync(new URL("../eval/results/latest.md", import.meta.url), "utf8");
+    const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const latestMd = readFileSync(new URL("../eval/results/latest.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const latestJson: unknown = JSON.parse(readFileSync(new URL("../eval/results/latest.json", import.meta.url), "utf8"));
     assert.equal(markerBody(readme), markerBody(latestMd));
     assert.equal(limitsBody(readme), limitsBody(latestMd));
@@ -269,6 +272,8 @@ describe("published numbers", () => {
       assert.ok(board.includes(line));
     }
     assert.ok(limits.includes(`${fresh.dataset.leakage.traces_with_hints}/${fresh.dataset.scored_count}`));
+    assert.ok(board.includes("PR #44"));
+    assert.ok(limits.includes("PR #44"));
     assert.ok(limits.includes("@diamanti-sg"));
     assert.ok(limits.includes("PR #21"));
     assert.ok(limits.includes("#15"));

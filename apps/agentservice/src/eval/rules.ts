@@ -63,9 +63,9 @@ export type GroundTruthRead =
   | { ok: false; reason: "no_labels" | "ambiguous_labels" };
 
 /**
- * Markers PR #28 writes into steps. `diagnoseTrace` does not strip them, so
- * they reach Grok. Scanning is limited to `trace.steps` (the evaluator's
- * leakage flag), never to `fault`, which the model is not shown.
+ * Markers PR #28 used to write into steps. PR #44 stops the injector from
+ * copying them onto model-visible fields. The scanner still flags any that
+ * remain in `trace.steps`. It does not read `fault`, which the model is not shown.
  */
 export const HINT_IDS = [
   "dropped_message",
@@ -79,7 +79,7 @@ export const HINT_IDS = [
 export type HintId = (typeof HINT_IDS)[number];
 
 export const LEAKAGE_NOTE =
-  "PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend.";
+  "PR #28 wrote fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true. PR #44 (@diamanti-sg) stopped copying those markers into steps. This scoreboard was recomputed after pnpm generate-dataset regenerated the harness traces on that injector. The scanner still looks for the same strings in trace.steps. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. This eval does not change apps/backend.";
 
 const DROPPED_MESSAGE = "Injected execution drop before the mock was called.";
 const SKIPPED_PREFIX = "Injector skipped ";

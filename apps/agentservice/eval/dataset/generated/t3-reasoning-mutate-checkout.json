@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T3-injected-4b26dd15-4d44-413f-8738-be116f0a362b",
+  "trace_id": "trace-T3-injected-41296c33-8cf3-4401-aab9-6d2cad3c21cf",
   "agent_id": "reference-shop",
-  "run_id": "run-T3-injected-fd0b70b2-936b-4d25-a9f5-bd58b4e8528a",
+  "run_id": "run-T3-injected-5ae40894-7126-4856-a019-5dd7d4b502a5",
   "task_id": "T3",
-  "started_at": "2026-11-04T12:34:13.429Z",
-  "ended_at": "2026-11-04T12:34:13.436Z",
+  "started_at": "2026-11-04T13:35:20.771Z",
+  "ended_at": "2026-11-04T13:35:20.778Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.430Z",
+      "timestamp": "2026-11-04T13:35:20.772Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.431Z",
+      "timestamp": "2026-11-04T13:35:20.773Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -40,7 +40,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.432Z",
+      "timestamp": "2026-11-04T13:35:20.774Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -50,7 +50,7 @@
       "cost_usd": 0,
       "tool_name": "get_cart",
       "tool_output": {
-        "session_id": "sT3_3d47459ddacf4316",
+        "session_id": "sT3_dabc41529ff74033",
         "items": [
           {
             "product_id": "SKU-MUG-01",
@@ -67,7 +67,7 @@
       "step_id": "step-3",
       "index": 3,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.433Z",
+      "timestamp": "2026-11-04T13:35:20.775Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -76,15 +76,13 @@
       },
       "cost_usd": 0,
       "tool_name": "checkout",
-      "tool_input": {
-        "injected": true
-      }
+      "tool_input": {}
     },
     {
       "step_id": "step-4",
       "index": 4,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.434Z",
+      "timestamp": "2026-11-04T13:35:20.776Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -95,7 +93,7 @@
       "tool_name": "checkout",
       "tool_output": {
         "order_id": "ord_0001",
-        "session_id": "sT3_3d47459ddacf4316",
+        "session_id": "sT3_dabc41529ff74033",
         "status": "placed",
         "items": [
           {
@@ -107,7 +105,7 @@
           }
         ],
         "total_usd": 24,
-        "created_at": "2026-11-04T12:34:13.431Z",
+        "created_at": "2026-11-04T13:35:20.773Z",
         "cancelled_at": null
       }
     },
@@ -115,7 +113,7 @@
       "step_id": "step-5",
       "index": 5,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.435Z",
+      "timestamp": "2026-11-04T13:35:20.777Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -150,7 +148,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT3_3d47459ddacf4316",
+            "session_id": "sT3_dabc41529ff74033",
             "items": [],
             "total_usd": 0
           }
@@ -158,7 +156,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT3_3d47459ddacf4316",
+            "session_id": "sT3_dabc41529ff74033",
             "status": "placed",
             "items": [
               {
@@ -170,7 +168,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.431Z",
+            "created_at": "2026-11-04T13:35:20.773Z",
             "cancelled_at": null
           }
         ],

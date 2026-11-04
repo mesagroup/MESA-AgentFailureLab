@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T2-injected-f6e49ed4-9b1e-4686-b220-c09191a2c58c",
+  "trace_id": "trace-T2-injected-33158214-8990-4c9c-94db-f8bb7b5f8e0b",
   "agent_id": "reference-shop",
-  "run_id": "run-T2-injected-e6020c04-60a5-4ba2-96ad-c088bb37edeb",
+  "run_id": "run-T2-injected-239f6ab5-4164-4960-aa46-d85b96aa982d",
   "task_id": "T2",
-  "started_at": "2026-11-04T12:34:13.387Z",
-  "ended_at": "2026-11-04T12:34:13.393Z",
+  "started_at": "2026-11-04T13:35:20.729Z",
+  "ended_at": "2026-11-04T13:35:20.734Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.388Z",
+      "timestamp": "2026-11-04T13:35:20.730Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -24,22 +24,8 @@
     {
       "step_id": "step-1",
       "index": 1,
-      "type": "system",
-      "timestamp": "2026-11-04T12:34:13.389Z",
-      "role": "system",
-      "latency_ms": 1,
-      "token_usage": {
-        "input": 0,
-        "output": 0
-      },
-      "cost_usd": 0,
-      "content": "Injector skipped add_to_cart."
-    },
-    {
-      "step_id": "step-2",
-      "index": 2,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.390Z",
+      "timestamp": "2026-11-04T13:35:20.731Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -51,10 +37,10 @@
       "tool_input": {}
     },
     {
-      "step_id": "step-3",
-      "index": 3,
+      "step_id": "step-2",
+      "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.391Z",
+      "timestamp": "2026-11-04T13:35:20.732Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -64,16 +50,16 @@
       "cost_usd": 0,
       "tool_name": "get_cart",
       "tool_output": {
-        "session_id": "sT2_83d4f30e845b4124",
+        "session_id": "sT2_b2e647a4ba4b492d",
         "items": [],
         "total_usd": 0
       }
     },
     {
-      "step_id": "step-4",
-      "index": 4,
+      "step_id": "step-3",
+      "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.392Z",
+      "timestamp": "2026-11-04T13:35:20.733Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -146,7 +132,7 @@
     "agent_claimed_success": true
   },
   "totals": {
-    "latency_ms": 5,
+    "latency_ms": 4,
     "tokens_in": 0,
     "tokens_out": 0,
     "cost_usd": 0

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-04T12:43:39.405Z",
+  "generated_at": "2026-11-04T13:37:24.072Z",
   "definitions": {
     "category_accuracy": "Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.",
     "step_accuracy_exact": "Predicted step_id equals the labelled step_id.",
@@ -38,16 +38,16 @@
       "Security": 2
     },
     "leakage": {
-      "traces_with_hints": 13,
+      "traces_with_hints": 0,
       "by_hint": {
-        "dropped_message": 3,
-        "injector_skipped": 4,
+        "dropped_message": 0,
+        "injector_skipped": 0,
         "injector_missed_target": 0,
-        "forged_true": 2,
-        "stale_true": 2,
-        "injected_true": 2
+        "forged_true": 0,
+        "stale_true": 0,
+        "injected_true": 0
       },
-      "note": "PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend."
+      "note": "PR #28 wrote fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true. PR #44 (@diamanti-sg) stopped copying those markers into steps. This scoreboard was recomputed after pnpm generate-dataset regenerated the harness traces on that injector. The scanner still looks for the same strings in trace.steps. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. This eval does not change apps/backend."
     }
   },
   "methods": {
@@ -59,12 +59,12 @@
       "scored": 19,
       "errors": 0,
       "category_correct": 4,
-      "step_exact": 3,
+      "step_exact": 4,
       "step_tolerance_1": 10,
       "fix_hits": 4,
       "fix_applicable": 7,
       "fix_not_applicable": 12,
-      "mean_latency_ms": 0.035,
+      "mean_latency_ms": 0.032,
       "tokens": {
         "input": null,
         "output": null,
@@ -184,7 +184,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.362,
+        "latency_ms": 0.306,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -216,7 +216,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.033,
+        "latency_ms": 0.03,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -237,20 +237,18 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.078,
+        "latency_ms": 0.077,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -271,20 +269,18 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.031,
+        "latency_ms": 0.033,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -305,9 +301,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "forged_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -318,7 +312,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.019,
+        "latency_ms": 0.021,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -350,7 +344,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.047,
+        "latency_ms": 0.043,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -371,9 +365,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "forged_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -384,7 +376,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.011,
+        "latency_ms": 0.015,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -405,15 +397,13 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "stale_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.014,
+        "latency_ms": 0.009,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -434,15 +424,13 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "stale_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.011,
+        "latency_ms": 0.01,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -495,15 +483,13 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injected_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.01,
+        "latency_ms": 0.008,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -535,7 +521,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.01,
+        "latency_ms": 0.009,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -556,15 +542,13 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injected_true"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.006,
+        "latency_ms": 0.004,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -585,9 +569,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -598,7 +580,7 @@
           ],
           "finding": "timeout"
         },
-        "latency_ms": 0.009,
+        "latency_ms": 0.008,
         "usage": null,
         "category_match": true,
         "step_exact": true,
@@ -619,9 +601,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -653,9 +633,7 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "dropped_message"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
@@ -687,14 +665,12 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "prediction",
           "category": "Verification",
-          "step_id": "step-4",
+          "step_id": "step-3",
           "proposed_fixes": [
             "pre_response_check"
           ],
@@ -703,7 +679,7 @@
         "latency_ms": 0.004,
         "usage": null,
         "category_match": true,
-        "step_exact": false,
+        "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": true
       },
@@ -721,15 +697,13 @@
         "attacker_used": false,
         "payload_id": null
       },
-      "hints": [
-        "injector_skipped"
-      ],
+      "hints": [],
       "baseline": {
         "prediction": {
           "kind": "abstain",
           "reason": "no_findings"
         },
-        "latency_ms": 0.003,
+        "latency_ms": 0.002,
         "usage": null,
         "category_match": false,
         "step_exact": false,
@@ -761,7 +735,7 @@
           ],
           "finding": "false_success_claim"
         },
-        "latency_ms": 0.005,
+        "latency_ms": 0.004,
         "usage": null,
         "category_match": false,
         "step_exact": false,

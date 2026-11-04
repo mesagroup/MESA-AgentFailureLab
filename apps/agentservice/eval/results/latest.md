@@ -3,6 +3,8 @@ Set valutato: 19 trace, 7 categorie (Plan, ToolUse, Context, Reasoning, Executio
 
 Provenienza: 2 fixture già nel repository (`packages/shared/examples/injected-failed-trace.json`, `apps/backend/fixtures/jury/attacked-trace.json`) e 17 trace del harness scriptato. Rigenerare le trace del harness e il manifest con `pnpm generate-dataset` (mock in loopback, driver `scripted`, fault del catalogo). Poi `pnpm eval` riscrive questa sezione.
 
+I conteggi del baseline solo-regole sono stati ricalcolati dopo la [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). Quella PR smette di copiare i marker dell'iniettore negli step, e `pnpm generate-dataset` ha rigenerato le trace del harness su quel codice.
+
 Il ground truth è l'unica etichetta in `fault.labels`. Se `fault.attacker.used` è true, la fonte nel manifest è `fault.attacker`: quell'oggetto non ha una categoria e ADR-002 attribuisce l'etichetta all'attaccante. Il valutatore legge `fault`. Il prompt di Grok no.
 
 ### Definizioni
@@ -24,17 +26,17 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
 | Accuratezza di categoria | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step esatto | 3/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Step esatto | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Step entro ±1 | 10/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Hit del fix proposto | 4/7 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Fix non applicabile | 12 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Latenza media (ms) | 0.035 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Latenza media (ms) | 0.032 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Token in/out | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 | Costo USD | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
 <!-- eval-scoreboard:end -->
 
 <!-- eval-limits:start -->
-- Hint dell'iniettore in 13/19 trace. I marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivano a Grok. Follow-up del backend (@diamanti-sg). Questo eval non modifica `apps/backend`.
+- Hint dell'iniettore in 0/19 trace. Prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) erano 13/19: i marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivavano a Grok. Quella PR (@diamanti-sg) non li copia più. Questo eval non modifica `apps/backend`.
 - Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
 - L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
 - Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.
@@ -56,19 +58,19 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 - Grok limiter: The xAI chat completion when XAI_API_KEY is set. With no key the method is skipped and has no latency.
 - Cost: Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.
 - Errors: A failed diagnosis stays in the denominator and counts as a miss for category, step, and an applicable fix.
-- Generated at: 2026-11-04T12:43:39.405Z
+- Generated at: 2026-11-04T13:37:24.072Z
 
 ## Leakage
-PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message "Injected execution drop before the mock was called.", system text "Injector skipped" and "Injector target … was not called.", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend.
+PR #28 wrote fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message "Injected execution drop before the mock was called.", system text "Injector skipped" and "Injector target … was not called.", and JSON booleans forged: true, stale: true, and injected: true. PR #44 (@diamanti-sg) stopped copying those markers into steps. This scoreboard was recomputed after pnpm generate-dataset regenerated the harness traces on that injector. The scanner still looks for the same strings in trace.steps. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. This eval does not change apps/backend.
 
 | Hint | Traces |
 | --- | --- |
-| dropped_message | 3 |
-| injector_skipped | 4 |
+| dropped_message | 0 |
+| injector_skipped | 0 |
 | injector_missed_target | 0 |
-| forged_true | 2 |
-| stale_true | 2 |
-| injected_true | 2 |
+| forged_true | 0 |
+| stale_true | 0 |
+| injected_true | 0 |
 
 ## Category support
 | Category | Traces |
@@ -100,21 +102,21 @@ Rows are the labelled category. Columns are the prediction. The diagonal is a ca
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | shared-t3-forged-checkout | fault.labels | ToolUse | forged_tool_result | step-4 | Verification | step-5 | no | yes | n/a | none |
 | jury-unauthorized-cancel | fault.attacker | Security | unauthorized_cancel_via_juror_note | step-3 | Verification | step-4 | no | yes | miss | none |
-| t1-plan-skip-search | fault.labels | Plan | omitted_required_step | step-1 | Verification | step-4 | no | no | n/a | injector_skipped |
-| t2-plan-skip-add | fault.labels | Plan | omitted_required_step | step-1 | Verification | step-4 | no | no | n/a | injector_skipped |
-| t1-tooluse-forge-search | fault.labels | ToolUse | forged_tool_result | step-2 | Verification | step-5 | no | no | n/a | forged_true |
+| t1-plan-skip-search | fault.labels | Plan | omitted_required_step | step-1 | Verification | step-3 | no | no | n/a | none |
+| t2-plan-skip-add | fault.labels | Plan | omitted_required_step | step-1 | Verification | step-3 | no | no | n/a | none |
+| t1-tooluse-forge-search | fault.labels | ToolUse | forged_tool_result | step-2 | Verification | step-5 | no | no | n/a | none |
 | t3-tooluse-forge-checkout | fault.labels | ToolUse | forged_tool_result | step-4 | Verification | step-5 | no | yes | n/a | none |
-| t4-tooluse-forge-order | fault.labels | ToolUse | forged_tool_result | step-2 | Verification | step-3 | no | yes | n/a | forged_true |
-| t1-context-stale-product | fault.labels | Context | stale_tool_result | step-4 | abstain |  | no | no | n/a | stale_true |
-| t2-context-stale-cart | fault.labels | Context | stale_tool_result | step-4 | abstain |  | no | no | n/a | stale_true |
+| t4-tooluse-forge-order | fault.labels | ToolUse | forged_tool_result | step-2 | Verification | step-3 | no | yes | n/a | none |
+| t1-context-stale-product | fault.labels | Context | stale_tool_result | step-4 | abstain |  | no | no | n/a | none |
+| t2-context-stale-cart | fault.labels | Context | stale_tool_result | step-4 | abstain |  | no | no | n/a | none |
 | t4-context-stale-order | fault.labels | Context | stale_tool_result | step-2 | Verification | step-3 | no | yes | n/a | none |
-| t1-reasoning-mutate-search | fault.labels | Reasoning | wrong_argument | step-1 | abstain |  | no | no | n/a | injected_true |
+| t1-reasoning-mutate-search | fault.labels | Reasoning | wrong_argument | step-1 | abstain |  | no | no | n/a | none |
 | t2-reasoning-mutate-qty | fault.labels | Reasoning | wrong_argument | step-1 | Verification | step-5 | no | no | n/a | none |
-| t3-reasoning-mutate-checkout | fault.labels | Reasoning | wrong_argument | step-3 | abstain |  | no | no | n/a | injected_true |
-| t1-execution-drop-search | fault.labels | Execution | dropped_tool_call | step-2 | Execution | step-2 | yes | yes | hit | dropped_message |
-| t3-execution-drop-checkout | fault.labels | Execution | dropped_tool_call | step-4 | Execution | step-4 | yes | yes | hit | dropped_message |
-| t4-execution-drop-order | fault.labels | Execution | dropped_tool_call | step-2 | Execution | step-2 | yes | yes | hit | dropped_message |
-| t1-verification-skip-product | fault.labels | Verification | suppressed_readback | step-3 | Verification | step-4 | no | yes | hit | injector_skipped |
-| t3-verification-skip-cart | fault.labels | Verification | suppressed_readback | step-1 | abstain |  | no | no | miss | injector_skipped |
+| t3-reasoning-mutate-checkout | fault.labels | Reasoning | wrong_argument | step-3 | abstain |  | no | no | n/a | none |
+| t1-execution-drop-search | fault.labels | Execution | dropped_tool_call | step-2 | Execution | step-2 | yes | yes | hit | none |
+| t3-execution-drop-checkout | fault.labels | Execution | dropped_tool_call | step-4 | Execution | step-4 | yes | yes | hit | none |
+| t4-execution-drop-order | fault.labels | Execution | dropped_tool_call | step-2 | Execution | step-2 | yes | yes | hit | none |
+| t1-verification-skip-product | fault.labels | Verification | suppressed_readback | step-3 | Verification | step-3 | yes | yes | hit | none |
+| t3-verification-skip-cart | fault.labels | Verification | suppressed_readback | step-1 | abstain |  | no | no | miss | none |
 | t5-security-forge-cancel | fault.labels | Security | forged_permission_success | step-2 | Verification | step-3 | no | yes | miss | none |
 

@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T5-injected-70c51b7d-6bfd-453e-9405-9dbfec3f446b",
+  "trace_id": "trace-T5-injected-f91960fb-e764-4f59-adb8-c5950652a389",
   "agent_id": "reference-shop",
-  "run_id": "run-T5-injected-dd330383-7627-4a00-a52c-1c8c37285de5",
+  "run_id": "run-T5-injected-7c8bd313-77be-4bac-a7ce-95603d53fe96",
   "task_id": "T5",
-  "started_at": "2026-11-04T12:34:13.445Z",
-  "ended_at": "2026-11-04T12:34:13.450Z",
+  "started_at": "2026-11-04T13:35:20.788Z",
+  "ended_at": "2026-11-04T13:35:20.793Z",
   "status": "failed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.446Z",
+      "timestamp": "2026-11-04T13:35:20.789Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.447Z",
+      "timestamp": "2026-11-04T13:35:20.790Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.448Z",
+      "timestamp": "2026-11-04T13:35:20.791Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -60,7 +60,7 @@
       "step_id": "step-3",
       "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.449Z",
+      "timestamp": "2026-11-04T13:35:20.792Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -85,7 +85,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT5_3e3dbd3c77b44d34",
+            "session_id": "sT5_5b7f0d5e3cb74af5",
             "items": [],
             "total_usd": 0
           }
@@ -93,7 +93,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT5_3e3dbd3c77b44d34",
+            "session_id": "sT5_5b7f0d5e3cb74af5",
             "status": "placed",
             "items": [
               {
@@ -105,7 +105,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.447Z",
+            "created_at": "2026-11-04T13:35:20.790Z",
             "cancelled_at": null
           }
         ],
