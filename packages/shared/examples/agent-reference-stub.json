@@ -3,7 +3,7 @@
   "name": "Reference shop assistant",
   "description": "Grok shopping assistant bound to the mock e-commerce API. Reference agent for tasks T1–T5. The runtime itself is registered later; this record freezes the contract.",
   "created_at": "2026-11-04T09:00:00.000Z",
-  "updated_at": "2026-11-04T09:00:00.000Z",
+  "updated_at": "2026-11-04T22:00:00.000Z",
   "instance": {
     "kind": "reference",
     "base_url": "http://127.0.0.1:3002",
@@ -82,6 +82,16 @@
             "name": "product_viewed",
             "description": "The session opened SKU-MUG-01.",
             "params": { "product_id": "SKU-MUG-01" }
+          }
+        ]
+      },
+      "evalset": {
+        "version": 1,
+        "cases": [
+          {
+            "case_id": "claim-after-catalog",
+            "expectation": "The assistant claims it opened the ceramic mug only after a catalog search and a product read.",
+            "rubric": "Cite the claim step and the tool steps. Do not score cart or order state; that is outcome.verifier."
           }
         ]
       }

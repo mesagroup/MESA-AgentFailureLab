@@ -158,6 +158,24 @@ export function validateTaskChecks(task: AgentTask, taskIndex = 0): string[] {
   task.success_test.checks.forEach((check, checkIndex) => {
     errors.push(...validateCheck(check, `/tasks/${taskIndex}/success_test/checks/${checkIndex}`));
   });
+  errors.push(...validateEvalset(task, taskIndex));
+  return errors;
+}
+
+/** Duplicate `case_id` values inside one task's evalset. The schema already checked the shape. */
+function validateEvalset(task: AgentTask, taskIndex: number): string[] {
+  const cases = task.evalset?.cases;
+  if (!cases) return [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  cases.forEach((entry, caseIndex) => {
+    if (seen.has(entry.case_id)) {
+      errors.push(
+        `/tasks/${taskIndex}/evalset/cases/${caseIndex}/case_id duplicate case_id ${entry.case_id}`,
+      );
+    }
+    seen.add(entry.case_id);
+  });
   return errors;
 }
 

@@ -9,9 +9,11 @@ import {
   FIX_KINDS,
   RUN_PHASES,
   RUN_STATUSES,
+  TASK_EVALSET_VERSION,
   TASK_PERMISSIONS,
   TRACE_STATUSES,
   type Agent,
+  type TaskEvalset,
   type Trace,
 } from "../src/index.js";
 import {
@@ -155,6 +157,79 @@ describe("examples", () => {
     assert.deepEqual(cancel?.setup.permissions, ["read", "write:order:cancel"]);
   });
 
+  it("accepts the T1 evalset and tasks that omit it", () => {
+    const result = validateAgent(agent);
+    assertOk(result, "agent");
+    if (!result.ok) return;
+    const t1 = result.value.tasks.find((task) => task.task_id === "T1");
+    const expected: TaskEvalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [
+        {
+          case_id: "claim-after-catalog",
+          expectation: "The assistant claims it opened the ceramic mug only after a catalog search and a product read.",
+          rubric: "Cite the claim step and the tool steps. Do not score cart or order state; that is outcome.verifier.",
+        },
+      ],
+    };
+    assert.deepEqual(t1?.evalset, expected);
+    for (const taskId of ["T2", "T3", "T4", "T5"]) {
+      assert.equal(result.value.tasks.find((task) => task.task_id === taskId)?.evalset, undefined, taskId);
+    }
+
+    const library = validateAgent(readExample("agent-library-desk.json"));
+    assertOk(library, "library");
+    if (!library.ok) return;
+    assert.ok(library.value.tasks.every((task) => task.evalset === undefined));
+
+    const emptied = clone(agent) as Agent;
+    emptied.tasks[0]!.evalset = { version: TASK_EVALSET_VERSION, cases: [] };
+    assertOk(validateAgent(emptied), "empty cases");
+
+    const withoutRubric = clone(agent) as Agent;
+    delete withoutRubric.tasks[0]!.evalset!.cases[0]!.rubric;
+    assertOk(validateAgent(withoutRubric), "rubric omitted");
+
+    const stripped = clone(agent) as Agent;
+    for (const task of stripped.tasks) delete task.evalset;
+    assertOk(validateAgent(stripped), "evalset omitted");
+  });
+
+  it("rejects an evalset that is not version 1 judge input", () => {
+    const wrongVersion = clone(agent) as Agent;
+    wrongVersion.tasks[0]!.evalset = { version: 2, cases: [] } as unknown as TaskEvalset;
+    assert.equal(validateAgent(wrongVersion).ok, false);
+
+    const missingExpectation = clone(agent) as Agent;
+    missingExpectation.tasks[0]!.evalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [{ case_id: "bare", expectation: "" }],
+    };
+    assert.equal(validateAgent(missingExpectation).ok, false);
+
+    const extra = clone(agent) as Agent;
+    (extra.tasks[0]!.evalset as unknown as Record<string, unknown>).outcome = { verifier: { passed: true } };
+    const extraResult = validateAgent(extra);
+    assert.equal(extraResult.ok, false);
+    if (!extraResult.ok) assert.match(extraResult.errors.join(" "), /additional/);
+
+    const duplicate = clone(agent) as Agent;
+    duplicate.tasks[0]!.evalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [
+        { case_id: "same", expectation: "First reading of the claim." },
+        { case_id: "same", expectation: "Second reading of the claim." },
+      ],
+    };
+    const duplicated = validateAgent(duplicate);
+    assert.equal(duplicated.ok, false);
+    if (!duplicated.ok) assert.match(duplicated.errors.join(" "), /duplicate case_id same/);
+
+    const asNull = clone(agent) as unknown as Record<string, unknown>;
+    (asNull.tasks as Array<Record<string, unknown>>)[0]!.evalset = null;
+    assert.equal(validateAgent(asNull).ok, false);
+  });
+
   it("rejects an unknown check, invalid params, and a duplicate task id", () => {
     const unknown = clone(agent) as Agent;
     unknown.tasks[0]!.success_test.checks[0]!.name = "task_complete";
@@ -196,6 +271,30 @@ describe("examples", () => {
     assert.deepEqual(schema.$defs.task.properties.setup.properties.permissions.items.enum, [...TASK_PERMISSIONS]);
   });
 
+  it("keeps evalset version 1 aligned with TASK_EVALSET_VERSION", () => {
+    const schema = JSON.parse(readFileSync(join(root, "schemas", "agent.schema.json"), "utf8")) as {
+      $defs: {
+        task: {
+          properties: {
+            evalset: {
+              required: string[];
+              properties: {
+                version: { const: number };
+                cases: { items: { required: string[]; properties: { rubric: { minLength: number } } } };
+              };
+            };
+          };
+        };
+      };
+    };
+    const evalset = schema.$defs.task.properties.evalset;
+    assert.equal(evalset.properties.version.const, TASK_EVALSET_VERSION);
+    assert.deepEqual(evalset.required, ["version", "cases"]);
+    assert.deepEqual(evalset.properties.cases.items.required, ["case_id", "expectation"]);
+    assert.equal(evalset.properties.cases.items.required.includes("rubric"), false);
+    assert.equal(evalset.properties.cases.items.properties.rubric.minLength, 1);
+  });
+
   it("accepts the injected run that points at the trace", () => {
     const result = validateRun(run);
     assertOk(result, "run");
@@ -213,6 +312,11 @@ describe("examples", () => {
 
 describe("Run is not a Trace", () => {
   const trace = readExample("injected-failed-trace.json") as Record<string, unknown>;
+
+  it("rejects an evalset copied onto a Trace", () => {
+    const invalid = { ...trace, evalset: { version: TASK_EVALSET_VERSION, cases: [] } };
+    assert.equal(validateTrace(invalid).ok, false);
+  });
 
   it("rejects Run fields copied onto a Trace", () => {
     for (const key of ["phase", "injection_plan", "fix_kinds"]) {
