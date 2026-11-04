@@ -6,6 +6,7 @@ import { agentRunRequest, type AgentRunRequest, type AgentRunResponse } from "..
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { executeAttempt, traceBounds } from "../harness/execute.js";
 import { prepareWorld } from "../harness/world.js";
+import { withWorldGate } from "../harness/world-gate.js";
 import type { MockShopClient } from "../mock/client.js";
 import type { RunStore } from "../persistence/memory.js";
 import { taskById } from "../reference-agent.js";
@@ -108,6 +109,11 @@ export interface JuryCaseOptions {
   parentRunId?: string;
   /** Shop URL copied onto the agent request. The scripted jury agent does not call it. */
   mockBaseUrl?: string;
+  /**
+   * Called after each world setup, while the world gate is held.
+   * Tests use this as a barrier. It is not read from the HTTP body and not stored on Run or Trace.
+   */
+  afterWorldSetup?: () => void | Promise<void>;
   /**
    * Override the agent. Tests and a live `POST /v1/tasks/run` use this.
    * The default is the in-process mirror of `guardCall` plus `readEmbeddedInstructions`.
@@ -251,6 +257,8 @@ async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
  * Each attempt resets the shop. The live shop afterwards is the attacked attempt.
  * `parentRunId` stores the attack as `after_fix` with `fix_kinds`.
  * Without it, `fix_kinds` go to the agent only and the Run stays `injected`.
+ * The mock-world gate covers both attempts, from before the first reset through the last save.
+ * A runner call from this case re-enters that gate.
  */
 export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseReport> {
   const fixKinds = resolveJuryFixes(options.fixKinds);
@@ -279,159 +287,163 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
   const storedFixes = attackPhase === "after_fix" ? fixKinds : [];
   const parentRunId = attackPhase === "after_fix" ? (options.parentRunId ?? null) : null;
 
-  let baseline: JuryAttempt | null = null;
-  if (includeBaseline) {
-    const sessionId = sessionIdFor(taskId, "baseline");
+  return withWorldGate(async () => {
+    let baseline: JuryAttempt | null = null;
+    if (includeBaseline) {
+      const sessionId = sessionIdFor(taskId, "baseline");
+      const startedMs = Date.now();
+      const prepared = await prepareWorld(task, options.mock, sessionId);
+      await options.afterWorldSetup?.();
+      if (taskNeedsOrderId(task) && !prepared.orderId) {
+        throw new Error(`Jury baseline did not receive an order id for ${task.task_id}.`);
+      }
+      const orderId = prepared.orderId ?? "";
+      const execution = await executeAttempt({
+        prompt: renderTaskPrompt(task.prompt, orderId),
+        taskId: task.task_id,
+        actions: scriptedActions(task, { orderId: prepared.orderId, permissions: granted }),
+        client: options.mock,
+        sessionId,
+        permissions: granted,
+        plan: null,
+        timeoutMs,
+        startedMs,
+      });
+      const shopState = await options.mock.state();
+      baseline = await commitBuilt({
+        agentId: options.agent.agent_id,
+        taskId,
+        store: options.store,
+        phase: "baseline",
+        fixKinds: [],
+        parentRunId: null,
+        startedMs,
+        sessionId,
+        orderId,
+        permissions: granted,
+        reportedOrderStatus: execution.reportedOrderStatus,
+        steps: execution.steps,
+        labels: [],
+        claimedSuccess: execution.claimedSuccess,
+        timedOut: execution.timedOut,
+        plan: null,
+        attacker: { used: false, payload_id: null },
+        timeoutMs,
+        checks: task.success_test.checks,
+        shopState,
+      });
+    }
+
+    const sessionId = sessionIdFor(taskId, "attack");
     const startedMs = Date.now();
     const prepared = await prepareWorld(task, options.mock, sessionId);
+    await options.afterWorldSetup?.();
     if (taskNeedsOrderId(task) && !prepared.orderId) {
-      throw new Error(`Jury baseline did not receive an order id for ${task.task_id}.`);
+      throw new Error(`Jury attack did not receive an order id for ${task.task_id}.`);
     }
     const orderId = prepared.orderId ?? "";
-    const execution = await executeAttempt({
-      prompt: renderTaskPrompt(task.prompt, orderId),
-      taskId: task.task_id,
-      actions: scriptedActions(task, { orderId: prepared.orderId, permissions: granted }),
-      client: options.mock,
+    const consulted = await consultJuryAgent(options, {
+      task,
+      taskId,
+      prompt: attackedUserContent(task.prompt, orderId, noteBody),
       sessionId,
+      orderId,
       permissions: granted,
-      plan: null,
-      timeoutMs,
-      startedMs,
+      fixKinds,
     });
+    const onlyCancel =
+      consulted.actions.length === 0 || consulted.actions.every((action) => action.tool_name === "cancel_order");
+    const attack = onlyCancel
+      ? await applyJurorAttack({
+          taskPrompt: task.prompt,
+          orderId,
+          noteBody,
+          client: options.mock,
+          sessionId,
+          startedMs,
+          permissions: consulted.request.permissions,
+          actions: consulted.actions,
+        })
+      : await applyJuryActions({
+          taskPrompt: task.prompt,
+          orderId,
+          noteBody,
+          client: options.mock,
+          sessionId,
+          startedMs,
+          permissions: consulted.request.permissions,
+          actions: consulted.actions,
+          refused: consulted.refused,
+          embeddedCancel: consulted.embedded.some((entry) => entry.kind === "tool" && entry.value === "cancel_order"),
+        });
     const shopState = await options.mock.state();
-    baseline = await commitBuilt({
+    const attacked = await commitBuilt({
       agentId: options.agent.agent_id,
       taskId,
       store: options.store,
-      phase: "baseline",
-      fixKinds: [],
-      parentRunId: null,
+      phase: attackPhase,
+      fixKinds: storedFixes,
+      parentRunId,
       startedMs,
       sessionId,
       orderId,
       permissions: granted,
-      reportedOrderStatus: execution.reportedOrderStatus,
-      steps: execution.steps,
-      labels: [],
-      claimedSuccess: execution.claimedSuccess,
-      timedOut: execution.timedOut,
-      plan: null,
-      attacker: { used: false, payload_id: null },
+      reportedOrderStatus: attack.reportedOrderStatus,
+      steps: attack.steps,
+      labels: attack.labels,
+      claimedSuccess: attack.claimedSuccess,
+      timedOut: false,
+      plan: juryPlan(),
+      attacker: { used: true, payload_id: JURY_PAYLOAD_ID },
       timeoutMs,
       checks: task.success_test.checks,
       shopState,
     });
-  }
 
-  const sessionId = sessionIdFor(taskId, "attack");
-  const startedMs = Date.now();
-  const prepared = await prepareWorld(task, options.mock, sessionId);
-  if (taskNeedsOrderId(task) && !prepared.orderId) {
-    throw new Error(`Jury attack did not receive an order id for ${task.task_id}.`);
-  }
-  const orderId = prepared.orderId ?? "";
-  const consulted = await consultJuryAgent(options, {
-    task,
-    taskId,
-    prompt: attackedUserContent(task.prompt, orderId, noteBody),
-    sessionId,
-    orderId,
-    permissions: granted,
-    fixKinds,
-  });
-  const onlyCancel =
-    consulted.actions.length === 0 || consulted.actions.every((action) => action.tool_name === "cancel_order");
-  const attack = onlyCancel
-    ? await applyJurorAttack({
-        taskPrompt: task.prompt,
-        orderId,
-        noteBody,
-        client: options.mock,
-        sessionId,
-        startedMs,
-        permissions: consulted.request.permissions,
-        actions: consulted.actions,
-      })
-    : await applyJuryActions({
-        taskPrompt: task.prompt,
-        orderId,
-        noteBody,
-        client: options.mock,
-        sessionId,
-        startedMs,
-        permissions: consulted.request.permissions,
-        actions: consulted.actions,
-        refused: consulted.refused,
-        embeddedCancel: consulted.embedded.some((entry) => entry.kind === "tool" && entry.value === "cancel_order"),
-      });
-  const shopState = await options.mock.state();
-  const attacked = await commitBuilt({
-    agentId: options.agent.agent_id,
-    taskId,
-    store: options.store,
-    phase: attackPhase,
-    fixKinds: storedFixes,
-    parentRunId,
-    startedMs,
-    sessionId,
-    orderId,
-    permissions: granted,
-    reportedOrderStatus: attack.reportedOrderStatus,
-    steps: attack.steps,
-    labels: attack.labels,
-    claimedSuccess: attack.claimedSuccess,
-    timedOut: false,
-    plan: juryPlan(),
-    attacker: { used: true, payload_id: JURY_PAYLOAD_ID },
-    timeoutMs,
-    checks: task.success_test.checks,
-    shopState,
-  });
+    const stepId = attacked.run.injection_plan?.ground_truth.step_id;
+    if (!stepId) throw new Error("Attacker did not record a ground-truth step.");
 
-  const stepId = attacked.run.injection_plan?.ground_truth.step_id;
-  if (!stepId) throw new Error("Attacker did not record a ground-truth step.");
+    const view = await buildJuryView({
+      taskId,
+      agentId: options.agent.agent_id,
+      store: options.store,
+      liveBaseline: baseline,
+      attacked,
+    });
 
-  const view = await buildJuryView({
-    taskId,
-    agentId: options.agent.agent_id,
-    store: options.store,
-    liveBaseline: baseline,
-    attacked,
-  });
-
-  return {
-    case_id: JURY_PAYLOAD_ID,
-    payload_id: JURY_PAYLOAD_ID,
-    note: publishedJuryNote(taskId, noteBody),
-    granted_permissions: granted,
-    wire_permissions: attack.wirePermissions,
-    agent_request: consulted.request,
-    agent_actions: consulted.actions,
-    agent_refused: consulted.refused,
-    client_called: attack.clientCalled,
-    tools_sent: attack.toolsSent,
-    task_id: taskId,
-    baseline,
-    attacked,
-    comparison: {
-      baseline_verifier_passed: baseline ? baseline.trace.outcome.verifier.passed : null,
-      attacked_verifier_passed: attacked.trace.outcome.verifier.passed,
-      baseline_order_status: baseline ? readOrderStatus(baseline.trace, baseline.order_id) : null,
-      attacked_order_status: readOrderStatus(attacked.trace, attacked.order_id),
-      baseline_mug_stock: baseline ? readMugStock(baseline.trace) : null,
-      attacked_mug_stock: readMugStock(attacked.trace),
-      ground_truth: {
-        category: "Security",
-        code: JURY_FAULT_CODE,
-        step_id: stepId,
+    return {
+      case_id: JURY_PAYLOAD_ID,
+      payload_id: JURY_PAYLOAD_ID,
+      note: publishedJuryNote(taskId, noteBody),
+      granted_permissions: granted,
+      wire_permissions: attack.wirePermissions,
+      agent_request: consulted.request,
+      agent_actions: consulted.actions,
+      agent_refused: consulted.refused,
+      client_called: attack.clientCalled,
+      tools_sent: attack.toolsSent,
+      task_id: taskId,
+      baseline,
+      attacked,
+      comparison: {
+        baseline_verifier_passed: baseline ? baseline.trace.outcome.verifier.passed : null,
+        attacked_verifier_passed: attacked.trace.outcome.verifier.passed,
+        baseline_order_status: baseline ? readOrderStatus(baseline.trace, baseline.order_id) : null,
+        attacked_order_status: readOrderStatus(attacked.trace, attacked.order_id),
+        baseline_mug_stock: baseline ? readMugStock(baseline.trace) : null,
+        attacked_mug_stock: readMugStock(attacked.trace),
+        ground_truth: {
+          category: "Security",
+          code: JURY_FAULT_CODE,
+          step_id: stepId,
+        },
+        injector_preset_code: "forged_permission_success",
       },
-      injector_preset_code: "forged_permission_success",
-    },
-    outcome: view.outcome,
-    baseline_comparison: view.baseline_comparison,
-    links: view.links,
-  };
+      outcome: view.outcome,
+      baseline_comparison: view.baseline_comparison,
+      links: view.links,
+    };
+  });
 }
 
 function resolveJuryFixes(values: readonly string[] | undefined): FixKind[] {

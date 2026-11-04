@@ -446,6 +446,21 @@ There is no env var that turns on an HTTP wipe. Reset is the CLI, and it still r
 
 ## Local runbook
 
+### One mock writer
+
+`POST /runs` and `POST /attacker/jury-case` share one lock inside the backend process that received them. The lock is taken before the shop reset and held until the snapshot, the verifier, and the save for that request are done. A second mutating request on that process receives HTTP 409:
+
+```json
+{
+  "error": "world_busy",
+  "message": "The mock world is busy with another run on this process. Retry after that run finishes. This is not a verifier failure."
+}
+```
+
+That 409 means the mock world is busy. A failed task is HTTP 200 with `outcome.verifier.passed` false. `GET /agents`, `GET /runs`, and `GET /traces` answer while a run holds the gate. `GET /attacker/jury-case` still returns the case description. `POST /traces/:traceId/diagnose` does not take this lock.
+
+Run one backend process against the demo shop. A second backend process can still reset that shop, and so can a client that calls the shop or `POST /internal/reset` directly. The lock stays inside one process. It leaves stored experiments in place. The shape of the gate is in [architecture.md](architecture.md#one-writer-for-the-mock-world).
+
 ### Without a database
 
 From the repo root:
