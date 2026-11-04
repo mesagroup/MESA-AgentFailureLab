@@ -29,17 +29,26 @@ export function listMigrationFiles(dir = migrationsDirectory()): string[] {
     .sort((left, right) => left.localeCompare(right));
 }
 
-/**
- * Pool settings for a Postgres URL.
- * Render's public URL sets `sslmode=require` and presents a certificate Node
- * does not trust by default. Those URLs use TLS without CA verification.
- * Local URLs, including Compose, are left unchanged.
- */
-/** True when the URL host is a Render Postgres hostname. Tests refuse these URLs. */
+/** True when the URL host is a public Render Postgres hostname. Tests refuse these URLs. */
 export function isRenderPostgresUrl(connectionString: string): boolean {
   return /@[^/?#]*\.render\.com(?::\d+)?(?:\/|\?|$)/i.test(connectionString);
 }
 
+/**
+ * Pool settings for a Postgres URL.
+ *
+ * Render's internal URL (`fromDatabase` property `connectionString`) is a
+ * private-network host. It has no `.render.com` suffix and no `sslmode`.
+ * TLS is not required on that path, so the string is passed through. Compose
+ * (`postgres://mesa:mesa@mesa-postgres:5432/mesa`) takes the same path.
+ *
+ * The external URL requires TLS. Render rejects `sslmode=disable` on it, and
+ * Node does not trust the certificate by default. A `.render.com` host, or
+ * any URL with `sslmode=require` (the external URL, or internal TLS opted
+ * in), uses TLS with `rejectUnauthorized: false`. `sslmode` is removed so
+ * node-postgres does not turn `require` into CA verification. Internal
+ * certificates are self-signed, so `verify-ca` and `verify-full` are not used.
+ */
 export function postgresPoolConfig(connectionString: string): pg.PoolConfig {
   const renderHost = isRenderPostgresUrl(connectionString);
   const requireSsl = /(?:\?|&)sslmode=require(?:&|$)/i.test(connectionString);

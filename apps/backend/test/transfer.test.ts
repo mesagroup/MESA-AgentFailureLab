@@ -108,6 +108,7 @@ describe("persistence export file", () => {
     assert.equal(label, "127.0.0.1:5432/mesa");
     assert.equal(label.includes("secret"), false);
     assert.equal(isRenderPostgresUrl("postgres://mesa:secret@dpg-abc.frankfurt-postgres.render.com:5432/mesa"), true);
+    assert.equal(isRenderPostgresUrl("postgresql://mesa:secret@dpg-abc-a:5432/mesa"), false);
     assert.equal(isRenderPostgresUrl("postgres://mesa:mesa@127.0.0.1:5432/mesa"), false);
     assert.match(httpExportAdvisory("postgres", "postgres"), /cannot read the SQL created_at/);
     assert.match(httpExportAdvisory("memory", "memory"), /no created_at column/);

@@ -59,6 +59,6 @@ Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` s
 
 ## Render
 
-The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus a Postgres instance `mesa-postgres` for agent, run, and trace records. Apply steps and env vars are in [deploy.md](deploy.md). Review that database block before the next Blueprint sync. `render.yaml` is not changed by the run/trace store. Provisioning stays with Yuri.
+The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus Postgres `mesa-postgres` for agent, run, and trace records. `DATABASE_URL` on `mesa-backend` comes from that database's internal connection string. Yuri applies the Blueprint in the Render workspace. The steps, the export-before-redeploy order, and the env vars are in [deploy.md](deploy.md) and [persistence.md](persistence.md).
 
 `mesa-mock-shop` is that fourth service. It is still not part of `apps/backend`. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. Local `pnpm dev` keeps `http://127.0.0.1:8787`.
