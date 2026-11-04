@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import { openAgentStore, agentStoreKind } from "../src/agents/open.js";
-import { listMigrationFiles, postgresPoolConfig } from "../src/agents/postgres.js";
+import { listMigrationFiles, normalizeMigrationSql, postgresPoolConfig } from "../src/agents/postgres.js";
 import { MemoryAgentStore, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
@@ -51,8 +51,13 @@ describe("agent store selection", () => {
     }
   });
 
-  it("lists the agent migrations in order", () => {
-    assert.deepEqual(listMigrationFiles(), ["001_agents.sql"]);
+  it("lists the migrations in order", () => {
+    assert.deepEqual(listMigrationFiles(), ["001_agents.sql", "002_runs.sql", "003_traces.sql"]);
+  });
+
+  it("normalizes a BOM and Windows CRLF before a migration is applied", () => {
+    assert.equal(normalizeMigrationSql("\uFEFFselect 1;\r\nselect 2;\r"), "select 1;\nselect 2;\n");
+    assert.equal(normalizeMigrationSql("select 1;\n"), "select 1;\n");
   });
 
   it("turns Render sslmode=require into unverified TLS and leaves local URLs alone", () => {
@@ -171,6 +176,44 @@ describe("agent HTTP API", () => {
 
       const missingDelete = await app.inject({ method: "DELETE", url: "/agents/does-not-exist" });
       assert.equal(missingDelete.statusCode, 404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects a check the registry does not define and params that do not match it", async () => {
+    const app = buildApp({ logger: false });
+    try {
+      const unknown = withoutServerFields(externalAgent("ignored"));
+      const tasks = unknown.tasks as Agent["tasks"];
+      tasks[0]!.success_test.checks[0]!.name = "task_complete";
+      const rejected = await app.inject({ method: "POST", url: "/agents", payload: unknown });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(rejected.json().error, "invalid_agent");
+
+      const badParams = withoutServerFields(externalAgent("ignored"));
+      const checks = (badParams.tasks as Agent["tasks"])[1]!.success_test.checks;
+      checks[0]!.params = { sku: "SKU-MUG-01" };
+      const missingQty = await app.inject({ method: "POST", url: "/agents", payload: badParams });
+      assert.equal(missingQty.statusCode, 400);
+      assert.match(missingQty.json().errors.join(" "), /qty/);
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/agents",
+        payload: withoutServerFields(externalAgent("kept")),
+      });
+      assert.equal(created.statusCode, 201);
+      const createdId = created.json().agent_id as string;
+      const replacement = externalAgent(createdId);
+      replacement.tasks[1]!.success_test.checks[0]!.params = { sku: "SKU-MUG-01", qty: 2, extra: true };
+      const updated = await app.inject({
+        method: "PUT",
+        url: `/agents/${createdId}`,
+        payload: replacement,
+      });
+      assert.equal(updated.statusCode, 400);
+      assert.match(updated.json().errors.join(" "), /extra/);
     } finally {
       await app.close();
     }

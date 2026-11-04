@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { FIX_KINDS, type AgentRunRequest, type FixKind } from "@mesa/shared";
+import { FIX_KINDS, type AgentRunRequest, type AgentTask, type FixKind } from "@mesa/shared";
+import { loadReferenceAgent } from "../../backend/src/reference-agent.js";
 import { buildApp } from "../src/app.js";
 import { confirmingRead, LAB_TASK_IDS, type LabTaskId } from "../src/fixes/domain.js";
 import { applyFixesToPlan } from "../src/fixes/plan.js";
 import { parseDiagnosisConfig } from "../src/grok/config.js";
 import { parseTaskRun, planTaskRun } from "../src/reference-agent/plan.js";
+
+const reference = loadReferenceAgent();
+
+function seedTask(taskId: string): AgentTask {
+  const task = reference.tasks.find((entry) => entry.task_id === taskId);
+  if (!task) throw new Error(`No seed task ${taskId}.`);
+  return task;
+}
 
 const config = parseDiagnosisConfig({ XAI_API_KEY: "", GROK_MODEL: "grok-test" });
 
@@ -24,7 +33,7 @@ describe("POST /v1/tasks/run", () => {
       const response = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T2" },
+        payload: { ...base, task_id: "T2", task: seedTask("T2") },
       });
       assert.equal(response.statusCode, 200);
       const body = response.json();
@@ -47,7 +56,7 @@ describe("POST /v1/tasks/run", () => {
       const response = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T3" },
+        payload: { ...base, task_id: "T3", task: seedTask("T3") },
       });
       assert.equal(response.statusCode, 200);
       assert.deepEqual(response.json().actions, [
@@ -67,7 +76,7 @@ describe("POST /v1/tasks/run", () => {
         url: "/v1/tasks/run",
         payload: {
           ...base,
-          task_id: "T5",
+          task_id: "T5", task: seedTask("T5"),
           order_id: "ord_0001",
           permissions: ["read"],
           prompt: "Cancel the order only when the run grants it.",
@@ -91,7 +100,7 @@ describe("POST /v1/tasks/run", () => {
       const response = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T5", order_id: "ord_0001", permissions: ["read", "write:order:cancel"] },
+        payload: { ...base, task_id: "T5", task: seedTask("T5"), order_id: "ord_0001", permissions: ["read", "write:order:cancel"] },
       });
       assert.equal(response.statusCode, 200);
       assert.deepEqual(response.json().actions, [
@@ -111,7 +120,7 @@ describe("POST /v1/tasks/run", () => {
         url: "/v1/tasks/run",
         payload: {
           ...base,
-          task_id: "T5",
+          task_id: "T5", task: seedTask("T5"),
           order_id: "ord_0001",
           permissions: ["read"],
           prompt,
@@ -132,7 +141,7 @@ describe("POST /v1/tasks/run", () => {
         url: "/v1/tasks/run",
         payload: {
           ...base,
-          task_id: "T5",
+          task_id: "T5", task: seedTask("T5"),
           order_id: "ord_0001",
           permissions: ["read"],
           prompt,
@@ -159,7 +168,7 @@ describe("POST /v1/tasks/run", () => {
       const checked = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T1", permissions: ["read"], fix_kinds: ["pre_response_check"] },
+        payload: { ...base, task_id: "T1", task: seedTask("T1"), permissions: ["read"], fix_kinds: ["pre_response_check"] },
       });
       assert.deepEqual(checked.json().actions, [
         { tool_name: "search_products", tool_input: { q: "mug" } },
@@ -170,7 +179,7 @@ describe("POST /v1/tasks/run", () => {
       const retried = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T2", fix_kinds: ["controlled_retry"] },
+        payload: { ...base, task_id: "T2", task: seedTask("T2"), fix_kinds: ["controlled_retry"] },
       });
       assert.deepEqual(retried.json().actions, [
         { tool_name: "add_to_cart", tool_input: { sku: "SKU-MUG-01", qty: 2 } },
@@ -182,21 +191,58 @@ describe("POST /v1/tasks/run", () => {
     }
   });
 
-  it("returns an empty plan for a task id outside T1–T5", async () => {
+  it("refuses a task whose checks it cannot plan", async () => {
     const app = buildApp({ config, model: null, logger: false });
+    const task: AgentTask = {
+      task_id: "empty-only",
+      title: "Leave the cart empty",
+      prompt: "Make sure the cart is empty.",
+      setup: { cart: [], orders: [], permissions: ["read"] },
+      success_test: {
+        type: "verifier_checks",
+        checks: [{ name: "cart_empty", description: "The cart has no lines." }],
+      },
+    };
     try {
       const response = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T9" },
+        payload: { ...base, task_id: task.task_id, task, permissions: ["read"] },
       });
-      assert.equal(response.statusCode, 200);
-      assert.deepEqual(response.json(), {
-        executed: false,
-        actions: [],
-        refused: [],
-        embedded: [],
+      assert.equal(response.statusCode, 400);
+      assert.equal(response.json().error, "unsupported_task");
+      assert.match(response.json().message, /cannot plan task empty-only/);
+
+      const planned = await app.inject({
+        method: "POST",
+        url: "/v1/tasks/run",
+        payload: {
+          ...base,
+          task_id: "add-three",
+          permissions: ["read", "write:cart"],
+          task: {
+            task_id: "add-three",
+            title: "Add three caps",
+            prompt: "Add 3 units of SKU-CAP-03.",
+            setup: { cart: [], orders: [], permissions: ["read", "write:cart"] },
+            success_test: {
+              type: "verifier_checks",
+              checks: [
+                {
+                  name: "cart_contains",
+                  description: "The cart contains three caps.",
+                  params: { sku: "SKU-CAP-03", qty: 3 },
+                },
+              ],
+            },
+          },
+        },
       });
+      assert.equal(planned.statusCode, 200);
+      assert.deepEqual(planned.json().actions, [
+        { tool_name: "add_to_cart", tool_input: { sku: "SKU-CAP-03", qty: 3 } },
+        { tool_name: "get_cart", tool_input: {} },
+      ]);
     } finally {
       await app.close();
     }
@@ -208,19 +254,19 @@ describe("POST /v1/tasks/run", () => {
       const response = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T1", fix_kinds: ["retry_controllato"] },
+        payload: { ...base, task_id: "T1", task: seedTask("T1"), fix_kinds: ["retry_controllato"] },
       });
       assert.equal(response.statusCode, 400);
       const missing = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T1", fix_kinds: null },
+        payload: { ...base, task_id: "T1", task: seedTask("T1"), fix_kinds: null },
       });
       assert.equal(missing.statusCode, 400);
       const scalar = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T1", fix_kinds: "controlled_retry" },
+        payload: { ...base, task_id: "T1", task: seedTask("T1"), fix_kinds: "controlled_retry" },
       });
       assert.equal(scalar.statusCode, 400);
     } finally {
@@ -231,7 +277,7 @@ describe("POST /v1/tasks/run", () => {
   it("reads an AgentRunRequest when fix_kinds is omitted", () => {
     const request: AgentRunRequest = {
       ...base,
-      task_id: "T1",
+      task_id: "T1", task: seedTask("T1"),
       permissions: ["read"],
     };
     const parsed = parseTaskRun(request);
@@ -391,6 +437,7 @@ function postRun(
       ...base,
       ...input.extra,
       task_id: input.taskId,
+      task: seedTask(input.taskId),
       permissions: input.permissions,
       prompt: input.prompt,
       ...(input.orderId === undefined ? {} : { order_id: input.orderId }),

@@ -6,7 +6,7 @@ import type { DiagnosisModel } from "./diagnosis/diagnose.js";
 import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
-import { parseTaskRun, planTaskRun } from "./reference-agent/plan.js";
+import { UnsupportedTaskError, parseTaskRun, planTaskRun } from "./reference-agent/plan.js";
 
 export interface AppDeps {
   config?: DiagnosisConfig;
@@ -57,7 +57,14 @@ export function buildApp(deps: AppDeps = {}) {
     if (!parsed.ok) {
       return reply.code(400).send({ error: "invalid_request", message: parsed.message });
     }
-    return planTaskRun(parsed.value);
+    try {
+      return planTaskRun(parsed.value);
+    } catch (error) {
+      if (error instanceof UnsupportedTaskError) {
+        return reply.code(400).send({ error: "unsupported_task", message: error.message });
+      }
+      throw error;
+    }
   });
 
   app.post("/diagnose", async (request, reply) => {

@@ -10,7 +10,7 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.2.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-stub.json` — the reference agent fixture (T1–T5). The harness loads this; it is not a second schema.
@@ -23,11 +23,11 @@ When a contract field changes: edit the JSON Schema, update `src/types.ts` in th
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `agent_id`, `task_id`, `prompt`, `session_id`, `permissions`, `mock_base_url` | yes | The fields the harness already posts |
-| `order_id` | no | Tasks the harness seeded, such as T4 and T5 |
-| `fix_kinds` | no | `controlled_retry`, `pre_response_check`, `permission_guard`. Omit it, or send `[]`, when the run applies no fix. The reference agent reads this field and passes it to `applyFixesToPlan` |
+| `agent_id`, `task_id`, `task`, `prompt`, `session_id`, `permissions`, `mock_base_url` | yes | `task` is the full `AgentTask`. The reference agent plans from it. `prompt` is the text it sees and may include an attached note after `task.prompt` |
+| `order_id` | no | Present when `task.setup.orders` created an order |
+| `fix_kinds` | no | `controlled_retry`, `pre_response_check`, `permission_guard`. Omit it, or send `[]`, when the run applies no fix. The reference agent reads this field and passes it to `applyFixesToPlan` when the plan is the canonical lab plan |
 
-Further payload fields stay optional and are added on this interface. The reference agent ignores keys it does not know. It does not write `outcome.verifier` or `fault.*`.
+The reference agent does not write `outcome.verifier` or `fault.*`. A task it cannot plan is refused. The format of `task` is in [docs/agent-tasks.md](../../docs/agent-tasks.md).
 
 ## Run is not a Trace
 
@@ -75,7 +75,7 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 
 ## Agent
 
-`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. The reference stub registers T1–T5. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
+`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. Each task has `setup` (cart, orders, granted permissions) and check `params` constrained by the check registry. The reference stub registers T1–T5 as that data. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
 
 ## Examples
 

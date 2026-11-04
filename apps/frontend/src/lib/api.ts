@@ -1,19 +1,103 @@
-import type { Run, RunPhase, FixKind, Trace } from "@mesa/shared";
+import type { Agent, AgentInstanceKind, AgentTask, Run, RunPhase, FixKind, Trace } from "@mesa/shared";
 
-const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
+const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
 
 async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (typeof body === "object" && body !== null) {
+      const record = body as { message?: unknown; errors?: unknown };
+      if (Array.isArray(record.errors) && record.errors.every((entry) => typeof entry === "string")) {
+        return record.errors.join("; ");
+      }
+      if (typeof record.message === "string" && record.message.length > 0) return record.message;
+    }
+  } catch {
+    // The error body was not JSON.
+  }
+  return `${res.status} ${res.statusText}`;
+}
+
+// --- Agents ---
+
+export interface AgentDraft {
+  name: string;
+  description: string;
+  instance_base_url: string;
+  test_instance_base_url: string;
+  instance_kind: AgentInstanceKind;
+  tasks?: AgentTask[];
+}
+
+export async function listAgents(): Promise<Agent[]> {
+  const data = await backendFetch<{ agents: Agent[] }>("/agents");
+  return data.agents;
+}
+
+export async function getAgent(id: string): Promise<Agent | undefined> {
+  try {
+    return await backendFetch<Agent>(`/agents/${id}`);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveAgent(draft: AgentDraft): Promise<Agent> {
+  return backendFetch<Agent>("/agents", {
+    method: "POST",
+    body: JSON.stringify(draftToBody(draft)),
+  });
+}
+
+export async function updateAgent(id: string, draft: AgentDraft): Promise<Agent> {
+  const existing = await backendFetch<Agent>(`/agents/${id}`);
+  const body: Agent = {
+    ...existing,
+    name: draft.name,
+    description: draft.description,
+    instance: { ...existing.instance, kind: draft.instance_kind, base_url: draft.instance_base_url },
+    test_instance: {
+      ...existing.test_instance,
+      base_url: draft.test_instance_base_url || draft.instance_base_url,
+    },
+    tasks: draft.tasks ?? existing.tasks,
+  };
+  return backendFetch<Agent>(`/agents/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+  await backendFetch<void>(`/agents/${id}`, { method: "DELETE" });
+}
+
+function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" | "updated_at"> {
+  return {
+    name: draft.name,
+    description: draft.description || draft.name,
+    instance: { kind: draft.instance_kind, base_url: draft.instance_base_url, runtime: "grok" },
+    test_instance: { base_url: draft.test_instance_base_url || draft.instance_base_url, runtime: "grok" },
+    traces: { store: "path", path_or_url: "pending" },
+    docs: { prompt_summary: "", tools: [], constraints: [], config_notes: "" },
+    tasks: draft.tasks ?? [],
+  };
 }
 
 // --- Runs ---
 
 export interface RunParams {
+  agent_id: string;
   phase: RunPhase;
   task_ids?: string[];
   fix_kinds?: FixKind[];
@@ -30,7 +114,7 @@ export async function getRun(id: string): Promise<Run> {
 }
 
 export async function createRun(params: RunParams): Promise<Run[]> {
-  const body: Record<string, unknown> = { phase: params.phase };
+  const body: Record<string, unknown> = { agent_id: params.agent_id, phase: params.phase };
   if (params.task_ids?.length) body.task_ids = params.task_ids;
   if (params.fix_kinds?.length) body.fix_kinds = params.fix_kinds;
   if (params.parent_run_id !== undefined) body.parent_run_id = params.parent_run_id;

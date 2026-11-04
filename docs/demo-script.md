@@ -38,13 +38,13 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 - Fallimento tipico: agentservice spento. Con `driver: auto` il harness passa in silenzio al driver `scripted`: va bene per la demo, ma va detto a voce.
 
 **2. Testa agente: baseline T3**
-- OGGI: `curl -s -X POST :3001/runs -H 'content-type: application/json' -d '{"phase":"baseline","task_ids":["T3"],"driver":"auto"}'` → poi `GET /runs/:runId` → `GET /traces/:traceId`.
+- OGGI: `curl -s -X POST :3001/runs -H 'content-type: application/json' -d '{"agent_id":"reference-shop","phase":"baseline","task_ids":["T3"],"driver":"auto"}'` → poi `GET /runs/:runId` → `GET /traces/:traceId`.
 - DOMANI (#14): **Testa agente** → scegli T3 → Avvia, guasti spenti.
 - Atteso: verifier **passed**, tutti i check verdi, `fault.labels` vuoto, `diagnosis = null`.
 - Fallimento tipico: mock-shop spento o `MOCK_SHOP_URL` sbagliato → errore di tool o run fallito, non un verdetto.
 
 **3. Testa con guasto iniettato (catalogo)**
-- OGGI: `GET :3001/faults` (catalogo e preset), poi `POST /runs` con `{"phase":"injected","task_ids":["T3"]}`. Il preset di T3 è `forged_tool_result`.
+- OGGI: `GET :3001/faults` (catalogo e preset), poi `POST /runs` con `{"agent_id":"reference-shop","phase":"injected","task_ids":["T3"]}`. Il preset di T3 è `forged_tool_result`.
 - DOMANI (#14): **Testa agente** → attiva il guasto "forged_tool_result" → Avvia.
 - Atteso: verifier **failed** su `order_created`; l'agente dichiara comunque successo; `Run.injection_plan.ground_truth = ToolUse / forged_tool_result`.
 - Fallimento tipico: codice guasto inesistente → `POST /runs` rifiuta la richiesta. Il codice giuria `unauthorized_cancel_via_juror_note` non è nel catalogo.
@@ -63,14 +63,14 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 
 **6. Scegli il fix → replay `after_fix` → before/after**
 - OGGI (2 vie):
-  - a. `POST /runs` con `{"phase":"after_fix","task_ids":["T3"],"injection":"preset","fix_kinds":["pre_response_check"]}`. Il Run registra `fix_kinds`, ma il fix **non arriva ancora all'agente** (#40/#41): il verdetto può restare failed.
+  - a. `POST /runs` con `{"agent_id":"reference-shop","phase":"after_fix","task_ids":["T3"],"injection":"preset","fix_kinds":["pre_response_check"]}`. Il Run registra `fix_kinds`, ma il fix **non arriva ancora all'agente** (#40/#41): il verdetto può restare failed.
   - b. Fonte attendibile per l'efficacia: `pnpm --filter @mesa/agentservice replay` → `apps/agentservice/replay/latest.md`, colonna `fix_verified` per task.
 - DOMANI (#53): in **Ispeziona traccia** → "Scegli fix" → "Replay" → vista before/after.
 - Atteso: before (injected) **failed** → after (after_fix) **passed**, senza regressioni sul baseline.
 - Fallimento tipico: after ancora failed perché `fix_kinds` non viene propagato (via a), oppure un fix non adatto alla categoria. Prima di registrare, controllare `latest.md`.
 
 **7. Regression suite**
-- OGGI: `POST /runs` con `{"phase":"baseline"}` (senza `task_ids` = T1–T5) → 5 trace, tutte passed. Il replay del passo 6b include anche "baseline con tutti e tre i fix" (nessuna regressione).
+- OGGI: `POST /runs` con `{"agent_id":"reference-shop","phase":"baseline"}` (senza `task_ids` = i task di quell'agente; il seed è T1–T5) → 5 trace, tutte passed. Il replay del passo 6b include anche "baseline con tutti e tre i fix" (nessuna regressione).
 - DOMANI (#54): suite per agente, confronto con l'ultimo baseline, badge "nessuna regressione".
 - Atteso: 5/5 passed; T5 senza grant → ordine ancora `placed` (check `cancel_respects_permission` passed).
 - Fallimento tipico: shop non resettato tra un run e l'altro → stato sporco. Il harness fa il reset per task: segnalare se succede.

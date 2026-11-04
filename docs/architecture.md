@@ -9,7 +9,7 @@ flowchart LR
   AS[agentservice :3002]
   SHOP[mock-shop stand-alone :8787]
   XAI[xAI Grok API]
-  PG[(Postgres agents)]
+  PG[(Postgres)]
   SHARED["@mesa/shared schemas"]
 
   UI --> BE
@@ -47,7 +47,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 | Field | Writer |
 | --- | --- |
-| `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok. `outcome.success` copies `verifier.passed`. |
+| `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok. `outcome.success` copies `verifier.passed`. The task, including `setup` and check `params`, is data on the agent. See [agent-tasks.md](agent-tasks.md). |
 | `fault.labels` | Injector or attacker only. They also write `fault.injected` and `fault.attacker`. |
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
 
@@ -55,10 +55,10 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
-Agent records live in the backend process. With `DATABASE_URL` set they are rows in Postgres and survive a restart. Without it they stay in memory and the process reseeds `reference-shop` on boot. Runs, traces, and the shop catalog are still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the `/agents` API, env vars, and the local runbook are in [persistence.md](persistence.md).
+Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds `reference-shop` on boot, and runs and traces start empty. The shop catalog is still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`.
 
 ## Render
 
-The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus a Postgres instance `mesa-postgres` for agent records. Apply steps and env vars are in [deploy.md](deploy.md). Review that database block before the next Blueprint sync.
+The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus a Postgres instance `mesa-postgres` for agent, run, and trace records. Apply steps and env vars are in [deploy.md](deploy.md). Review that database block before the next Blueprint sync. `render.yaml` is not changed by the run/trace store. Provisioning stays with Yuri.
 
 `mesa-mock-shop` is that fourth service. It is still not part of `apps/backend`. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. Local `pnpm dev` keeps `http://127.0.0.1:8787`.

@@ -9,6 +9,8 @@ import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
+import { sessionView } from "./harness/session.js";
+import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 
 export interface BuildAppOptions {
@@ -22,11 +24,14 @@ export interface BuildAppOptions {
 
 /**
  * Harness API. This process is not the mock shop.
+ * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
+ * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
+  registerFrontendCors(app);
   const store = options.store ?? new MemoryStore();
   const agents = options.agents ?? new MemoryAgentStore();
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";
@@ -59,6 +64,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     contract_version: CONTRACT_VERSION,
     mock_base_url: mockBaseUrl,
     agent_store: agents.kind,
+    run_store: store.kind,
     grok_forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
 
@@ -75,18 +81,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     presets: TASK_FAULT_PRESETS,
   }));
 
-  app.get("/runs", async () => ({ runs: store.listRuns() }));
+  app.get("/runs", async () => {
+    const agentsNow = await agents.list();
+    return sessionView({
+      runs: await store.listRuns(),
+      traces: await store.listTraces(),
+      agentCount: agentsNow.length,
+    });
+  });
 
   app.get<{ Params: { runId: string } }>("/runs/:runId", async (request, reply) => {
-    const run = store.getRun(request.params.runId);
+    const run = await store.getRun(request.params.runId);
     if (!run) return reply.code(404).send({ error: "not_found", message: `No run ${request.params.runId}` });
     return run;
   });
 
-  app.get("/traces", async () => ({ traces: store.listTraces() }));
+  app.get("/traces", async () => ({ traces: await store.listTraces() }));
 
   app.get<{ Params: { traceId: string } }>("/traces/:traceId", async (request, reply) => {
-    const trace = store.getTrace(request.params.traceId);
+    const trace = await store.getTrace(request.params.traceId);
     if (!trace) {
       return reply.code(404).send({ error: "not_found", message: `No trace ${request.params.traceId}` });
     }
@@ -119,9 +132,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.post("/runs", async (request, reply) => {
     const parsed = parseRunRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    const registered = await agents.get(parsed.value.agentId);
+    if (!registered) {
+      return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
+    }
     try {
       const results = await runTasks({
-        agent,
+        agent: registered,
         store,
         mock,
         mockBaseUrl,
@@ -148,6 +165,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 }
 
 interface RunRequest {
+  agentId: string;
   phase: RunPhase;
   taskIds?: string[];
   driver?: DriverMode;
@@ -181,10 +199,10 @@ function parseJuryRequest(body: unknown):
 }
 
 function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok: false; message: string } {
-  if (body === undefined || body === null) {
-    return { ok: true, value: { phase: "baseline" } };
-  }
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
+  if (typeof body.agent_id !== "string" || body.agent_id.trim() === "") {
+    return { ok: false, message: "agent_id is required and must be a non-empty string." };
+  }
 
   const phase = body.phase === undefined ? "baseline" : body.phase;
   if (phase !== "baseline" && phase !== "injected" && phase !== "after_fix") {
@@ -246,6 +264,7 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
   return {
     ok: true,
     value: {
+      agentId: body.agent_id,
       phase,
       taskIds,
       driver,

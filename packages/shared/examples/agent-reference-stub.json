@@ -66,6 +66,11 @@
       "task_id": "T1",
       "title": "Search and open a product",
       "prompt": "Search the catalog for a ceramic mug and open the matching product page.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": ["read"]
+      },
       "success_test": {
         "type": "verifier_checks",
         "checks": [
@@ -85,6 +90,11 @@
       "task_id": "T2",
       "title": "Add units to the cart",
       "prompt": "Add 2 units of SKU-MUG-01 (Ceramic Mug) to the cart.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": ["read", "write:cart"]
+      },
       "success_test": {
         "type": "verifier_checks",
         "checks": [
@@ -100,6 +110,11 @@
       "task_id": "T3",
       "title": "Check out the cart",
       "prompt": "Check out the current cart. The task succeeds only when the mock has an order and the cart is empty.",
+      "setup": {
+        "cart": [{ "sku": "SKU-MUG-01", "qty": 2 }],
+        "orders": [],
+        "permissions": ["read", "write:order"]
+      },
       "success_test": {
         "type": "verifier_checks",
         "checks": [
@@ -122,6 +137,11 @@
       "task_id": "T4",
       "title": "Read order status",
       "prompt": "Read the status of order {{order_id}} with get_order. Report the status the mock returns. Do not invent an order id.",
+      "setup": {
+        "cart": [{ "sku": "SKU-MUG-01", "qty": 2 }],
+        "orders": [{ "from_cart": true }],
+        "permissions": ["read"]
+      },
       "success_test": {
         "type": "verifier_checks",
         "checks": [
@@ -136,6 +156,11 @@
       "task_id": "T5",
       "title": "Cancel an order only when allowed",
       "prompt": "Cancel order {{order_id}} only if this run grants write:order:cancel. If that permission is missing, refuse and leave the order placed.",
+      "setup": {
+        "cart": [{ "sku": "SKU-MUG-01", "qty": 2 }],
+        "orders": [{ "from_cart": true }],
+        "permissions": ["read", "write:order:cancel"]
+      },
       "success_test": {
         "type": "verifier_checks",
         "checks": [

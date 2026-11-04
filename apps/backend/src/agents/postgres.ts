@@ -11,6 +11,7 @@ import {
   REFERENCE_AGENT_ID,
   agentFromCreate,
   agentFromReplace,
+  importedAgent,
   referenceSeed,
   type AgentStore,
 } from "./store.js";
@@ -34,8 +35,13 @@ export function listMigrationFiles(dir = migrationsDirectory()): string[] {
  * does not trust by default. Those URLs use TLS without CA verification.
  * Local URLs, including Compose, are left unchanged.
  */
+/** True when the URL host is a Render Postgres hostname. Tests refuse these URLs. */
+export function isRenderPostgresUrl(connectionString: string): boolean {
+  return /@[^/?#]*\.render\.com(?::\d+)?(?:\/|\?|$)/i.test(connectionString);
+}
+
 export function postgresPoolConfig(connectionString: string): pg.PoolConfig {
-  const renderHost = /@[^/?#]*\.render\.com(?::\d+)?(?:\/|\?|$)/i.test(connectionString);
+  const renderHost = isRenderPostgresUrl(connectionString);
   const requireSsl = /(?:\?|&)sslmode=require(?:&|$)/i.test(connectionString);
   const base: pg.PoolConfig = {
     max: 5,
@@ -55,11 +61,61 @@ export function postgresPoolConfig(connectionString: string): pg.PoolConfig {
   };
 }
 
-function quoteIdent(name: string): string {
+export function quoteIdent(name: string): string {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) {
     throw new Error(`Invalid Postgres identifier ${name}.`);
   }
   return name;
+}
+
+/**
+ * SQL files are LF in git. A Windows checkout may hand the runner CRLF, and a
+ * copied file may start with a BOM. Postgres accepts either ending, but one
+ * normalized form keeps the script identical on both.
+ */
+export function normalizeMigrationSql(sql: string): string {
+  return sql.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/**
+ * Apply every pending `migrations/*.sql` file in name order.
+ * Each file runs in its own transaction. A file already recorded in
+ * `schema_migrations` is skipped. Shipped files stay unchanged; add the next
+ * numbered file instead. Agent and run stores both call this.
+ */
+export async function applyMigrations(pool: pg.Pool, dir = migrationsDirectory()): Promise<void> {
+  const files = listMigrationFiles(dir);
+  if (files.length === 0) {
+    throw new Error(`No SQL migrations found in ${dir}.`);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
+        version text PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    for (const file of files) {
+      const seen = await client.query(`SELECT 1 FROM ${MIGRATION_TABLE} WHERE version = $1`, [file]);
+      if ((seen.rowCount ?? 0) > 0) continue;
+      const sql = normalizeMigrationSql(readFileSync(join(dir, file), "utf8"));
+      try {
+        await client.query("BEGIN");
+        await client.query(sql);
+        await client.query(
+          `INSERT INTO ${MIGRATION_TABLE} (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`,
+          [file],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    }
+  } finally {
+    client.release();
+  }
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -98,39 +154,7 @@ export class PostgresAgentStore implements AgentStore {
   }
 
   async migrate(): Promise<void> {
-    const dir = migrationsDirectory();
-    const files = listMigrationFiles(dir);
-    if (files.length === 0) {
-      throw new Error(`No SQL migrations found in ${dir}.`);
-    }
-    const client = await this.pool.connect();
-    try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
-          version text PRIMARY KEY,
-          applied_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      for (const file of files) {
-        const seen = await client.query(`SELECT 1 FROM ${MIGRATION_TABLE} WHERE version = $1`, [file]);
-        if ((seen.rowCount ?? 0) > 0) continue;
-        const sql = readFileSync(join(dir, file), "utf8");
-        try {
-          await client.query("BEGIN");
-          await client.query(sql);
-          await client.query(
-            `INSERT INTO ${MIGRATION_TABLE} (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`,
-            [file],
-          );
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        }
-      }
-    } finally {
-      client.release();
-    }
+    await applyMigrations(this.pool);
   }
 
   async list(): Promise<Agent[]> {
@@ -194,6 +218,40 @@ export class PostgresAgentStore implements AgentStore {
        ON CONFLICT (agent_id) DO NOTHING`,
       [agent.agent_id, JSON.stringify(agent), agent.created_at, agent.updated_at],
     );
+  }
+
+  async upsertImported(agent: Agent): Promise<"inserted" | "updated"> {
+    const valid = importedAgent(agent);
+    const existing = await this.get(valid.agent_id);
+    if (!existing) {
+      try {
+        await this.pool.query(
+          `INSERT INTO agents (agent_id, document, created_at, updated_at)
+           VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)`,
+          [valid.agent_id, JSON.stringify(valid), valid.created_at, valid.updated_at],
+        );
+        return "inserted";
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+    const current = existing ?? (await this.get(valid.agent_id));
+    if (!current) throw new AgentNotFoundError(valid.agent_id);
+    const next = importedAgent({ ...valid, created_at: current.created_at });
+    const result = await this.pool.query(
+      `UPDATE agents
+       SET document = $2::jsonb,
+           updated_at = $3::timestamptz
+       WHERE agent_id = $1`,
+      [next.agent_id, JSON.stringify(next), next.updated_at],
+    );
+    if ((result.rowCount ?? 0) === 0) throw new AgentNotFoundError(valid.agent_id);
+    return "updated";
+  }
+
+  async deleteAgentsExceptSeed(): Promise<number> {
+    const result = await this.pool.query("DELETE FROM agents WHERE agent_id <> $1", [REFERENCE_AGENT_ID]);
+    return result.rowCount ?? 0;
   }
 
   /** Deletes every agent row in the current search_path, including the seed. Tests only. */
