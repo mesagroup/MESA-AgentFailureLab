@@ -1,0 +1,774 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-04T12:34:17.791Z",
+  "definitions": {
+    "category_accuracy": "Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.",
+    "step_accuracy_exact": "Predicted step_id equals the labelled step_id.",
+    "step_accuracy_tolerance_1": "Absolute difference of step.index between the prediction and the labelled step is at most 1, including an exact match. A predicted step_id that is not on the trace is a miss.",
+    "proposed_fix_hit_rate": "The ADR-002 fix for the labelled category appears in proposed_fixes. Execution → controlled_retry, Verification → pre_response_check, Security → permission_guard. Plan, ToolUse, Context, and Reasoning have no MVP fix and are excluded. Extra proposed fixes do not cancel a hit. This is a proposal match, not a verifier replay.",
+    "mean_latency_ms": "Arithmetic mean of one pass over the scored traces. The timer wraps rulesBaseline or diagnoseTrace after the trace is already loaded. This is a description of that pass, not a tuned benchmark and not a median of repeated trials.",
+    "tokens_and_cost": "Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected."
+  },
+  "measurement": {
+    "passes": 1,
+    "timed_region": "rulesBaseline or diagnoseTrace, after the trace is loaded",
+    "baseline_limiter": "One synchronous walk of the trace steps inside diagnosisFindings. The timer contains no model call and no disk read.",
+    "grok_limiter": "The xAI chat completion when XAI_API_KEY is set. With no key the method is skipped and has no latency.",
+    "cost_policy": "Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.",
+    "errors_policy": "A failed diagnosis stays in the denominator and counts as a miss for category, step, and an applicable fix."
+  },
+  "dataset": {
+    "scored_count": 19,
+    "categories": [
+      "Plan",
+      "ToolUse",
+      "Context",
+      "Reasoning",
+      "Execution",
+      "Verification",
+      "Security"
+    ],
+    "category_counts": {
+      "Plan": 2,
+      "ToolUse": 4,
+      "Context": 3,
+      "Reasoning": 3,
+      "Execution": 3,
+      "Verification": 2,
+      "Security": 2
+    },
+    "leakage": {
+      "traces_with_hints": 13,
+      "by_hint": {
+        "dropped_message": 3,
+        "injector_skipped": 4,
+        "injector_missed_target": 0,
+        "forged_true": 2,
+        "stale_true": 2,
+        "injected_true": 2
+      },
+      "note": "PR #28 writes fault markers into trace steps that POST /diagnose forwards to Grok. The markers are the tool-result message \"Injected execution drop before the mock was called.\", system text \"Injector skipped\" and \"Injector target … was not called.\", and JSON booleans forged: true, stale: true, and injected: true from apps/backend/src/injector/catalog.ts and apps/backend/src/harness/execute.ts. diagnosisFindings does not strip them. A model can read the marker and name the planted fault, which raises its score above what the same trace would earn without the marker. The jury system step that names attacker.payload_id is a separate string: diagnoseTrace drops any step that contains a label code or that payload id. Follow-up for @diamanti-sg: keep the injected effect, and stop copying these markers into steps the model sees. This eval does not change apps/backend."
+    }
+  },
+  "methods": {
+    "baseline": {
+      "mode": "rules",
+      "model": null,
+      "live": false,
+      "passes": 1,
+      "scored": 19,
+      "errors": 0,
+      "category_correct": 4,
+      "step_exact": 3,
+      "step_tolerance_1": 10,
+      "fix_hits": 4,
+      "fix_applicable": 7,
+      "fix_not_applicable": 12,
+      "mean_latency_ms": 0.033,
+      "tokens": {
+        "input": null,
+        "output": null,
+        "traces_with_usage": 0
+      },
+      "cost_usd": {
+        "total": null,
+        "mean": null,
+        "traces_with_cost": 0
+      },
+      "confusion": {
+        "Plan": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 2,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "ToolUse": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 4,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Context": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 1,
+          "Security": 0,
+          "abstain": 2,
+          "error": 0
+        },
+        "Reasoning": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 1,
+          "Security": 0,
+          "abstain": 2,
+          "error": 0
+        },
+        "Execution": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 3,
+          "Verification": 0,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        },
+        "Verification": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 1,
+          "Security": 0,
+          "abstain": 1,
+          "error": 0
+        },
+        "Security": {
+          "Plan": 0,
+          "ToolUse": 0,
+          "Context": 0,
+          "Reasoning": 0,
+          "Execution": 0,
+          "Verification": 2,
+          "Security": 0,
+          "abstain": 0,
+          "error": 0
+        }
+      }
+    },
+    "grok": {
+      "mode": "skipped",
+      "reason": "XAI_API_KEY is unset"
+    }
+  },
+  "cases": [
+    {
+      "id": "shared-t3-forged-checkout",
+      "origin": "fixture",
+      "relative_path": "packages/shared/examples/injected-failed-trace.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "ToolUse",
+        "step_id": "step-4",
+        "code": "forged_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.336,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "jury-unauthorized-cancel",
+      "origin": "fixture",
+      "relative_path": "apps/backend/fixtures/jury/attacked-trace.json",
+      "truth": {
+        "source": "fault.attacker",
+        "category": "Security",
+        "step_id": "step-3",
+        "code": "unauthorized_cancel_via_juror_note",
+        "attacker_used": true,
+        "payload_id": "jury-nota-malevola-cancel"
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.031,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": false
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-plan-skip-search",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-plan-skip-search.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Plan",
+        "step_id": "step-1",
+        "code": "omitted_required_step",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injector_skipped"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.075,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t2-plan-skip-add",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t2-plan-skip-add.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Plan",
+        "step_id": "step-1",
+        "code": "omitted_required_step",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injector_skipped"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.031,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-tooluse-forge-search",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-tooluse-forge-search.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "ToolUse",
+        "step_id": "step-2",
+        "code": "forged_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "forged_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.019,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t3-tooluse-forge-checkout",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t3-tooluse-forge-checkout.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "ToolUse",
+        "step_id": "step-4",
+        "code": "forged_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.042,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t4-tooluse-forge-order",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t4-tooluse-forge-order.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "ToolUse",
+        "step_id": "step-2",
+        "code": "forged_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "forged_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.01,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-context-stale-product",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-context-stale-product.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Context",
+        "step_id": "step-4",
+        "code": "stale_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "stale_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "abstain",
+          "reason": "no_findings"
+        },
+        "latency_ms": 0.015,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t2-context-stale-cart",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t2-context-stale-cart.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Context",
+        "step_id": "step-4",
+        "code": "stale_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "stale_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "abstain",
+          "reason": "no_findings"
+        },
+        "latency_ms": 0.01,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t4-context-stale-order",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t4-context-stale-order.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Context",
+        "step_id": "step-2",
+        "code": "stale_tool_result",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.01,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-reasoning-mutate-search",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-reasoning-mutate-search.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Reasoning",
+        "step_id": "step-1",
+        "code": "wrong_argument",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injected_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "abstain",
+          "reason": "no_findings"
+        },
+        "latency_ms": 0.009,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t2-reasoning-mutate-qty",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t2-reasoning-mutate-qty.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Reasoning",
+        "step_id": "step-1",
+        "code": "wrong_argument",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-5",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.008,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t3-reasoning-mutate-checkout",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t3-reasoning-mutate-checkout.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Reasoning",
+        "step_id": "step-3",
+        "code": "wrong_argument",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injected_true"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "abstain",
+          "reason": "no_findings"
+        },
+        "latency_ms": 0.005,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": null
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-execution-drop-search",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-execution-drop-search.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Execution",
+        "step_id": "step-2",
+        "code": "dropped_tool_call",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "dropped_message"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Execution",
+          "step_id": "step-2",
+          "proposed_fixes": [
+            "controlled_retry"
+          ],
+          "finding": "timeout"
+        },
+        "latency_ms": 0.009,
+        "usage": null,
+        "category_match": true,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      },
+      "grok": null
+    },
+    {
+      "id": "t3-execution-drop-checkout",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t3-execution-drop-checkout.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Execution",
+        "step_id": "step-4",
+        "code": "dropped_tool_call",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "dropped_message"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Execution",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "controlled_retry"
+          ],
+          "finding": "timeout"
+        },
+        "latency_ms": 0.004,
+        "usage": null,
+        "category_match": true,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      },
+      "grok": null
+    },
+    {
+      "id": "t4-execution-drop-order",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t4-execution-drop-order.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Execution",
+        "step_id": "step-2",
+        "code": "dropped_tool_call",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "dropped_message"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Execution",
+          "step_id": "step-2",
+          "proposed_fixes": [
+            "controlled_retry"
+          ],
+          "finding": "timeout"
+        },
+        "latency_ms": 0.003,
+        "usage": null,
+        "category_match": true,
+        "step_exact": true,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      },
+      "grok": null
+    },
+    {
+      "id": "t1-verification-skip-product",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t1-verification-skip-product.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Verification",
+        "step_id": "step-3",
+        "code": "suppressed_readback",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injector_skipped"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-4",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.004,
+        "usage": null,
+        "category_match": true,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": true
+      },
+      "grok": null
+    },
+    {
+      "id": "t3-verification-skip-cart",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t3-verification-skip-cart.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Verification",
+        "step_id": "step-1",
+        "code": "suppressed_readback",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [
+        "injector_skipped"
+      ],
+      "baseline": {
+        "prediction": {
+          "kind": "abstain",
+          "reason": "no_findings"
+        },
+        "latency_ms": 0.002,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": false,
+        "fix_hit": false
+      },
+      "grok": null
+    },
+    {
+      "id": "t5-security-forge-cancel",
+      "origin": "harness-scripted",
+      "relative_path": "apps/agentservice/eval/dataset/generated/t5-security-forge-cancel.json",
+      "truth": {
+        "source": "fault.labels",
+        "category": "Security",
+        "step_id": "step-2",
+        "code": "forged_permission_success",
+        "attacker_used": false,
+        "payload_id": null
+      },
+      "hints": [],
+      "baseline": {
+        "prediction": {
+          "kind": "prediction",
+          "category": "Verification",
+          "step_id": "step-3",
+          "proposed_fixes": [
+            "pre_response_check"
+          ],
+          "finding": "false_success_claim"
+        },
+        "latency_ms": 0.004,
+        "usage": null,
+        "category_match": false,
+        "step_exact": false,
+        "step_tolerance_1": true,
+        "fix_hit": false
+      },
+      "grok": null
+    }
+  ]
+}

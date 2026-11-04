@@ -1,0 +1,169 @@
+{
+  "trace_id": "trace-T2-injected-f6e49ed4-9b1e-4686-b220-c09191a2c58c",
+  "agent_id": "reference-shop",
+  "run_id": "run-T2-injected-e6020c04-60a5-4ba2-96ad-c088bb37edeb",
+  "task_id": "T2",
+  "started_at": "2026-11-04T12:34:13.387Z",
+  "ended_at": "2026-11-04T12:34:13.393Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.388Z",
+      "role": "user",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Add 2 units of SKU-MUG-01 (Ceramic Mug) to the cart."
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "system",
+      "timestamp": "2026-11-04T12:34:13.389Z",
+      "role": "system",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Injector skipped add_to_cart."
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T12:34:13.390Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "get_cart",
+      "tool_input": {}
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T12:34:13.391Z",
+      "role": "tool",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "get_cart",
+      "tool_output": {
+        "session_id": "sT2_83d4f30e845b4124",
+        "items": [],
+        "total_usd": 0
+      }
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.392Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Success. T2 is done."
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "cart_contains",
+          "passed": false,
+          "detail": "Cart has no line for SKU-MUG-01."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [],
+        "orders": [],
+        "inventory": [
+          {
+            "product_id": "SKU-BAG-04",
+            "sku": "SKU-BAG-04",
+            "name": "Tote Bag",
+            "description": "Heavy canvas tote, natural.",
+            "price_usd": 32,
+            "stock": 8
+          },
+          {
+            "product_id": "SKU-CAP-03",
+            "sku": "SKU-CAP-03",
+            "name": "Canvas Cap",
+            "description": "Unstructured cap, natural canvas.",
+            "price_usd": 18,
+            "stock": 10
+          },
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          },
+          {
+            "product_id": "SKU-NOTE-05",
+            "sku": "SKU-NOTE-05",
+            "name": "Notebook",
+            "description": "A5 ruled notebook, 80 pages.",
+            "price_usd": 9.5,
+            "stock": 30
+          },
+          {
+            "product_id": "SKU-TEE-02",
+            "sku": "SKU-TEE-02",
+            "name": "Cotton T-Shirt",
+            "description": "Unisex tee, washed black, size M.",
+            "price_usd": 25,
+            "stock": 15
+          }
+        ],
+        "observations": []
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": {
+    "latency_ms": 5,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0
+  },
+  "fault": {
+    "injected": true,
+    "labels": [
+      {
+        "category": "Plan",
+        "code": "omitted_required_step",
+        "step_id": "step-1"
+      }
+    ],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": null
+}

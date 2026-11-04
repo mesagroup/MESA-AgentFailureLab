@@ -44,6 +44,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Eval baseline
+        run: pnpm eval
+
   compose:
     name: docker compose config
     runs-on: ubuntu-latest

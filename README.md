@@ -57,6 +57,54 @@ pnpm exec turbo run dev --filter=@mesa/mock-shop     # http://127.0.0.1:8787  GE
 
 Shortcuts: `pnpm dev:frontend`, `pnpm dev:backend`, `pnpm dev:agentservice`, `pnpm dev:mock-shop`. `pnpm dev` starts every dev script.
 
+## Classification eval
+
+`pnpm eval` scores the labelled set and writes `apps/agentservice/eval/results/latest.json` and `latest.md`. The rules baseline is the diagnosis pre-pass (`diagnosisFindings` in `apps/agentservice`), mapped to one category and one step, with no model call. ADR-002 keeps that pre-pass distinct from `apps/backend/src/verifier/prepass.ts`, so the runner sits next to `diagnoseTrace` and does not keep a second copy of the findings. Grok runs when `XAI_API_KEY` is set. With no key, that column is skipped. `pnpm eval -- --fake` is a labelled stand-in for tests and is not a Grok score.
+
+The evaluator reads ground truth from the trace after the methods run. Category and step come from the single `fault.labels` entry. When `fault.attacker.used` is true, the manifest source is `fault.attacker`: that object has no category, and ADR-002 says the attacker wrote the label. `diagnoseTrace` still drops `fault` before the model call.
+
+The manifest is `apps/agentservice/eval/dataset/manifest.json`. It lists the shared T3 fixture, the jury attack fixture, and traces from `pnpm generate-dataset`. That script starts the mock shop on loopback and runs the merged scripted driver with catalog faults. It does not call the reference agent in open PR #21, so traces where the model itself picks the wrong tool are still absent.
+
+Issue #16 also names a verified fix rate. ADR-001 defines that as a verifier delta after replay. The applicator is not on main, so the hit rate here is whether `proposed_fixes` contains the ADR-002 fix for the labelled category: `controlled_retry` for Execution, `pre_response_check` for Verification, `permission_guard` for Security. Plan, ToolUse, Context, and Reasoning have no MVP fix and stay out of that denominator.
+
+PR #28 copies injector markers into steps the model sees: `Injected execution drop before the mock was called.`, `Injector skipped`, `Injector target … was not called.`, and the JSON booleans `forged: true`, `stale: true`, `injected: true` (`apps/backend/src/injector/catalog.ts`, `apps/backend/src/harness/execute.ts`). A model can read the marker and name the planted fault. The scoreboard counts traces that contain one. Follow-up for @diamanti-sg. This eval does not change `apps/backend`.
+
+`timeout-repeated-tool-trace.json` and `tool-error-trace.json` stay out of the scored set. A clean trace cannot carry `fault.labels`.
+
+<!-- eval-scoreboard:start -->
+Definitions
+- `category_accuracy`: Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.
+- `step_accuracy_exact`: Predicted step_id equals the labelled step_id.
+- `step_accuracy_tolerance_1`: Absolute difference of step.index between the prediction and the labelled step is at most 1, including an exact match. A predicted step_id that is not on the trace is a miss.
+- `proposed_fix_hit_rate`: The ADR-002 fix for the labelled category appears in proposed_fixes. Execution → controlled_retry, Verification → pre_response_check, Security → permission_guard. Plan, ToolUse, Context, and Reasoning have no MVP fix and are excluded. Extra proposed fixes do not cancel a hit. This is a proposal match, not a verifier replay.
+- `mean_latency_ms`: Arithmetic mean of one pass over the scored traces. The timer wraps rulesBaseline or diagnoseTrace after the trace is already loaded. This is a description of that pass, not a tuned benchmark and not a median of repeated trials.
+- `tokens_and_cost`: Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.
+
+Rules baseline mapping. The first diagnosis finding in repair priority is the prediction. No finding abstains.
+- false_success_claim → Verification / pre_response_check
+- tool_error → Execution / controlled_retry
+- repeated_tool_call → Reasoning / (none)
+- timeout → Execution / controlled_retry
+
+Scores
+- Scored traces: 19
+- Categories: 7 (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security)
+- Baseline category accuracy: 4/19
+- Baseline step accuracy exact: 3/19
+- Baseline step accuracy tolerance 1: 10/19
+- Baseline proposed-fix hits: 4/7
+- Baseline proposed-fix not applicable: 12
+- Traces with injector hints: 13/19
+- Grok: skipped (XAI_API_KEY is unset)
+
+Timing (one pass; latency describes that pass and is not a tuned benchmark)
+- Baseline mean latency ms: 0.033
+- Baseline tokens in/out: n/a
+- Baseline cost usd: n/a
+<!-- eval-scoreboard:end -->
+
+Per-trace rows and the confusion tables are in [apps/agentservice/eval/results/latest.md](apps/agentservice/eval/results/latest.md). `pnpm eval` rewrites the scoreboard above.
+
 Copy an app's `.env.example` to `.env` only when you need overrides. Do not commit `.env` or a Grok API key. `XAI_API_KEY` in `apps/agentservice/.env.example` is an empty placeholder.
 
 ## Docker and Render

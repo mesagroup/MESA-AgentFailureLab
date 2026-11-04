@@ -103,3 +103,15 @@ The backend harness applies a fix, replays the task (`Run.phase = after_fix`), a
 Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.
+
+## Eval
+
+From the repo root:
+
+```bash
+pnpm generate-dataset   # loopback mock + scripted harness; rewrites eval/dataset
+pnpm eval               # rules baseline, and Grok when XAI_API_KEY is set
+pnpm --filter @mesa/agentservice test
+```
+
+`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The scoreboard, metric definitions, and baseline numbers are in the root [README](../../README.md). The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
