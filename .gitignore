@@ -27,8 +27,6 @@ coverage/
 # claude code
 .claude/
 
-# local handoff / notes (not committed)
-docs/
 
 # vite
 *.local
