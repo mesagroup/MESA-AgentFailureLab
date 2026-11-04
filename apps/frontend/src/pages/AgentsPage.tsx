@@ -1,15 +1,11 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
-import { Pencil, PlusCircle, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useState } from "react";
+import { Pencil, PlusCircle, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -50,10 +46,19 @@ function agentToForm(agent: Agent): FormState {
 
 export function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>(() => listAgents());
+  const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return agents;
+    return agents.filter(
+      (a) => a.name.toLowerCase().includes(q) || a.agent_id.toLowerCase().includes(q)
+    );
+  }, [agents, query]);
 
   function openCreate() {
     setEditing(null);
@@ -129,200 +134,256 @@ export function AgentsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {agents.map((agent) => (
-          <AgentCard
-            key={agent.agent_id}
-            agent={agent}
-            onEdit={() => openEdit(agent)}
-            onDelete={() => handleDelete(agent)}
+      {/* Search island */}
+      <div className="rounded-2xl bg-card shadow-island">
+        <div className="flex items-center gap-2.5 px-5 py-3.5">
+          <Search className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or ID…"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
           />
-        ))}
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Count — on canvas */}
+      <div className="flex justify-end px-1">
+        <span className="text-xs text-muted-foreground">
+          {query
+            ? `${filtered.length} of ${agents.length} agent${agents.length !== 1 ? "s" : ""}`
+            : `${agents.length} agent${agents.length !== 1 ? "s" : ""}`}
+        </span>
+      </div>
+
+      {/* List island */}
+      <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+
+        {/* List */}
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {query ? <>No agents match <span className="font-mono">"{query}"</span></> : "No agents registered yet."}
+          </div>
+        ) : (
+          <div>
+            {filtered.map((agent) => {
+              const isReference = agent.instance.kind === "reference";
+              return (
+                <div
+                  key={agent.agent_id}
+                  className="group flex items-center gap-4 px-5 py-3.5 border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
+                >
+                  {/* Name + ID */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-medium">{agent.name}</span>
+                      <span className={cn(
+                        "text-xs font-mono",
+                        isReference ? "text-ring/70" : "text-muted-foreground/60"
+                      )}>
+                        {isReference ? "ref" : "ext"}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono text-muted-foreground/60 truncate mt-0.5">
+                      {agent.agent_id}
+                    </p>
+                  </div>
+
+                  {/* Instance URL */}
+                  <span className="hidden sm:block font-mono text-xs text-muted-foreground/60 truncate max-w-[260px]">
+                    {agent.instance.base_url}
+                  </span>
+
+                  {/* Task count */}
+                  <span className="text-xs text-muted-foreground/60 shrink-0 w-14 text-right">
+                    {agent.tasks.length} task{agent.tasks.length !== 1 ? "s" : ""}
+                  </span>
+
+                  {/* Actions */}
+                  <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon-sm" variant="ghost" onClick={() => openEdit(agent)} title="Edit">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    {!isReference && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => handleDelete(agent)}
+                        title="Delete"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={(open: boolean) => setSheetOpen(open)}>
-        <SheetContent side="right" className="flex flex-col overflow-hidden">
-          <SheetHeader>
-            <SheetTitle>{editing ? "Edit agent" : "New agent"}</SheetTitle>
-            <SheetDescription>
-              {editing
-                ? `Editing · ${editing.agent_id}`
-                : "Register a new agent to run tasks against."}
-            </SheetDescription>
-          </SheetHeader>
+        <SheetContent side="bottom" className="flex flex-col h-[95vh] rounded-t-2xl p-0">
 
-          <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-5">
-            <FormField label="Name" error={errors.name} required>
-              <Input
-                value={form.name}
-                onChange={(e) => setField("name", e.target.value)}
-                placeholder="My shopping agent"
-                aria-invalid={!!errors.name}
-              />
-            </FormField>
-
-            <FormField label="Description">
-              <textarea
-                value={form.description}
-                onChange={(e) => setField("description", e.target.value)}
-                placeholder="Short description of what this agent does"
-                rows={3}
-                className="w-full rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 resize-none transition-[color,box-shadow,background-color]"
-              />
-            </FormField>
-
-            <FormField label="Kind">
-              <div className="flex gap-5">
-                {(["external", "reference"] as AgentInstanceKind[]).map((k) => {
-                  const locked = editing?.instance.kind === "reference" && k !== "reference";
-                  return (
-                    <label
-                      key={k}
-                      className={cn(
-                        "flex items-center gap-2 text-sm cursor-pointer",
-                        locked && "opacity-40 pointer-events-none"
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name="instance_kind"
-                        value={k}
-                        checked={form.instance_kind === k}
-                        onChange={() => setField("instance_kind", k)}
-                        disabled={locked}
-                        className="accent-primary"
-                      />
-                      {k}
-                    </label>
-                  );
-                })}
-              </div>
-            </FormField>
-
-            <FormField label="Instance base URL" error={errors.instance_base_url} required>
-              <Input
-                value={form.instance_base_url}
-                onChange={(e) => setField("instance_base_url", e.target.value)}
-                placeholder="http://127.0.0.1:3002"
-                className="font-mono text-xs"
-                aria-invalid={!!errors.instance_base_url}
-              />
-            </FormField>
-
-            <FormField label="Test instance base URL">
-              <Input
-                value={form.test_instance_base_url}
-                onChange={(e) => setField("test_instance_base_url", e.target.value)}
-                placeholder={form.instance_base_url || "http://127.0.0.1:3002"}
-                className="font-mono text-xs"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Defaults to instance URL if empty.</p>
-            </FormField>
-
-            {editing && editing.tasks.length > 0 && (
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-                  Tasks ({editing.tasks.length})
-                </p>
-                <div className="space-y-2">
-                  {editing.tasks.map((task) => (
-                    <div key={task.task_id} className="rounded-xl bg-muted/40 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{task.title}</span>
-                        <span className="text-xs font-mono text-muted-foreground shrink-0">{task.task_id}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.prompt}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {task.success_test.checks.length} check
-                        {task.success_test.checks.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!editing && (
-              <p className="text-xs text-muted-foreground italic">Tasks can be added after saving.</p>
-            )}
+          {/* Header: data is the hero, action is the label */}
+          <div className="shrink-0 flex items-start justify-between px-8 pt-6 pb-5 border-b border-border/40">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">
+                {editing ? "Editing agent" : "New agent"}
+              </p>
+              <SheetTitle className="font-mono text-base font-medium tracking-tight">
+                {editing ? editing.agent_id : "configure"}
+              </SheetTitle>
+            </div>
           </div>
 
-          <SheetFooter className="border-t border-border/50">
-            {errors.save && (
-              <div className="w-full rounded-lg bg-destructive/10 text-destructive text-xs px-3 py-2 mb-1">
-                {errors.save}
+          {/* Body: identity (left) | config (right) */}
+          <div className="flex flex-1 overflow-hidden">
+
+            {/* Left — identity */}
+            <div className="w-[38%] shrink-0 overflow-y-auto px-8 py-6 space-y-5 border-r border-border/40">
+              <FormField label="Name" error={errors.name} required>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setField("name", e.target.value)}
+                  placeholder="My shopping agent"
+                  aria-invalid={!!errors.name}
+                />
+              </FormField>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Kind</label>
+                <div className="flex gap-1 mt-1">
+                  {(["external", "reference"] as AgentInstanceKind[]).map((k) => {
+                    const isReference = editing?.instance.kind === "reference";
+                    const active = form.instance_kind === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        disabled={isReference}
+                        onClick={() => !isReference && setField("instance_kind", k)}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-sm border transition-colors",
+                          active
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
+                          isReference && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {k}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              <FormField label="Description">
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setField("description", e.target.value)}
+                  placeholder="What does this agent do?"
+                  rows={4}
+                  className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none transition-[color,border-color]"
+                />
+              </FormField>
+            </div>
+
+            {/* Right — technical config */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-7">
+
+              {/* Endpoints */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-3">Endpoints</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Instance</span>
+                    <div className="flex-1">
+                      <Input
+                        value={form.instance_base_url}
+                        onChange={(e) => setField("instance_base_url", e.target.value)}
+                        placeholder="http://127.0.0.1:3002"
+                        className="font-mono text-xs"
+                        aria-invalid={!!errors.instance_base_url}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Test</span>
+                    <div className="flex-1">
+                      <Input
+                        value={form.test_instance_base_url}
+                        onChange={(e) => setField("test_instance_base_url", e.target.value)}
+                        placeholder={form.instance_base_url || "http://127.0.0.1:3002"}
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                  {errors.instance_base_url && (
+                    <p className="text-xs text-destructive pl-[76px]">{errors.instance_base_url}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground pl-[76px]">Test defaults to instance URL if empty.</p>
+                </div>
+              </div>
+
+              {/* Tasks */}
+              {editing && editing.tasks.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Tasks ({editing.tasks.length})
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {editing.tasks.map((task) => (
+                      <div key={task.task_id} className="rounded-xl bg-muted/40 px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-1.5 mb-1">
+                          <span className="text-xs font-medium leading-snug">{task.title}</span>
+                          <span className="text-xs font-mono text-muted-foreground shrink-0">{task.task_id}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {task.success_test.checks.length} check{task.success_test.checks.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!editing && (
+                <p className="text-xs text-muted-foreground">Tasks can be configured after saving.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="shrink-0 flex items-center gap-3 px-8 py-4 border-t border-border/40">
+            {errors.save && (
+              <span className="text-xs text-destructive flex-1">{errors.save}</span>
             )}
-            <div className="flex gap-2 w-full">
-              <Button variant="outline" className="flex-1" onClick={() => setSheetOpen(false)}>
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={() => setSheetOpen(false)}>
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleSave}>
-                Save
+              <Button onClick={handleSave}>
+                {editing ? "Save changes" : "Register agent"}
               </Button>
             </div>
-          </SheetFooter>
+          </div>
+
         </SheetContent>
       </Sheet>
     </div>
   );
 }
 
-function AgentCard({
-  agent,
-  onEdit,
-  onDelete,
-}: {
-  agent: Agent;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const isReference = agent.instance.kind === "reference";
-  return (
-    <div className="rounded-2xl bg-card shadow-island p-5 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold">{agent.name}</span>
-            {isReference ? (
-              <Badge variant="secondary" className="text-xs">reference</Badge>
-            ) : (
-              <Badge variant="outline" className="text-xs">external</Badge>
-            )}
-          </div>
-          <p className="text-xs font-mono text-muted-foreground mt-0.5 truncate">{agent.agent_id}</p>
-        </div>
-        <div className="flex gap-1 shrink-0">
-          <Button size="icon-sm" variant="ghost" onClick={onEdit} title="Edit">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          {!isReference && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={onDelete}
-              title="Delete"
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {agent.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2">{agent.description}</p>
-      )}
-
-      <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/40 pt-3 mt-auto">
-        <span className="font-mono truncate max-w-[70%]">{agent.instance.base_url}</span>
-        <span>
-          {agent.tasks.length} task{agent.tasks.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function FormField({
   label,
