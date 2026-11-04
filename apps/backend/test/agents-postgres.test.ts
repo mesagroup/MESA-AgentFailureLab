@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import type { Agent } from "@mesa/shared";
+import { TASK_EVALSET_VERSION, type Agent, type TaskEvalset } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import pg from "pg";
 import { PostgresAgentStore, postgresPoolConfig } from "../src/agents/postgres.js";
@@ -130,6 +130,53 @@ describe("Postgres agent store", { skip: databaseUrl === "" ? "TEST_DATABASE_URL
     } finally {
       await app.close();
     }
+  });
+
+  it("persists task evalset in jsonb and accepts a document that omits it", async () => {
+    const agents = store;
+    assert.ok(agents);
+    const sample: TaskEvalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [
+        {
+          case_id: "cart-claim",
+          expectation: "Claim follows add_to_cart.",
+          rubric: "Cite step ids. Do not score the cart.",
+        },
+      ],
+    };
+    const withEval = externalAgent("pg-evalset");
+    withEval.tasks[1]!.evalset = sample;
+    const created = await agents.create(withEval);
+    assert.deepEqual((await agents.get(created.agent_id))?.tasks[1]?.evalset, sample);
+
+    const restarted = new PostgresAgentStore(databaseUrl, { searchPath: TEST_SCHEMA });
+    try {
+      await restarted.migrate();
+      assert.deepEqual((await restarted.get(created.agent_id))?.tasks[1]?.evalset, sample);
+    } finally {
+      await restarted.close();
+    }
+
+    const cleared = structuredClone(created);
+    delete cleared.tasks[1]!.evalset;
+    const replaced = await agents.replace(created.agent_id, cleared);
+    assert.equal(replaced.tasks[1]?.evalset, undefined);
+    assert.equal(replaced.tasks[0]?.evalset?.version, TASK_EVALSET_VERSION);
+    assert.equal(replaced.tasks[0]?.evalset?.cases[0]?.case_id, "claim-after-catalog");
+
+    const omitted = externalAgent("pg-evalset-omit");
+    for (const task of omitted.tasks) delete task.evalset;
+    const bare = await agents.create(omitted);
+    assert.ok((await agents.get(bare.agent_id))?.tasks.every((task) => task.evalset === undefined));
+
+    const invalid = externalAgent("pg-evalset-bad");
+    invalid.tasks[0]!.evalset = { version: 2, cases: [] } as unknown as TaskEvalset;
+    await assert.rejects(agents.create(invalid), /version|constant|evalset/i);
+    assert.equal(await agents.get("pg-evalset-bad"), undefined);
+
+    await agents.delete(created.agent_id);
+    await agents.delete(bare.agent_id);
   });
 });
 

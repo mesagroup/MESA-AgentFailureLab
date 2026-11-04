@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { Agent, AgentTask } from "../src/index.js";
+import { TASK_EVALSET_VERSION, type Agent, type AgentTask } from "../src/index.js";
 import { planShopTask } from "../src/shop-plan.js";
 import { validateAgent } from "../src/validate.js";
 
@@ -28,6 +28,8 @@ const grant = ["read", "write:cart", "write:order", "write:order:cancel"];
 
 describe("planShopTask", () => {
   it("keeps the T1–T5 purchase plans", () => {
+    assert.equal(task(reference, "T1").evalset?.version, TASK_EVALSET_VERSION);
+    assert.equal(task(reference, "T2").evalset, undefined);
     assert.deepEqual(planShopTask(task(reference, "T1"), { permissions: grant }), {
       ok: true,
       actions: [

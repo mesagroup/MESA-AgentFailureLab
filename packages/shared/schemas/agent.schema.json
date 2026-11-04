@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json",
   "title": "Agent",
-  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks. The reference shop agent is seeded with five tasks (T1–T5). The library desk agent is seeded with three tasks that use library checks. Other agents may register a different non-empty task list.",
+  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks, and may carry an optional evalset. The evalset is user-supplied material for a later Grok judgment of that task's Run or Trace. It is not a verifier check and it does not write outcome.verifier. The reference shop agent is seeded with five tasks (T1–T5). T1 includes one evalset case; T2–T5 omit the field. The library desk agent is seeded with three tasks that use library checks and omit evalset. Other agents may register a different non-empty task list.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -275,6 +275,44 @@
                   "params": {
                     "type": "object",
                     "description": "Arguments for this check type. Required keys depend on name. Unknown keys are rejected."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "evalset": {
+          "description": "Optional user-supplied material a later Grok judgment may read when looking at a Run or Trace for this task. Omit the field when the task has none. version 1 with cases: [] is valid and means no cases yet. The deterministic verifier does not read this object. Pass/fail stays on success_test, scored from mock world state. This object never writes outcome.verifier. version is the shape of this object; only 1 is valid.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "cases"],
+          "properties": {
+            "version": {
+              "description": "Evalset document shape. Only 1 is valid in this contract. A consumer that does not know the version must reject the document.",
+              "const": 1
+            },
+            "cases": {
+              "description": "Judge cases for this task. Order is the author's order. An empty array is valid.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["case_id", "expectation"],
+                "properties": {
+                  "case_id": {
+                    "description": "Stable id within this task's evalset. Unique among cases on the same task.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectation": {
+                    "description": "What the judge should look for in the Trace or Run (claims, steps, tool use). Not a world-state assertion. Those stay on success_test.checks.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rubric": {
+                    "description": "How the judge should score the expectation. Free text. Optional. Does not write outcome.verifier.",
+                    "type": "string",
+                    "minLength": 1
                   }
                 }
               }

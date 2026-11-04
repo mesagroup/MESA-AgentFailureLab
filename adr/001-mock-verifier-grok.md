@@ -27,6 +27,13 @@ Tre componenti con responsabilità esclusive.
 - **Non** scrive `outcome.verifier` né `fault.labels`.
 - Fix applicati dall’harness; validità = replay + verificatore, non fiducia nella diagnosi.
 
+### Evalset sul task (input al giudice, non esito)
+
+- `Agent.tasks[].evalset` è materiale fornito dall’utente, opzionale. Un giudizio Grok successivo può leggerlo insieme alla Trace o alla Run di quel task.
+- Non è input del verificatore deterministico. Non scrive `outcome.verifier`.
+- L’esito resta `success_test.checks` sullo stato del mondo nel mock.
+- Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. Non esiste un endpoint che genera l’evalset.
+
 ## Ground truth
 - `fault.labels` e `attacker`: solo iniettore / attaccante in run di caos.
 - Eval classificazione: confronto `diagnosis.category` (+ step) vs `fault.labels`.

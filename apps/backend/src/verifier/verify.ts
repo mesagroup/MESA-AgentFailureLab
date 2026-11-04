@@ -246,7 +246,11 @@ function runCheck(check: AgentTaskCheck, input: VerifyInput): VerifierCheck {
   return CHECK_RUNNERS[check.name](check, input);
 }
 
-/** Only this function writes `outcome.verifier`. It does not read assistant prose or `fault.labels`. */
+/**
+ * Only this function writes `outcome.verifier`.
+ * It reads mock state and `success_test` checks. It does not read assistant prose,
+ * `fault.labels`, or `task.evalset`.
+ */
 export function verifyOutcome(input: VerifyInput): TraceOutcome {
   const checks = input.checks.map((check) => runCheck(check, input));
   const passed = checks.length > 0 && checks.every((check) => check.passed);

@@ -10,7 +10,7 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.2.1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, and `TaskEvalCase`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-shop.json` — the reference shop agent (T1–T5). The harness loads this; it is not a second schema. Seed URLs are applied by the backend ([docs/seed-endpoints.md](../../docs/seed-endpoints.md)).
@@ -53,7 +53,7 @@ Phase rules:
 
 `GROK_FORBIDDEN_WRITE_PATHS` lists the paths the agent service must not write: `outcome.verifier`, `fault.injected`, `fault.labels`, `fault.attacker`.
 
-- `outcome.verifier` is the only pass/fail authority. The deterministic verifier computes it from mock state. `outcome.success` must equal `outcome.verifier.passed`. The agent and Grok do not write this object.
+- `outcome.verifier` is the only pass/fail authority. The deterministic verifier computes it from mock state. `outcome.success` must equal `outcome.verifier.passed`. The agent and Grok do not write this object. `tasks[].evalset` is not a Trace field and is not an input to that computation.
 - `outcome.agent_claimed_success` is what the agent asserted. It is not a verdict.
 - `fault.labels` are written only by the injector or the attacker. A clean attempt has `injected: false`, no labels, and `attacker.used: false` with `payload_id: null`.
 - `diagnosis` stays `null` until Grok runs. Fault labels and the diagnosis category need not match.
@@ -77,6 +77,37 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 ## Agent
 
 `instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. Each task has `setup` (cart, orders, granted permissions) and check `params` constrained by the check registry. The reference shop agent registers T1–T5 as that data. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference shop agent and executes tool calls itself.
+
+### Task evalset
+
+`tasks[].evalset` is optional user data. A later Grok judgment of that task's Run or Trace may read it. It is not a verifier check, and it does not write `outcome.verifier`. Pass/fail stays on `success_test.checks`, which the deterministic verifier scores from mock world state ([ADR-001](../../adr/001-mock-verifier-grok.md)). This package does not call Grok and does not add a generate-evalset route.
+
+`TASK_EVALSET_VERSION` is `1`. That is the only valid `evalset.version`. Omit `evalset` when the task has none. `version: 1` with `cases: []` is also valid. `rubric` is optional on a case. `case_id` is unique within the task.
+
+T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json) is the seed example. T2–T5 and the library desk tasks omit the field.
+
+```json
+{
+  "version": 1,
+  "cases": [
+    {
+      "case_id": "claim-after-catalog",
+      "expectation": "The assistant claims it opened the ceramic mug only after a catalog search and a product read.",
+      "rubric": "Cite the claim step and the tool steps. Do not score cart or order state; that is outcome.verifier."
+    }
+  ]
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `version` | yes, when `evalset` is present | Shape of this object. Only `1`. |
+| `cases` | yes, when `evalset` is present | Author order. May be empty. |
+| `cases[].case_id` | yes | Stable id inside this task. |
+| `cases[].expectation` | yes | What the judge should look for in the Trace or Run. Not a world-state assertion. |
+| `cases[].rubric` | no | How to score the expectation. Free text. |
+
+`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. There is no separate evalset API.
 
 ## Examples
 

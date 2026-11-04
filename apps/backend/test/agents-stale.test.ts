@@ -164,6 +164,16 @@ describe("stale reference-shop", () => {
     const rewritten = new MemoryAgentStore([older]);
     assert.equal((await rewritten.get(REFERENCE_AGENT_ID))?.name, "Reference shop assistant");
     assert.equal((await rewritten.get(REFERENCE_AGENT_ID))?.updated_at, loadReferenceAgent().updated_at);
+    assert.equal((await rewritten.get(REFERENCE_AGENT_ID))?.tasks[0]?.evalset?.version, 1);
+
+    const newerWithout = loadReferenceAgent();
+    for (const task of newerWithout.tasks) delete task.evalset;
+    newerWithout.name = "No evalset";
+    newerWithout.updated_at = "2099-01-01T00:00:00.000Z";
+    const keptOmit = new MemoryAgentStore([newerWithout]);
+    assert.equal((await keptOmit.get(REFERENCE_AGENT_ID))?.name, "No evalset");
+    assert.ok((await keptOmit.get(REFERENCE_AGENT_ID))?.tasks.every((task) => task.evalset === undefined));
+    await keptOmit.close();
 
     const sameAge = loadReferenceAgent();
     sameAge.name = "Same age custom";
