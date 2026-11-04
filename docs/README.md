@@ -4,6 +4,7 @@ Product and contributor docs live here. Architecture Decision Records do not —
 
 - [Overview](overview.md) — what the lab is, and Track 03
 - [Agent tasks](agent-tasks.md) — `AgentTask` setup, check registry, and an example
+- [Canonical shop scenario](../apps/agentservice/scenarios/shop-readback-v1/README.md) — #99 fixture, isolated HTTP experiment, negative controls and handoff to #100
 - [Architecture](architecture.md) — four processes; mock-shop is a stand-alone HTTP target
 - [Persistence](persistence.md) — Agent, Run, and Trace stores (Postgres or memory), migrations, APIs, backup, jury reset, cutover, and the local runbook
 - [Getting started](getting-started.md) — install, run one app, where each team writes code

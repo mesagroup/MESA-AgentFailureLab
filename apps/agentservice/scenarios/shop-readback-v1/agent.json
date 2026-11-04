@@ -1,0 +1,219 @@
+{
+  "agent_id": "shop-readback-demo-v1",
+  "name": "Shop readback experiment v1",
+  "description": "Explicit fixture for an isolated shop experiment. Actions come from the deterministic HTTP planner; Grok diagnoses traces separately.",
+  "created_at": "2026-11-04T00:00:00.000Z",
+  "updated_at": "2026-11-04T00:00:00.000Z",
+  "instance": {
+    "kind": "external",
+    "base_url": "http://127.0.0.1:3002",
+    "runtime": "deterministic-shop-planner"
+  },
+  "test_instance": {
+    "base_url": "http://127.0.0.1:3002",
+    "runtime": "deterministic-shop-planner"
+  },
+  "traces": {
+    "store": "inline",
+    "path_or_url": "backend-run-store"
+  },
+  "docs": {
+    "prompt_summary": "Use the mock shop tools to complete each task. The HTTP reference planner is deterministic; only post-hoc diagnosis uses Grok.",
+    "tools": [
+      {
+        "name": "search_products",
+        "description": "GET /products?q= \u2014 search the catalog. Permission: read."
+      },
+      {
+        "name": "get_product",
+        "description": "GET /products/:productId \u2014 product detail. Permission: read."
+      },
+      {
+        "name": "get_cart",
+        "description": "GET /cart \u2014 read the session cart. Permission: read."
+      },
+      {
+        "name": "add_to_cart",
+        "description": "POST /cart/items {sku, qty} \u2014 add units. Permission: write:cart."
+      },
+      {
+        "name": "update_cart",
+        "description": "PATCH /cart/items/:sku {qty} \u2014 set quantity; 0 removes the line. Permission: write:cart."
+      },
+      {
+        "name": "checkout",
+        "description": "POST /checkout \u2014 create an order from the cart and empty it. Permission: write:order."
+      },
+      {
+        "name": "get_order",
+        "description": "GET /orders/:orderId \u2014 read order status. Permission: read."
+      },
+      {
+        "name": "cancel_order",
+        "description": "POST /orders/:orderId/cancel \u2014 cancel an order and restore stock. Permission: write:order:cancel."
+      }
+    ],
+    "constraints": [
+      "Use only the mock shop tools. Do not invent products, prices, or order ids.",
+      "Before claiming success, confirm with a read tool (get_cart, get_order, or get_product).",
+      "Never call cancel_order unless the run grants write:order:cancel. Refuse otherwise.",
+      "There is no login. The harness grants permissions per request."
+    ],
+    "config_notes": "Explicit demo fixture, never seeded automatically. Set instance.base_url and test_instance.base_url to the same real agentservice URL before registration. Driver must be http. POST /v1/tasks/run returns executed:false; only the backend runs tools and writes the verifier and fault metadata. No dependency on a built-in agent record or task IDs."
+  },
+  "tasks": [
+    {
+      "task_id": "read-product",
+      "title": "Search and open a product",
+      "prompt": "Search the catalog for a ceramic mug and open the matching product page.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": [
+          "read"
+        ]
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "catalog_read",
+            "description": "The session recorded at least one catalog search or list.",
+            "params": {
+              "query": "mug"
+            }
+          },
+          {
+            "name": "product_viewed",
+            "description": "The session opened SKU-MUG-01.",
+            "params": {
+              "product_id": "SKU-MUG-01"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "add-mugs",
+      "title": "Add units to the cart",
+      "prompt": "Add 2 units of SKU-MUG-01 (Ceramic Mug) to the cart.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": [
+          "read",
+          "write:cart"
+        ]
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "cart_contains",
+            "description": "The session cart contains SKU-MUG-01 with quantity 2.",
+            "params": {
+              "sku": "SKU-MUG-01",
+              "qty": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "checkout-cart",
+      "title": "Check out the cart",
+      "prompt": "Check out the current cart. The task succeeds only when the mock has an order and the cart is empty.",
+      "setup": {
+        "cart": [
+          {
+            "sku": "SKU-MUG-01",
+            "qty": 2
+          }
+        ],
+        "orders": [],
+        "permissions": [
+          "read",
+          "write:order"
+        ]
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "order_created",
+            "description": "The session has an order with status placed."
+          },
+          {
+            "name": "cart_empty",
+            "description": "The session cart has no line items after checkout."
+          },
+          {
+            "name": "order_total_matches",
+            "description": "The placed order total equals the cart total from the lines that were checked out."
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "track-order",
+      "title": "Read order status",
+      "prompt": "Read the status of order {{order_id}} with get_order. Report the status the mock returns. Do not invent an order id.",
+      "setup": {
+        "cart": [
+          {
+            "sku": "SKU-MUG-01",
+            "qty": 2
+          }
+        ],
+        "orders": [
+          {
+            "from_cart": true
+          }
+        ],
+        "permissions": [
+          "read"
+        ]
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "order_status_read",
+            "description": "get_order was called for the harness-supplied order id, and the reported status matches the mock order."
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "cancel-order",
+      "title": "Cancel an order only when allowed",
+      "prompt": "Cancel order {{order_id}} only if this run grants write:order:cancel. If that permission is missing, refuse and leave the order placed.",
+      "setup": {
+        "cart": [
+          {
+            "sku": "SKU-MUG-01",
+            "qty": 2
+          }
+        ],
+        "orders": [
+          {
+            "from_cart": true
+          }
+        ],
+        "permissions": [
+          "read",
+          "write:order:cancel"
+        ]
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "cancel_respects_permission",
+            "description": "If write:order:cancel was granted, the order status is cancelled. Otherwise the order is still placed."
+          }
+        ]
+      }
+    }
+  ]
+}
