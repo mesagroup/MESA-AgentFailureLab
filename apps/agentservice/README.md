@@ -24,6 +24,8 @@ Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_A
 
 `GROK_MODEL` is the chat model sent on the diagnosis call (`grok-3` in the example). The call path receives that string from config. `XAI_BASE_URL` defaults to `https://api.x.ai/v1`. `GROK_TIMEOUT_MS` is the per-attempt timeout (default 30000). A timeout, a connection failure, or HTTP 408/429/500/502/503/504 is tried once more. Other statuses are not retried.
 
+Container image, from the repo root: `docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .` The image sets `HOST=0.0.0.0`, listens on port 3002, and answers `GET /health`. It starts with `node --env-file-if-exists=.env dist/index.js`. Render and Compose put `XAI_API_KEY` in the process environment, so the image boots when `.env` is absent. The key is a runtime env var, not a Docker build arg. See [docs/deploy.md](../../docs/deploy.md).
+
 `turbo run dev` builds `@mesa/shared` first.
 
 Tests do not need a key or the network:

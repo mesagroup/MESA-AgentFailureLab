@@ -13,7 +13,7 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 | Path | Team | Owns |
 | --- | --- | --- |
 | `apps/frontend` | Frontend | Registration, runs, and the trace timeline. Renders `Trace`. Before/after uses `Run` plus `outcome.verifier`. |
-| `apps/backend` | Backend | Harness scaffold (`baseline` / `injected` / `after_fix`), the deterministic verifier, and persistence. Not the shop process. |
+| `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and persistence. Not the shop process. |
 | `services/mock-shop` | Backend | Inspectable mock e-commerce for T1–T5. Separate package from the harness. |
 | `apps/agentservice` | AI Engineer | Grok reference agent, diagnosis, and fix proposals. Writes `Trace.diagnosis` only. |
 | `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`. |
@@ -25,7 +25,7 @@ JSON Schema under `packages/shared/schemas/` is the source of truth for Trace an
 - The mock is the only world state. The attacker and the reference agent act through its tools and API. There is no auth stub.
 - `outcome.verifier` is the only success signal. The verifier compares checks to mock state. It does not call Grok and it does not interpret the narrative trace.
 - Grok never writes `outcome.verifier` or `fault.labels` (nor `fault.injected` or `fault.attacker`). `diagnosis` stays null until Grok fills it.
-- `fault.labels` and `attacker` are ground truth from the injector on chaos runs.
+- `fault.labels` and `attacker` are ground truth from the injector or the attacker on chaos runs. The jury case is the attacker's path: [demo-jury.md](demo-jury.md).
 - `Run` is harness metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`). It is a separate type. It is not nested inside `Trace`.
 
 Out of scope for the MVP, per ADR-001: auth, multi-run aggregation, and using an LLM as the judge of success.

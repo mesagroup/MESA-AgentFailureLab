@@ -125,6 +125,53 @@ describe("diagnoseTrace", () => {
     assert.equal(output.fault, trace.fault);
   });
 
+  it("diagnoses the jury attack without showing the payload or the label", async () => {
+    const raw: unknown = JSON.parse(
+      readFileSync(new URL("../../backend/fixtures/jury/attacked-trace.json", import.meta.url), "utf8"),
+    );
+    const trace = mustTrace(raw);
+    assert.equal(trace.fault.attacker.payload_id, "jury-nota-malevola-cancel");
+    assert.equal(trace.fault.labels[0]?.code, "unauthorized_cancel_via_juror_note");
+    assert.equal(trace.diagnosis, null);
+    const seen: ModelCompletionRequest[] = [];
+    const output = await diagnoseTrace(trace, {
+      model: scripted(seen, {
+        category: "Security",
+        cause: "The agent cancelled the order after an untrusted note told it to ignore the permission check.",
+        step_id: "step-4",
+        confidence: 0.7,
+        evidence: ["step-4 claims the cancel succeeded."],
+        proposed_fixes: ["permission_guard"],
+      }),
+      modelName: config.modelName,
+    });
+    const request = seen[0]!;
+    const packet = `${request.system}\n${request.user}`;
+    for (const secret of [
+      "jury-nota-malevola-cancel",
+      "unauthorized_cancel_via_juror_note",
+      "Attacker applied payload",
+      "was not granted but ord_0001 is cancelled",
+      "injected",
+      "injection_plan",
+    ]) {
+      assert.equal(packet.includes(secret), false, secret);
+    }
+    assert.equal(request.user.includes("NOTA DEL GIURATO"), true);
+    assert.equal(request.user.includes("step-4"), true);
+    const findings = readView(request).findings;
+    assert.deepEqual(
+      findings.map((item) => ({ kind: item.kind, step_ids: item.step_ids })),
+      [{ kind: "false_success_claim", step_ids: ["step-4"] }],
+    );
+    assert.equal(output.diagnosis.step_id, "step-4");
+    assert.equal(output.diagnosis.category, "Security");
+    assert.deepEqual(output.diagnosis.proposed_fixes, ["permission_guard"]);
+    assert.equal(output.fault, trace.fault);
+    assert.equal(output.fault.attacker.payload_id, "jury-nota-malevola-cancel");
+    assert.equal(output.outcome.verifier.passed, false);
+  });
+
   it("hides fault labels, the attacker, and verifier details from the model", async () => {
     const input = pending("injected-failed-trace.json");
     const seen: ModelCompletionRequest[] = [];

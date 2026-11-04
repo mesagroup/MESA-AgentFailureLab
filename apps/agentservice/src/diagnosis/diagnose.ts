@@ -32,9 +32,11 @@ interface Finding {
  * effect, and `success` is defined to equal `verifier.passed`.
  * `trace_id`, `run_id`, and `agent_id` are omitted because the harness puts
  * the run phase in those ids (`run-${taskId}-${phase}-uuid`). `injection_plan`
- * is a Run field and is not on this view. `task_id`, `status`, and
- * `agent_claimed_success` stay. Pre-pass may read `verifier.passed` locally;
- * its detail strings do not quote checks, snapshots, or label codes.
+ * is a Run field and is not on this view. Steps that contain a fault label
+ * code or `attacker.payload_id` are omitted: the jury attacker writes that id
+ * into a system step. `task_id`, `status`, and `agent_claimed_success` stay.
+ * Pre-pass may read `verifier.passed` locally; its detail strings do not quote
+ * checks, snapshots, or label codes.
  */
 interface PromptView {
   task_id: string;
@@ -210,11 +212,45 @@ function toPromptView(trace: Trace, findings: readonly Finding[]): PromptView {
     started_at: trace.started_at,
     ended_at: trace.ended_at,
     status: trace.status,
-    steps: trace.steps,
+    steps: stepsForModel(trace),
     totals: trace.totals,
     agent_claimed_success: trace.outcome.agent_claimed_success,
     findings: [...findings],
   };
+}
+
+function stepsForModel(trace: Trace): TraceStep[] {
+  const secrets = groundTruthSecrets(trace);
+  if (secrets.length === 0) {
+    return trace.steps;
+  }
+  const visible: TraceStep[] = [];
+  for (const step of trace.steps) {
+    if (stepMentionsSecret(step, secrets)) {
+      continue;
+    }
+    visible.push(step);
+  }
+  return visible;
+}
+
+function groundTruthSecrets(trace: Trace): string[] {
+  const secrets: string[] = [];
+  for (const label of trace.fault.labels) {
+    if (label.code.length > 0) {
+      secrets.push(label.code);
+    }
+  }
+  const payloadId = trace.fault.attacker.payload_id;
+  if (payloadId !== null && payloadId.length > 0) {
+    secrets.push(payloadId);
+  }
+  return secrets;
+}
+
+function stepMentionsSecret(step: TraceStep, secrets: readonly string[]): boolean {
+  const blob = JSON.stringify(step);
+  return secrets.some((secret) => blob.includes(secret));
 }
 
 function renderPrompt(view: PromptView): { system: string; user: string } {

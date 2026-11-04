@@ -10,7 +10,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 /
   apps/
     frontend/        # web UI — registration, runs, timeline
-    backend/         # harness scaffold, verifier, persistence
+    backend/         # harness, verifier, injector, persistence
     agentservice/    # Grok reference agent, diagnosis, fix proposals
   services/
     mock-shop/       # inspectable e-commerce API for T1–T5
@@ -26,7 +26,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 | Path | Team | Owns |
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
-| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, persistence. No auth. Scaffold only for now. |
+| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. |
 | [`services/mock-shop`](services/mock-shop/README.md) | Backend | Mock shop: catalog, cart, checkout, cancel, `GET /internal/state`. Not inside `apps/backend`. |
 | [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference agent and Grok diagnosis. Writes `diagnosis` only. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
@@ -59,10 +59,31 @@ Shortcuts: `pnpm dev:frontend`, `pnpm dev:backend`, `pnpm dev:agentservice`, `pn
 
 Copy an app's `.env.example` to `.env` only when you need overrides. Do not commit `.env` or a Grok API key. `XAI_API_KEY` in `apps/agentservice/.env.example` is an empty placeholder.
 
+## Docker and Render
+
+Three images, built from the repo root so `packages/shared` is in the context:
+
+```bash
+docker build -f apps/frontend/Dockerfile -t mesa-frontend .
+docker build -f apps/backend/Dockerfile -t mesa-backend .
+docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .
+docker compose up --build
+```
+
+| Image | Port | Health |
+| --- | --- | --- |
+| `mesa-frontend` | 3000 | `GET /health` |
+| `mesa-backend` | 3001 | `GET /health` |
+| `mesa-agentservice` | 3002 | `GET /health` |
+
+Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`). The Render Blueprint groups the same three free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
+
 ## Docs
 
 - [Overview](docs/overview.md) — product, track, boundaries
 - [Getting started](docs/getting-started.md) — contributor workflow and stack choices
+- [Jury demo](docs/demo-jury.md) — one security case, baseline comparison, limitations
+- [Deploy](docs/deploy.md) — Docker, Compose, Render Blueprint, secrets
 - [ADRs](adr/README.md) — decisions only; [ADR-001](adr/001-mock-verifier-grok.md) is the mock / verifier / Grok freeze
 
 ## Contracts
