@@ -1,6 +1,6 @@
 import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateAgent, validateRun, validateTrace } from "@mesa/shared/validate";
-import { REFERENCE_AGENT_ID, type AgentStore } from "../agents/store.js";
+import { REFERENCE_AGENT_ID, type AgentStore, type SeedResult } from "../agents/store.js";
 import { isRecord } from "../util.js";
 import {
   assertUtcTimestamp,
@@ -45,8 +45,12 @@ export interface ResetCounts {
   agents_deleted: number;
   runs_deleted: number;
   traces_deleted: number;
-  /** `kept` means the row was already there, including an edited one. `inserted` means the fixture was missing. */
-  seed: "kept" | "inserted";
+  /**
+   * `kept`: the row validated and was not older than the fixture.
+   * `refreshed`: the stored row was invalid or older, and was rewritten.
+   * `inserted`: the id was missing.
+   */
+  seed: SeedResult;
 }
 
 export class PersistenceTransferError extends Error {
@@ -293,14 +297,15 @@ export async function importPersistence(
 
 /**
  * Delete every run, every trace, and every agent except `reference-shop`.
- * An edited seed is kept. A missing seed is inserted from the fixture.
- * Not an HTTP route.
+ * A valid seed that is not older than the fixture is kept.
+ * An invalid or older seed is rewritten from the fixture. A missing seed is inserted.
+ * Not an HTTP route. Does not read the seed through `get`, so an invalid document
+ * does not abort the reset.
  */
 export async function resetKeepingSeed(agents: AgentStore, runs: RunStore): Promise<ResetCounts> {
-  const seedBefore = await agents.get(REFERENCE_AGENT_ID);
   const deleted = await runs.deleteAllRunsAndTraces();
   const agentsDeleted = await agents.deleteAgentsExceptSeed();
-  await agents.seedIfMissing();
+  const seed = await agents.seedIfMissing();
   const seedAfter = await agents.get(REFERENCE_AGENT_ID);
   if (!seedAfter || seedAfter.agent_id !== REFERENCE_AGENT_ID) {
     fail("Reset failed to keep reference-shop.");
@@ -309,7 +314,7 @@ export async function resetKeepingSeed(agents: AgentStore, runs: RunStore): Prom
     agents_deleted: agentsDeleted,
     runs_deleted: deleted.runs,
     traces_deleted: deleted.traces,
-    seed: seedBefore ? "kept" : "inserted",
+    seed,
   };
 }
 
