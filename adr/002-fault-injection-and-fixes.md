@@ -11,6 +11,7 @@
 - L'iniezione sta in `apps/backend`, in `executeAttempt`, prima di `MockShopClient.request`. La Run porta `injection_plan`. `POST /runs` manda `injection` come `preset`, come oggetto, o come null. `preset` legge `TASK_FAULT_PRESETS`.
 - Gli effetti sono `skip`, `mutate_input`, `forge_output`, `replace_output` e `drop`. `skip`, `forge_output` e `drop` non chiamano `services/mock-shop`.
 - L'agent sotto l'harness restituisce le azioni con `executed: false`. L'harness fa la chiamata HTTP. Il backend scrive `fault.injected` e `fault.labels`. `apps/agentservice` e Grok non scrivono quei campi, né `fault.attacker`. I path sono `GROK_FORBIDDEN_WRITE_PATHS`.
+- Il testo negli step non è ground truth. `content`, `tool_input` e `tool_output` non riportano i marker dell'iniettore (`Injected…`, `Injector skipped`, `Injector target … was not called`, `forged: true`, `stale: true`, `injected: true`, e gli stessi flag a `false`). Categoria, codice e step restano su `fault.labels`. `fault.injected` e `fault.attacker` restano metadati di harness. Il verificatore non legge quel testo: l'esito continua a dipendere dai check e dallo snapshot del mock. `scrubSpoilers` in `apps/backend/src/injector/spoilers.ts` è il confine, riusabile da un payload prima di scriverlo su uno step.
 
 ### 2. Attaccante di giuria, come nella PR #32
 

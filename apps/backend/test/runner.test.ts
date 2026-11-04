@@ -10,6 +10,7 @@ import { createHttpMockClient, type MockShopClient } from "../src/mock/client.js
 import { parseSnapshot } from "../src/mock/snapshot.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
+import { spoilerMarkersIn } from "../src/injector/spoilers.js";
 import { verifyOutcome } from "../src/verifier/verify.js";
 import { startMockShop } from "./helpers.js";
 
@@ -128,6 +129,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       assert.equal(result.run.status, "failed");
       assert.deepEqual(result.run.fix_kinds, []);
       assert.equal(result.trace.fault.injected, true);
+      assert.deepEqual(spoilerMarkersIn(result.trace.steps), []);
       assert.equal(result.trace.diagnosis, null);
       assert.equal(result.trace.outcome.verifier.passed, false);
       assert.equal(result.trace.outcome.success, false);
@@ -177,6 +179,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
     );
     assert.ok(planned?.trace);
     assert.equal(planned.trace.fault.labels[0]?.category, "Plan");
+    assert.deepEqual(spoilerMarkersIn(planned.trace.steps), []);
     assert.equal(planned.trace.outcome.verifier.checks.find((check) => check.name === "catalog_read")?.passed, false);
     assert.equal(planned.run.injection_plan?.ground_truth.code, "omitted_required_step");
 
@@ -193,6 +196,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
     );
     assert.ok(dropped?.trace);
     assert.equal(dropped.trace.fault.labels[0]?.category, "Execution");
+    assert.deepEqual(spoilerMarkersIn(dropped.trace.steps), []);
     assert.equal(dropped.trace.outcome.agent_claimed_success, false);
     assert.equal(dropped.trace.outcome.verifier.passed, false);
     assert.equal(dropped.run.phase, "injected");

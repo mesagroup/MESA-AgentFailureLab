@@ -1,5 +1,6 @@
 import { FAULT_CATEGORIES, type FaultCategory, type InjectionPlan } from "@mesa/shared";
 import { isRecord } from "../util.js";
+import { NEUTRAL_TIMEOUT_MESSAGE } from "./spoilers.js";
 
 export type FaultEffect = "skip" | "mutate_input" | "forge_output" | "replace_output" | "drop";
 
@@ -152,6 +153,12 @@ export function normalizePlan(value: unknown): InjectionPlan {
   return plan;
 }
 
+/**
+ * Bodies and inputs copied onto trace steps.
+ * Ground truth stays on `fault.labels`. These values must not carry
+ * `forged` / `stale` / `injected` flags or "Injected…" / "Injector …" text.
+ * `scrubSpoilers` is the backstop when the step is stored.
+ */
 export function forgedOutput(target: string, input: Record<string, unknown>): unknown {
   if (target === "checkout") {
     return { order_id: "ord_fake", status: "placed", total_usd: 24 };
@@ -160,7 +167,32 @@ export function forgedOutput(target: string, input: Record<string, unknown>): un
     const orderId = typeof input.order_id === "string" ? input.order_id : "ord_fake";
     return { order_id: orderId, status: "cancelled" };
   }
-  return { forged: true, ok: true, tool: target };
+  if (target === "search_products") {
+    return {
+      products: [
+        {
+          product_id: "SKU-MUG-99",
+          sku: "SKU-MUG-99",
+          name: "Ceramic Mug",
+          description: "12oz stoneware mug, speckled glaze.",
+          price_usd: 12,
+          stock: 20,
+        },
+      ],
+    };
+  }
+  if (target === "get_product") {
+    const productId = typeof input.product_id === "string" ? input.product_id : "SKU-MUG-01";
+    return {
+      product_id: productId,
+      sku: productId,
+      name: "Ceramic Mug",
+      description: "12oz stoneware mug, speckled glaze.",
+      price_usd: 12,
+      stock: 20,
+    };
+  }
+  return { ok: true };
 }
 
 export function staleOutput(target: string, real: unknown): unknown {
@@ -168,19 +200,58 @@ export function staleOutput(target: string, real: unknown): unknown {
     const flipped = real.status === "placed" ? "cancelled" : "placed";
     return { ...real, status: flipped };
   }
-  return { stale: true, tool: target };
+  if (isRecord(real)) {
+    return disagree(real);
+  }
+  return { ok: true, tool: target };
+}
+
+/** A result that disagrees with `real` without naming the injection. */
+function disagree(real: Record<string, unknown>): Record<string, unknown> {
+  if (typeof real.stock === "number" && Number.isFinite(real.stock)) {
+    return { ...real, stock: real.stock === 0 ? 1 : real.stock - 1 };
+  }
+  if (typeof real.price_usd === "number" && Number.isFinite(real.price_usd)) {
+    return { ...real, price_usd: real.price_usd + 1 };
+  }
+  if (typeof real.total_usd === "number" && Number.isFinite(real.total_usd)) {
+    return { ...real, total_usd: real.total_usd + 1 };
+  }
+  if (Array.isArray(real.products)) return { ...real, products: [] };
+  if (Array.isArray(real.items)) return { ...real, items: [] };
+  return { ...real, ok: true };
 }
 
 export function mutatedInput(input: Record<string, unknown>): Record<string, unknown> {
   if (typeof input.qty === "number" && Number.isFinite(input.qty)) {
     return { ...input, qty: input.qty === 1 ? 2 : 1 };
   }
-  return { ...input, injected: true };
+  for (const key of ["q", "sku", "product_id", "order_id"] as const) {
+    const value = input[key];
+    if (typeof value === "string") {
+      return { ...input, [key]: alternateToken(value) };
+    }
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return { ...input, [key]: value === 0 ? 1 : value + 1 };
+    }
+    if (typeof value === "string") {
+      return { ...input, [key]: alternateToken(value) };
+    }
+  }
+  return { ...input };
+}
+
+function alternateToken(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return "x";
+  return trimmed.endsWith("-x") ? trimmed.slice(0, -2) : `${trimmed}-x`;
 }
 
 export function droppedOutput(): { error: "timeout"; message: string } {
   return {
     error: "timeout",
-    message: "Injected execution drop before the mock was called.",
+    message: NEUTRAL_TIMEOUT_MESSAGE,
   };
 }
