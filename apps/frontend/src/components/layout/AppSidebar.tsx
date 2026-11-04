@@ -1,5 +1,5 @@
 import { Activity, Bot, LayoutDashboard, Play, Zap } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,7 @@ const NAV = [
 
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   return (
     <Sidebar variant="floating" collapsible="icon">
@@ -53,7 +54,7 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       tooltip={label}
                       isActive={isActive}
-                      render={<Link to={to} />}
+                      onClick={() => navigate(to)}
                     >
                       <Icon />
                       <span>{label}</span>

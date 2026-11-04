@@ -1,41 +1,60 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { CHECK_REGISTRY, CHECK_TYPES, TASK_PERMISSIONS, isCheckType, type AgentTask } from "@mesa/shared";
-import { CodeTip } from "@/components/CodeTip";
+import {
+  CHECK_REGISTRY,
+  CHECK_TYPES,
+  TASK_PERMISSIONS,
+  isCheckType,
+  type AgentTask,
+  type AgentTaskCheck,
+  type CheckParamField,
+  type CheckType,
+} from "@mesa/shared";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-import { checkLabel, paramLabel, permissionLabel } from "@/lib/labels";
-import { blankTask, checkOf, nextTaskId, type TaskFieldError } from "@/lib/tasks";
+
+export function blankTasks(): AgentTask[] {
+  return [blankTask("search")];
+}
+
+export function validateTasks(tasks: AgentTask[]): string | undefined {
+  if (tasks.length === 0) return "Add at least one task.";
+  const seen = new Set<string>();
+  for (const task of tasks) {
+    const label = task.task_id.trim() || "A task";
+    if (!task.task_id.trim()) return "Every task needs an id.";
+    if (seen.has(task.task_id)) return `Duplicate task id ${task.task_id}.`;
+    seen.add(task.task_id);
+    if (!task.title.trim()) return `${label} needs a title.`;
+    if (!task.prompt.trim()) return `${label} needs a prompt.`;
+    for (const line of task.setup.cart) {
+      if (!line.sku.trim()) return `${label} has a cart line without a SKU.`;
+      if (!Number.isInteger(line.qty) || line.qty < 1) {
+        return `${label} cart quantity must be an integer of at least 1.`;
+      }
+    }
+    if (task.success_test.checks.length === 0) return `${label} needs a check.`;
+    for (const check of task.success_test.checks) {
+      if (!isCheckType(check.name)) return `${label} has an unknown check.`;
+      if (!check.description.trim()) return `${label} check ${check.name} needs a description.`;
+      const issue = paramIssue(label, check);
+      if (issue) return issue;
+    }
+  }
+  return undefined;
+}
 
 export function AgentTasksEditor({
   tasks,
   onChange,
-  errors,
-  showErrors,
 }: {
   tasks: AgentTask[];
   onChange: (tasks: AgentTask[]) => void;
-  errors?: TaskFieldError[];
-  showErrors?: boolean;
 }) {
-  const [active, setActive] = useState(0);
-  const index = Math.min(active, Math.max(tasks.length - 1, 0));
-  const task = tasks[index];
-
-  useEffect(() => {
-    if (!showErrors || !errors) return;
-    const problem = errors.findIndex(taskHasError);
-    if (problem >= 0) setActive(problem);
-  }, [showErrors]);
-
-  function patch(indexToPatch: number, recipe: (task: AgentTask) => void) {
+  function patch(index: number, recipe: (task: AgentTask) => void) {
     onChange(
       tasks.map((task, taskIndex) => {
-        if (taskIndex !== indexToPatch) return task;
+        if (taskIndex !== index) return task;
         const next = structuredClone(task);
         recipe(next);
         return next;
@@ -43,350 +62,347 @@ export function AgentTasksEditor({
     );
   }
 
-  if (!task) return null;
-  const field = errors?.[index];
-  const show = Boolean(showErrors);
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tasks">
-          {tasks.map((item, taskIndex) => (
-            <button
-              key={`${item.task_id}-${taskIndex}`}
-              type="button"
-              role="tab"
-              aria-selected={taskIndex === index}
-              onClick={() => setActive(taskIndex)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-sm",
-                taskIndex === index ? "border-foreground bg-foreground text-background" : "border-border bg-card text-foreground",
-                show && taskHasError(errors?.[taskIndex]) && taskIndex !== index && "border-destructive text-destructive",
-              )}
-            >
-              {item.title.trim() || "New task"}
-            </button>
-          ))}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Tasks ({tasks.length})</p>
+          <p className="text-xs text-muted-foreground/80 mt-1">
+            Setup runs before the agent. Checks are scored from shop state.
+          </p>
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            onChange([...tasks, blankTask(nextTaskId(tasks))]);
-            setActive(tasks.length);
-          }}
+          className="gap-1.5"
+          onClick={() => onChange([...tasks, blankTask(nextTaskId(tasks))])}
         >
-          <Plus className="size-3.5" />
+          <Plus className="h-3.5 w-3.5" />
           Add task
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="rounded-full"
-          aria-label={`Remove ${task.title.trim() || "task"}`}
-          disabled={tasks.length === 1}
-          onClick={() => {
-            onChange(tasks.filter((_, taskIndex) => taskIndex !== index));
-            setActive(Math.max(0, index - 1));
-          }}
-        >
-          <Trash2 className="size-3.5" />
-          Remove
         </Button>
       </div>
 
-      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+      {tasks.map((task, index) => (
+        <div key={`${task.task_id}-${index}`} className="rounded-xl bg-muted/40 px-4 py-4 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs font-mono text-muted-foreground">{task.task_id || "task"}</p>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              title="Remove task"
+              disabled={tasks.length === 1}
+              onClick={() => onChange(tasks.filter((_, taskIndex) => taskIndex !== index))}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Task id" error={show ? field?.task_id : undefined}>
-                <Input
-                  value={task.task_id}
-                  aria-invalid={show && Boolean(field?.task_id)}
-                  onChange={(event) => patch(index, (next) => { next.task_id = event.target.value; })}
-                  className="font-mono text-xs"
-                />
-              </Field>
-              <Field label="Title" error={show ? field?.title : undefined}>
-                <Input
-                  value={task.title}
-                  aria-invalid={show && Boolean(field?.title)}
-                  onChange={(event) => patch(index, (next) => { next.title = event.target.value; })}
-                />
-              </Field>
-            </div>
-
-            <div className="sm:col-span-2">
-            <Field label="Prompt" error={show ? field?.prompt : undefined}>
-              <Textarea
-                value={task.prompt}
-                rows={2}
-                aria-invalid={show && Boolean(field?.prompt)}
-                placeholder="What should the agent do?"
-                onChange={(event) => patch(index, (next) => { next.prompt = event.target.value; })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Task id">
+              <Input
+                value={task.task_id}
+                onChange={(event) => patch(index, (next) => { next.task_id = event.target.value; })}
+                className="font-mono text-xs"
               />
             </Field>
-            </div>
+            <Field label="Title">
+              <Input
+                value={task.title}
+                onChange={(event) => patch(index, (next) => { next.title = event.target.value; })}
+              />
+            </Field>
+          </div>
 
-            <fieldset className="space-y-2 sm:col-span-2">
-              <legend className="text-sm font-medium">Permissions</legend>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                {TASK_PERMISSIONS.map((permission) => {
-                  const checked = task.setup.permissions.includes(permission);
-                  const id = `task-${index}-perm-${permission}`;
-                  return (
-                    <label key={permission} htmlFor={id} className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        id={id}
-                        className="mt-0.5"
-                        checked={checked}
-                        onCheckedChange={(next) =>
-                          patch(index, (taskNext) => {
-                            taskNext.setup.permissions = next
-                              ? TASK_PERMISSIONS.filter((entry) => entry === permission || taskNext.setup.permissions.includes(entry))
-                              : taskNext.setup.permissions.filter((entry) => entry !== permission);
-                          })
-                        }
-                      />
-                      <CodeTip label={permissionLabel(permission)} code={permission} />
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+          <Field label="Prompt">
+            <textarea
+              value={task.prompt}
+              onChange={(event) => patch(index, (next) => { next.prompt = event.target.value; })}
+              rows={3}
+              className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none"
+            />
+          </Field>
 
-            <div className="space-y-2 sm:col-span-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Cart seeded before the run</p>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => patch(index, (next) => { next.setup.cart = [...next.setup.cart, { sku: "", qty: 1 }]; })}
-                >
-                  Add line
-                </Button>
-              </div>
-              {task.setup.cart.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No cart lines.</p>
-              ) : (
-                task.setup.cart.map((line, lineIndex) => {
-                  const lineError = field?.cart[lineIndex];
-                  return (
-                    <div key={lineIndex} className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={line.sku}
-                          placeholder="SKU"
-                          aria-invalid={show && Boolean(lineError?.sku)}
-                          className="font-mono text-xs"
-                          onChange={(event) =>
-                            patch(index, (next) => {
-                              const cartLine = next.setup.cart[lineIndex];
-                              if (cartLine) cartLine.sku = event.target.value;
-                            })
-                          }
-                        />
-                        <Input
-                          type="number"
-                          min={1}
-                          value={line.qty}
-                          aria-label="Quantity"
-                          aria-invalid={show && Boolean(lineError?.qty)}
-                          className="w-20 font-mono text-xs"
-                          onChange={(event) =>
-                            patch(index, (next) => {
-                              const cartLine = next.setup.cart[lineIndex];
-                              const qty = Number(event.target.value);
-                              if (cartLine && Number.isInteger(qty)) cartLine.qty = qty;
-                            })
-                          }
-                        />
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label="Remove cart line"
-                          onClick={() => patch(index, (next) => { next.setup.cart = next.setup.cart.filter((_, i) => i !== lineIndex); })}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                      {show && lineError?.sku && <p className="text-xs text-destructive">{lineError.sku}</p>}
-                      {show && lineError?.qty && <p className="text-xs text-destructive">{lineError.qty}</p>}
-                    </div>
-                  );
-                })
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={task.setup.orders.some((order) => order.from_cart)}
-                  onCheckedChange={(checked) =>
-                    patch(index, (next) => {
-                      next.setup.orders = checked ? [{ from_cart: true }] : [];
-                    })
-                  }
-                />
-                Check out that cart into an order before the agent runs
-              </label>
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Checks</p>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  onClick={() =>
-                    patch(index, (next) => {
-                      next.success_test.checks = [...next.success_test.checks, checkOf("catalog_read")];
-                    })
-                  }
-                >
-                  Add check
-                </Button>
-              </div>
-              {task.success_test.checks.map((check, checkIndex) => {
-                const checkName = isCheckType(check.name) ? check.name : "catalog_read";
-                const spec = CHECK_REGISTRY[checkName];
-                const checkError = field?.checks[checkIndex];
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Granted permissions</p>
+            <div className="flex flex-wrap gap-2">
+              {TASK_PERMISSIONS.map((permission) => {
+                const active = task.setup.permissions.includes(permission);
                 return (
-                  <div key={checkIndex} className="grid items-end gap-3 rounded-xl bg-card px-3 py-3 shadow-island sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                    <div className="flex items-center gap-2 sm:col-span-2">
-                      <Select
-                        value={checkName}
-                        onValueChange={(value) => {
-                          if (!value || !isCheckType(value)) return;
-                          patch(index, (next) => {
-                            next.success_test.checks[checkIndex] = checkOf(value);
-                          });
-                        }}
-                      >
-                        <SelectTrigger aria-label="Check">
-                          <SelectValue>{(value: string | null) => (value ? checkLabel(value) : "Choose a check")}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CHECK_TYPES.map((name) => (
-                            <SelectItem key={name} value={name}>
-                              {checkLabel(name)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Remove check"
-                        disabled={task.success_test.checks.length === 1}
-                        onClick={() =>
-                          patch(index, (next) => {
-                            next.success_test.checks = next.success_test.checks.filter((_, i) => i !== checkIndex);
-                          })
-                        }
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                    <CodeTip label={spec.summary} code={checkName}>
-                      <span className="text-sm text-muted-foreground">{spec.summary}</span>
-                    </CodeTip>
-                    <Field label="What this check means" error={show ? checkError?.description : undefined}>
+                  <button
+                    key={permission}
+                    type="button"
+                    onClick={() => patch(index, (next) => { next.setup.permissions = togglePermission(next.setup.permissions, permission); })}
+                    className={
+                      active
+                        ? "px-2.5 py-1 rounded-full text-xs font-mono border border-foreground bg-foreground text-background"
+                        : "px-2.5 py-1 rounded-full text-xs font-mono border border-border text-muted-foreground"
+                    }
+                  >
+                    {permission}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Cart seeded before the run</p>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => patch(index, (next) => { next.setup.cart = [...next.setup.cart, { sku: "", qty: 1 }]; })}
+              >
+                Add line
+              </Button>
+            </div>
+            {task.setup.cart.length === 0 ? (
+              <p className="text-xs text-muted-foreground/70">No cart lines.</p>
+            ) : (
+              task.setup.cart.map((line, lineIndex) => (
+                <div key={lineIndex} className="flex items-center gap-2">
+                  <Input
+                    value={line.sku}
+                    placeholder="SKU"
+                    className="font-mono text-xs"
+                    onChange={(event) =>
+                      patch(index, (next) => {
+                        const cartLine = next.setup.cart[lineIndex];
+                        if (cartLine) cartLine.sku = event.target.value;
+                      })
+                    }
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={line.qty}
+                    className="w-20 font-mono text-xs"
+                    onChange={(event) =>
+                      patch(index, (next) => {
+                        const cartLine = next.setup.cart[lineIndex];
+                        const qty = Number(event.target.value);
+                        if (cartLine && Number.isInteger(qty)) cartLine.qty = qty;
+                      })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    title="Remove line"
+                    onClick={() => patch(index, (next) => { next.setup.cart = next.setup.cart.filter((_, i) => i !== lineIndex); })}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))
+            )}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={task.setup.orders.some((order) => order.from_cart)}
+                onChange={(event) =>
+                  patch(index, (next) => {
+                    next.setup.orders = event.target.checked ? [{ from_cart: true }] : [];
+                  })
+                }
+              />
+              Check out that cart into an order before the agent runs
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Checks</p>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() =>
+                  patch(index, (next) => {
+                    next.success_test.checks = [...next.success_test.checks, checkOf("catalog_read")];
+                  })
+                }
+              >
+                Add check
+              </Button>
+            </div>
+            {task.success_test.checks.map((check, checkIndex) => {
+              const checkName = isCheckType(check.name) ? check.name : "catalog_read";
+              const spec = CHECK_REGISTRY[checkName];
+              return (
+                <div key={checkIndex} className="rounded-lg bg-background/70 px-3 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={checkName}
+                      onChange={(event) => {
+                        const name = event.target.value;
+                        if (!isCheckType(name)) return;
+                        patch(index, (next) => {
+                          next.success_test.checks[checkIndex] = checkOf(name);
+                        });
+                      }}
+                      className="flex-1 bg-transparent text-xs font-mono border-b border-border/60 py-1 outline-none"
+                    >
+                      {CHECK_TYPES.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      title="Remove check"
+                      disabled={task.success_test.checks.length === 1}
+                      onClick={() =>
+                        patch(index, (next) => {
+                          next.success_test.checks = next.success_test.checks.filter((_, i) => i !== checkIndex);
+                        })
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{spec.summary}</p>
+                  <Input
+                    value={check.description}
+                    placeholder="What this check means"
+                    onChange={(event) =>
+                      patch(index, (next) => {
+                        const current = next.success_test.checks[checkIndex];
+                        if (current) current.description = event.target.value;
+                      })
+                    }
+                  />
+                  {spec.params.map((field) => (
+                    <Field key={field.name} label={`${field.name}${field.required ? "" : " (optional)"}`}>
                       <Input
-                        value={check.description}
-                        aria-invalid={show && Boolean(checkError?.description)}
+                        value={paramValue(check, field)}
+                        className="font-mono text-xs"
                         onChange={(event) =>
                           patch(index, (next) => {
                             const current = next.success_test.checks[checkIndex];
-                            if (current) current.description = event.target.value;
+                            if (!current) return;
+                            current.params = setParam(current.params, field, event.target.value);
                           })
                         }
                       />
                     </Field>
-                    {spec.params.map((param) => (
-                      <Field
-                        key={param.name}
-                        label={param.required ? paramLabel(param.name) : `${paramLabel(param.name)} (optional)`}
-                        error={show ? checkError?.params[param.name] : undefined}
-                        hint={param.description}
-                      >
-                        <Input
-                          value={paramValue(check, param.name)}
-                          aria-invalid={show && Boolean(checkError?.params[param.name])}
-                          className="font-mono text-xs"
-                          onChange={(event) =>
-                            patch(index, (next) => {
-                              const current = next.success_test.checks[checkIndex];
-                              if (!current) return;
-                              current.params = setParam(current.params, param.type, param.name, event.target.value);
-                            })
-                          }
-                        />
-                      </Field>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-      </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function taskHasError(error: TaskFieldError | undefined): boolean {
-  if (!error) return false;
-  return Boolean(
-    error.task_id || error.title || error.prompt || Object.keys(error.cart).length > 0 || Object.keys(error.checks).length > 0,
-  );
-}
-
-function Field({
-  label,
-  error,
-  hint,
-  children,
-}: {
-  label: string;
-  error?: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-sm font-medium">{label}</label>
+      <label className="text-xs text-muted-foreground">{label}</label>
       {children}
-      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
-      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
 
-function paramValue(check: AgentTask["success_test"]["checks"][number], name: string): string | number {
-  const value = check.params?.[name];
+function blankTask(taskId: string): AgentTask {
+  return {
+    task_id: taskId,
+    title: "Search and open a product",
+    prompt: "Search the catalog and open the matching product page.",
+    setup: { cart: [], orders: [], permissions: ["read"] },
+    success_test: {
+      type: "verifier_checks",
+      checks: [
+        { name: "catalog_read", description: "The session recorded a catalog search." },
+        checkOf("product_viewed"),
+      ],
+    },
+  };
+}
+
+function checkOf(name: CheckType): AgentTaskCheck {
+  const spec = CHECK_REGISTRY[name];
+  const params: Record<string, unknown> = {};
+  for (const field of spec.params) {
+    if (!field.required) continue;
+    params[field.name] = field.type === "integer" ? 1 : name === "product_viewed" && field.name === "product_id" ? "SKU-MUG-01" : "";
+  }
+  const check: AgentTaskCheck = {
+    name,
+    description: spec.summary,
+  };
+  if (Object.keys(params).length > 0) check.params = params;
+  return check;
+}
+
+function nextTaskId(tasks: AgentTask[]): string {
+  const used = new Set(tasks.map((task) => task.task_id));
+  let index = tasks.length + 1;
+  let id = `task-${index}`;
+  while (used.has(id)) {
+    index += 1;
+    id = `task-${index}`;
+  }
+  return id;
+}
+
+function togglePermission(current: string[], permission: string): string[] {
+  const next = new Set(current);
+  if (next.has(permission)) next.delete(permission);
+  else next.add(permission);
+  return TASK_PERMISSIONS.filter((entry) => next.has(entry));
+}
+
+function paramIssue(label: string, check: AgentTaskCheck): string | undefined {
+  if (!isCheckType(check.name)) return `${label} has an unknown check.`;
+  const params = check.params ?? {};
+  for (const field of CHECK_REGISTRY[check.name].params) {
+    const value = params[field.name];
+    if (value === undefined) {
+      if (field.required) return `${label} check ${check.name} needs ${field.name}.`;
+      continue;
+    }
+    if (field.type === "string" && (typeof value !== "string" || value.trim().length === 0)) {
+      return `${label} check ${check.name} ${field.name} must be a non-empty string.`;
+    }
+    if (field.type === "integer" && (typeof value !== "number" || !Number.isInteger(value) || value < 1)) {
+      return `${label} check ${check.name} ${field.name} must be an integer of at least 1.`;
+    }
+  }
+  return undefined;
+}
+
+function paramValue(check: AgentTaskCheck, field: CheckParamField): string | number {
+  const value = check.params?.[field.name];
   if (typeof value === "string" || typeof value === "number") return value;
   return "";
 }
 
 function setParam(
   params: Record<string, unknown> | undefined,
-  type: "string" | "integer",
-  name: string,
+  field: CheckParamField,
   raw: string,
 ): Record<string, unknown> | undefined {
   const next = { ...(params ?? {}) };
-  if (type === "integer") {
-    if (raw.trim() === "") delete next[name];
+  if (field.type === "integer") {
+    if (raw.trim() === "") delete next[field.name];
     else {
       const qty = Number(raw);
-      if (Number.isInteger(qty)) next[name] = qty;
+      if (Number.isInteger(qty)) next[field.name] = qty;
     }
   } else if (raw.trim() === "") {
-    delete next[name];
+    delete next[field.name];
   } else {
-    next[name] = raw;
+    next[field.name] = raw;
   }
   return Object.keys(next).length > 0 ? next : undefined;
 }
