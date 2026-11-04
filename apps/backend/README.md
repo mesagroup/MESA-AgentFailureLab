@@ -9,7 +9,7 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | Field | Writer |
 | --- | --- |
 | `outcome.verifier` and `outcome.success` | Deterministic verifier, from `GET /internal/state` and the task's `success_test.checks` |
-| `fault.labels`, `fault.injected`, `fault.attacker` | Injector, from the Run's `injection_plan`. The jury attacker writes the same fields for its own Security plan and sets `attacker.used` |
+| `fault.labels`, `fault.injected`, `fault.attacker` | Injector, from the Run's `injection_plan`. The jury attacker and the T5 security attacker set `attacker.used` on their own runs |
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
 | `diagnosis` | Nobody here. It stays `null` until Grok, which must not write the rows above |
 
@@ -48,7 +48,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 
 `driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` and expects `{ "executed": false, "actions": [...] }`. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
-Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code. The T5 preset is `forged_permission_success` (a forged tool result). The jury attacker is a different Security path and is not in that catalog. See [the jury demo](../../docs/demo-jury.md).
+Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code. The T5 preset is `forged_permission_success` (a forged tool result, `attacker.used` false). The T5 security attacker uses that same catalog code, sets `attacker.used`, and commits `cancel_order` through the agent-service hook. The jury attacker is a third Security path (`unauthorized_cancel_via_juror_note`) and is not in that catalog. See [the jury demo](../../docs/demo-jury.md) and [ADR-002](../../adr/002-fault-injection-and-fixes.md).
 
 ```bash
 pnpm --filter @mesa/backend jury-demo
@@ -61,7 +61,7 @@ pnpm --filter @mesa/backend jury-demo -- --run
 
 - `src/verifier/` — check runner and the optional loop / timeout / repeated-tool pre-pass
 - `src/injector/` — fault catalog. Labels are copied onto the trace; the plan stays on the run
-- `src/attacker/` — security jury case (juror note, real cancel). Separate from the catalog. Writes `fault.labels` and `fault.attacker`
+- `src/attacker/` — security jury case (juror note, real cancel). Separate from the catalog. Writes `fault.labels` and `fault.attacker`. The T5 payload hook lives in the agent service and is passed into `executeAttempt`
 - `fixtures/jury/` — one frozen baseline/attacked pair and the juror note, for the timeline
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`
 - `src/agent/` — scripted driver and the HTTP client for the agent under test

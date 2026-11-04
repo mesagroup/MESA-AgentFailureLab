@@ -102,6 +102,7 @@ The backend harness records `fix_kinds` and replays the task (`Run.phase = after
 - `src/fixes/` — the three `FixKind` policies, as a wrapper around a shop tool client
 - `src/replay/` — before/after report. Pass/fail is copied from the backend verifier
 - `src/reference-agent/` — `planTaskRun` for `POST /v1/tasks/run`. It calls `applyFixesToPlan` and does not call tools.
+- `src/security/` — T5 security payload `forged_permission_success` (`security-forged-permission-success`) and `createSecurityToolHook`. The hook does not write `fault.*` or `outcome.verifier`. `scripts/security-attack.ts` passes it to the backend injector. This is not the jury attacker (#17). `fix_kinds` on the agent request is #61 / #40.
 
 Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
 

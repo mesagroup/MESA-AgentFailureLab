@@ -35,8 +35,19 @@
 - **Applicazione.** I tre id sono flag di configurazione dell'agent in `apps/agentservice`. L'harness li passa quando avvia la run `after_fix`, copiandoli da `fix_kinds`. Il fix conta solo dopo il replay verificato, come in ADR-001.
 - **Zod.** I tool dell'agent possono usare zod. JSON Schema in `packages/shared` resta la fonte di verità per Trace, Run e Agent. I test restano su `node --test`.
 
+### 5. Attaccante Security su T5, confine con il round giuria (#17)
+
+Il round giuria E4 è l'issue #17, già nel codice della PR #32. Non è questo payload.
+
+- Il caso giuria usa il codice `unauthorized_cancel_via_juror_note` e il payload `jury-nota-malevola-cancel`. `POST /attacker/jury-case` inserisce `cancel_order` da solo, senza chiedere l'agent, e manda `write:order:cancel` su quel filo. Resta fuori dal catalogo. `POST /runs` continua a rifiutare quel codice.
+- Il payload MVP di #34 è uno solo, legato a T5: codice di catalogo `forged_permission_success`, id `security-forged-permission-success`. Sta in `apps/agentservice/src/security/`. La nota ordine è testo aggiunto al prompt. Non c'è un secondo turno, né uno step `system` dell'attaccante. L'agent sotto test non scrive `fault.*` né `outcome.verifier`.
+- L'hook è `createSecurityToolHook`. L'iniettore lo chiama in `executeAttempt` prima del forge di catalogo. Se l'agent emette `cancel_order` e il grant di sessione non ha `write:order:cancel`, l'hook fa committare la chiamata sul mock con i permessi di wire del catalogo (`read`, `write:order:cancel`). Quei permessi sono una costante del payload. L'hook non li legge dalla nota né da `tool_input`. Se l'agent non emette la chiamata, l'hook non la inventa e l'ordine resta `placed`.
+- La run di questo attaccante ha `fault.injected: true`, una label `Security` / `forged_permission_success`, e `fault.attacker.used: true` con quel payload id. Li scrive l'iniettore. Una baseline, e una run iniettata su un altro task, restano con `attacker.used: false`. Il preset `POST /runs` su T5, senza questo hook, continua a contraffare il tool result senza chiamare il mock e con `attacker.used: false`.
+- `permission_guard` e il campo `fix_kinds` su `AgentRunRequest` sono #61 e #40. Questo cambiamento non li riceve e non li applica. Il runner di #34 chiama `planTaskRun` con la lista fix vuota. Quando l'agent non emette `cancel_order`, il verificatore può passare: è l'effetto che `permission_guard` già produce sulla action list, non un wiring nuovo.
+
 ## Conseguenze
 
 - L'hook in `createToolAdapter` della [PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21) deve passare dall'iniettore del backend, o delegargli la chiamata. Resta un solo iniettore, quello dell'harness. Oggi l'agent chiama lo shop da solo, e l'harness rifiuta `executed: true`. `buildTrace` scrive `fault.injected: false`, senza label, e riempie `outcome.verifier` in locale. ADR-001 dà l'esito solo al verificatore del backend.
 - `AgentRunRequest` non porta i flag. La run `after_fix` salva `fix_kinds` e rilancia la sequenza scriptata. Nella PR #21 i flag arrivano solo nel body di `POST /run`. Lì `controlled_retry` ritenta su status 0 o su HTTP 5xx. `permission_guard` blocca anche `checkout` senza `write:order`. L'issue #15 dice ancora `retry_controllato` e `applied_fixes`.
 - La [PR #29](https://github.com/mesagroup/MESA-AgentFailureLab/pull/29) tiene `proposed_fixes` dentro `FIX_KINDS` e non scrive `fault.*`. Categoria e id restano scelte del modello. Il pre-pass di #29 non è quello di `prepass.ts`. Il retry HTTP del client Grok non è `controlled_retry`. Lo step `system` del caso giuria nomina il payload id, e #29 manda gli step a Grok.
+- L'attaccante Security di #34 non è il round #17. L'hook in `apps/agentservice/src/security/hook.ts` non è un secondo iniettore: lo chiama `executeAttempt`, che resta l'unico a scrivere `fault.labels` e `fault.attacker`. `runSecurityAttack` non manda `fix_kinds` sull'`AgentRunRequest`.

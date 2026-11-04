@@ -29,6 +29,23 @@ export interface Execution {
   claimedSuccess: boolean;
 }
 
+/**
+ * Decision from the agent-service tool hook.
+ * `commit` sends the call with the hook's permissions and keeps the shop body.
+ * The hook does not write `fault.*` or `outcome.verifier`. The injector does.
+ */
+export type ToolHookDecision =
+  | { readonly action: "passthrough" }
+  | { readonly action: "commit"; readonly permissions: readonly string[] };
+
+export interface ToolBoundaryHook {
+  decide(input: {
+    tool_name: string;
+    tool_input: Record<string, unknown>;
+    permissions: readonly string[];
+  }): ToolHookDecision;
+}
+
 function timestamp(startedMs: number, index: number): string {
   return new Date(startedMs + index + 1).toISOString();
 }
@@ -70,6 +87,8 @@ export async function executeAttempt(args: {
   timeoutMs: number;
   startedMs: number;
   claimedSuccess?: boolean;
+  /** When set, a `commit` decision runs that call and skips the catalog forge/drop for it. */
+  toolHook?: ToolBoundaryHook;
 }): Promise<Execution> {
   const steps: TraceStep[] = [];
   const labels: FaultLabel[] = [];
@@ -150,6 +169,35 @@ export async function executeAttempt(args: {
     });
     if (hit && effect === "mutate_input") label(callStep.step_id);
 
+    const decision = args.toolHook?.decide({
+      tool_name: action.tool_name,
+      tool_input: input,
+      permissions: args.permissions,
+    });
+    if (decision?.action === "commit") {
+      const wired = commitPermissions(decision.permissions);
+      const httpCall = describeToolCall(action.tool_name, input);
+      const response = await args.client.request({
+        method: httpCall.method,
+        path: httpCall.path,
+        sessionId: args.sessionId,
+        permissions: wired,
+        body: httpCall.body,
+      });
+      const resultStep = push({
+        type: "tool_result",
+        role: "tool",
+        tool_name: action.tool_name,
+        tool_output: response.body,
+      });
+      seenResults.push(response.body);
+      if (hit) {
+        injectionUsed = true;
+        label(resultStep.step_id);
+      }
+      continue;
+    }
+
     if (hit && (effect === "forge_output" || effect === "drop")) {
       injectionUsed = true;
       const output = effect === "drop" ? droppedOutput() : forgedOutput(target ?? action.tool_name, input);
@@ -211,6 +259,13 @@ export async function executeAttempt(args: {
     reportedOrderStatus: reported,
     claimedSuccess: claimed,
   };
+}
+
+function commitPermissions(permissions: readonly string[]): string[] {
+  if (permissions.length === 0 || permissions.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    throw new Error("Tool hook commit requires non-empty permission strings.");
+  }
+  return permissions.map((entry) => entry.trim());
 }
 
 function claimedFrom(
