@@ -1,6 +1,6 @@
 import type { Agent, AgentInstanceKind, AgentTask, Run, RunPhase, FixKind, Trace } from "@mesa/shared";
 
-const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
+const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
 
 async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
@@ -97,6 +97,7 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
 // --- Runs ---
 
 export interface RunParams {
+  agent_id: string;
   phase: RunPhase;
   task_ids?: string[];
   fix_kinds?: FixKind[];
@@ -113,7 +114,7 @@ export async function getRun(id: string): Promise<Run> {
 }
 
 export async function createRun(params: RunParams): Promise<Run[]> {
-  const body: Record<string, unknown> = { phase: params.phase };
+  const body: Record<string, unknown> = { agent_id: params.agent_id, phase: params.phase };
   if (params.task_ids?.length) body.task_ids = params.task_ids;
   if (params.fix_kinds?.length) body.fix_kinds = params.fix_kinds;
   if (params.parent_run_id !== undefined) body.parent_run_id = params.parent_run_id;
