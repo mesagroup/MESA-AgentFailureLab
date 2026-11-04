@@ -2,7 +2,7 @@
 
 Monorepo for Track 03 — Agent Failure Lab / CHAOS.AI. Frontend, Backend, and the AI Engineer each get an app. Contracts, product docs, and architecture decisions sit outside those apps.
 
-The lab runs a shopping agent against a mock store, scores the task with a deterministic verifier, and uses Grok only to diagnose failures and propose fixes. A fix counts after the harness replays it and the verifier agrees. Details: [docs/overview.md](docs/overview.md) and [ADR-001](adr/001-mock-verifier-grok.md).
+The lab runs a shopping agent against a mock store, scores the task with a deterministic verifier, and uses Grok only to diagnose failures and propose fixes. A fix counts after the harness replays it and the verifier agrees. The shop is its own HTTP server. The harness and the agent service call it by URL. Details: [docs/overview.md](docs/overview.md), [docs/architecture.md](docs/architecture.md), and [ADR-001](adr/001-mock-verifier-grok.md).
 
 ## Monorepo map
 
@@ -13,7 +13,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
     backend/         # harness, verifier, injector, persistence
     agentservice/    # Grok reference agent, diagnosis, fix proposals
   services/
-    mock-shop/       # inspectable e-commerce API for T1–T5
+    mock-shop/       # stand-alone HTTP shop; external target via URL, port 8787
   packages/
     shared/          # JSON Schema + TypeScript contracts (Trace, Agent, Run)
   docs/              # product and contributor docs (not ADRs)
@@ -27,10 +27,10 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
 | [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. |
-| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Mock shop: catalog, cart, checkout, cancel, `GET /internal/state`. Not inside `apps/backend`. |
+| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. Harness calls `MOCK_SHOP_URL`. The agent service calls a configured tool base URL. Own process, separate from the harness. |
 | [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference agent and Grok diagnosis. Writes `diagnosis` only. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
-| [`docs/`](docs/README.md) | All | Overview and contributor guide. |
+| [`docs/`](docs/README.md) | All | Overview, runtime architecture, and contributor guide. |
 | [`adr/`](adr/README.md) | Architect | Numbered ADRs, separate from `docs/`. |
 
 ## Install and run
@@ -76,11 +76,12 @@ docker compose up --build
 | `mesa-backend` | 3001 | `GET /health` |
 | `mesa-agentservice` | 3002 | `GET /health` |
 
-Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`). The Render Blueprint groups the same three free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
+Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`). The Render Blueprint groups the same three free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. The shop stays off that stack: run `@mesa/mock-shop` yourself on port 8787 and set `MOCK_SHOP_URL`. It is not a Blueprint service yet ([#21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
 
 ## Docs
 
 - [Overview](docs/overview.md) — product, track, boundaries
+- [Architecture](docs/architecture.md) — stand-alone mock shop, ports, ADR-001 writers, Render
 - [Getting started](docs/getting-started.md) — contributor workflow and stack choices
 - [Jury demo](docs/demo-jury.md) — one security case, baseline comparison, limitations
 - [Deploy](docs/deploy.md) — Docker, Compose, Render Blueprint, secrets
