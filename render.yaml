@@ -1,6 +1,6 @@
 # MESA Agent Failure Lab — Render Blueprint.
 # Applying this file creates project mesa-agent-failure-lab / environment demo
-# and the three web services inside it. Do not also declare those services at
+# and the four web services inside it. Do not also declare those services at
 # the root, or they land loose on the workspace.
 # Preview environments and per-service PR previews stay off.
 # This file does not contain secret values. XAI_API_KEY is sync: false.
@@ -86,6 +86,14 @@ projects:
                 value: https://mesa-agentservice.onrender.com
               - key: FRONTEND_URL
                 value: https://mesa-frontend-rleq.onrender.com
+              # Intended public host for service name mesa-mock-shop.
+              # Not assigned until this Blueprint is applied. If Render appends
+              # a suffix, update this value and the Dashboard together before
+              # the next sync. See docs/deploy.md.
+              # The agent service does not read a shop URL. The harness copies
+              # MOCK_SHOP_URL into mock_base_url on POST /v1/tasks/run.
+              - key: MOCK_SHOP_URL
+                value: https://mesa-mock-shop.onrender.com
 
           - type: web
             name: mesa-agentservice
@@ -124,3 +132,28 @@ projects:
                 value: https://mesa-backend-itm4.onrender.com
               - key: FRONTEND_URL
                 value: https://mesa-frontend-rleq.onrender.com
+
+          - type: web
+            name: mesa-mock-shop
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./services/mock-shop/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - services/mock-shop/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 8787

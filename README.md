@@ -119,12 +119,13 @@ Copy an app's `.env.example` to `.env` only when you need overrides. Do not comm
 
 ## Docker and Render
 
-Three images, built from the repo root so `packages/shared` is in the context:
+Four images, built from the repo root so the workspace is in the context:
 
 ```bash
 docker build -f apps/frontend/Dockerfile -t mesa-frontend .
 docker build -f apps/backend/Dockerfile -t mesa-backend .
 docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .
+docker build -f services/mock-shop/Dockerfile -t mesa-mock-shop .
 docker compose up --build
 ```
 
@@ -133,8 +134,9 @@ docker compose up --build
 | `mesa-frontend` | 3000 | `GET /health` |
 | `mesa-backend` | 3001 | `GET /health` |
 | `mesa-agentservice` | 3002 | `GET /health` |
+| `mesa-mock-shop` | 8787 | `GET /health` |
 
-Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`). The Render Blueprint groups the same three free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. The shop stays off that stack: run `@mesa/mock-shop` yourself on port 8787 and set `MOCK_SHOP_URL`. It is not a Blueprint service yet ([#21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
+Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`, `mesa-mock-shop`) and sets the harness `MOCK_SHOP_URL` to `http://mesa-mock-shop:8787`. The Render Blueprint groups the same four free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. The shop stays its own service. Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
 
 ## Docs
 

@@ -1,4 +1,4 @@
-# Install, build, test, and dry-build the three images.
+# Install, build, test, and dry-build the four images.
 # No registry push. No secrets are read or printed.
 
 name: CI
@@ -73,6 +73,9 @@ jobs:
           - image: mesa-agentservice
             file: apps/agentservice/Dockerfile
             port: 3002
+          - image: mesa-mock-shop
+            file: services/mock-shop/Dockerfile
+            port: 8787
     steps:
       - name: Checkout
         uses: actions/checkout@v4
