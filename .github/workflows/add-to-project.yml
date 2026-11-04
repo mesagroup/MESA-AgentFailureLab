@@ -1,0 +1,24 @@
+# Add opened, reopened, and transferred issues to the org Project.
+# Requires the ADD_TO_PROJECT_PAT secret. GITHUB_TOKEN cannot access Projects.
+
+name: Add issues to project
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+      - transferred
+
+permissions: {}
+
+jobs:
+  add-to-project:
+    name: Add issue to project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to org project
+        uses: actions/add-to-project@v2
+        with:
+          project-url: https://github.com/orgs/mesagroup/projects/31
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
