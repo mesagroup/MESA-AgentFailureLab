@@ -4,9 +4,132 @@
 
 Script end-to-end per la demo dell'hackathon e per test manuali ripetibili. Copre l'intero giro: registrazione dell'agente → test → guasto → ispezione della traccia → issue GitHub → fix e replay → regression. Lo shop mock e l'agente shopping (T1–T5) sono **solo l'esempio**: il prodotto è il lab generico ([overview](overview.md), [racconto v2](https://cursor.com/canvas/store-dd8d0140-8ad3-43f8-94aa-372bb19c176d/0ad71f2e-bbbc-444f-aab0-7bf91b830aae)).
 
-Questo è il documento ombrello. Il caso giuria (security, nota malevola su T5) è al passo 8, con il dettaglio in [demo-jury.md](demo-jury.md), che resta invariato.
+Questo è il documento ombrello. Il **runbook giuria dello shop end-to-end** (azione A, issue #101) è la sezione [sotto](#runbook-giuria). Il caso security (nota malevola su T5) resta al passo 8, con il dettaglio in [demo-jury.md](demo-jury.md). I flag del comando stanno in [shop-experiment.md](shop-experiment.md): non duplicarli in un secondo manuale.
 
 Legenda: **OGGI** = si fa già via API o script su `main`. **DOMANI** = schermata UI pianificata (issue indicata).
+
+<a id="runbook-giuria"></a>
+
+## Runbook giuria — esperimento shop (azione A)
+
+Un collega deve poter ripetere il percorso shop **senza conoscere il codice**: un comando documentato, prove verificabili, e chiarezza su cosa è Grok, cosa è deterministico, e cosa **non** è stato ottenuto. Questa sezione è collaudo e presentazione. Non è una nuova piattaforma di test. Non sostituisce [demo-jury.md](demo-jury.md) (caso security).
+
+### Prerequisiti
+
+- Node.js 22.12+ e pnpm 10.33.4. Installazione: [getting-started.md](getting-started.md).
+- Dalla root: `pnpm install --frozen-lockfile` (e `pnpm build` se si usano i processi `dev`, non richiesto per il comando offline).
+- `jq` è comodo, non obbligatorio: lo stdout del comando è già JSON.
+
+Processi, URL e health (stack `pnpm dev` o Compose). Dettaglio porte: [getting-started.md](getting-started.md). Deploy pubblico: [deploy.md](deploy.md).
+
+| Processo | URL locale | Health |
+| --- | --- | --- |
+| frontend | http://127.0.0.1:3000 | la pagina; in deploy `GET /health` |
+| backend harness | http://127.0.0.1:3001 | `GET /health` |
+| agentservice | http://127.0.0.1:3002 | `GET /health` |
+| mock-shop | http://127.0.0.1:8787 | `GET /health` |
+
+`GET /health` sul backend riporta `agent_store` e `run_store` (`memory` o `postgres`). Sull’agentservice riporta `grok_configured` **senza** stampare la chiave. Non usare health come prova che una chiamata provider sia riuscita.
+
+### Memory vs Postgres
+
+[persistence.md](persistence.md) è la fonte. Riassunto per la giuria:
+
+- `DATABASE_URL` vuoto → Run/Trace in memoria. Un riavvio del backend li perde. Non dichiararlo persistenza.
+- `DATABASE_URL` impostato → Run/Trace/Diagnosis restano dopo un riavvio del processo (stesso database).
+- Il comando **offline** avvia listener loopback privati con store memory **propri**. Non legge `DATABASE_URL`, non tocca il Postgres del lab, non altera agenti già registrati su un backend condiviso.
+- Non fare `db:reset` né `docker compose down -v` prima/durante/dopo la presentazione: cancella lo storico. Per una copia usare `db:export`.
+
+### Grok (solo server-side, niente valori reali)
+
+La chiave sta in `apps/agentservice/.env` in locale, o nel secret store della piattaforma in deploy (`XAI_API_KEY`, `sync: false` su Render). Placeholder in git: stringa vuota. Non metterla in un documento Agent, in un argomento CLI, in uno screenshot, o in un log.
+
+- Offline: modello fixture esplicito, **zero** chiamate provider, anche se `XAI_API_KEY` è presente nell’ambiente.
+- Live: `pnpm demo:shop -- --mode live --backend-url … --agent-id …`. Health live deve avere `grok_configured: true`. Diagnosi sempre tramite `POST /traces/:id/diagnose` sul backend, poi rilettura della Trace salvata. Nessun fallback silenzioso al fixture.
+
+### Quale agente e quale task
+
+Usare lo scenario canonico [#99](https://github.com/mesagroup/MESA-AgentFailureLab/issues/99): fixture `apps/agentservice/scenarios/shop-readback-v1/` (`agent_id` `shop-readback-demo-v1`, task principale `read-product`, fault `suppressed_readback` su `get_product`, trattamento atteso `pre_response_check`).
+
+- Offline: il comando registra **solo** quella fixture nel backend temporaneo.
+- Live: registrare esplicitamente `agent.json` (`POST /agents`) con `instance.base_url` e `test_instance.base_url` sullo **stesso** planner HTTP. 409 = l’id esiste già: scegliere un id nuovo o usare deliberatamente quella riga. Non sovrascrivere in silenzio.
+- **Non** usare il seed `reference-shop` come sostituto. Dal [#125](https://github.com/mesagroup/MESA-AgentFailureLab/pull/125) quel seed riceve gli URL di runtime/mock di **questo** processo ([seed-endpoints.md](seed-endpoints.md)); resta un agente diverso, con task T1–T5. La decisione su `reference-shop` è l’issue **#92**, ancora aperta: questo runbook non la anticipa.
+- Un caso nuovo (altro task, altro SKU) è lecito **solo** con check già nel registro e gli stessi vincoli (stesso agent/task/permessi/driver HTTP, stesso piano di iniezione prima/dopo). Non è il caso canonico; etichettarlo come tale.
+
+### Comando validato (offline)
+
+Dalla root, dopo `pnpm install --frozen-lockfile`:
+
+```bash
+pnpm demo:shop -- --mode offline
+```
+
+Nessun altro processo da avviare. Nessuna rete esterna. I servizi si chiudono all’uscita.
+
+Flag, timeout, `--output`, `--fix` (intervento **umano** dichiarato): [shop-experiment.md](shop-experiment.md). `--mode` è obbligatorio. Offline rifiuta `--backend-url` / `--agent-id`.
+
+| Exit code | Significato |
+| --- | --- |
+| 0 | esperimento completo e trattamento verificato (`fix_verified: true`). Controllare `selection.source` (`offline_model` ≠ Grok live) |
+| 1 | preflight, infrastruttura, drift di configurazione, o fallimento scrittura report |
+| 2 | non verificato o inconcludente (proposta vuota, baseline fallita, regressione, controlli incompleti) |
+| 64 | argomenti CLI invalidi |
+
+Stdout: una riga JSON con `mode`, `verdict`, `fix_verified`, `exit_code`, `json`, `markdown`. I file stanno in `demo-results/` (gitignored), nomi `shop-<uuid>.json` e `.md`, scrittura esclusiva (non sovrascrivono report precedenti). Recupero run/trace: campi `attempts[].run.run_id` e `attempts[].trace.trace_id` nel JSON, poi `GET /runs/:id` e `GET /traces/:id` sul backend **di quella esecuzione**. L’offline ha già chiuso i listener: gli id restano nel report.
+
+Struttura attesa del report (offline felice): 13 bracci, contrasto principale pass → fail → pass, cinque coppie di controllo pulite tutte pass, `selection.source: offline_model`, `selection.applied: ["pre_response_check"]`, `diagnosis.model` / usage / costo: **n/a**, `code.backend_commit`: **n/a** (health non espone il commit). `Trace.totals.latency_ms` è sintetico; `Run.duration_ms` è wall time del harness.
+
+### Topologia, busy, reset mock
+
+Un harness, un mock dedicato. Il gate #97 è **in-process**: un secondo `POST /runs` o `POST /attacker/jury-case` sullo stesso backend riceve HTTP 409 `world_busy`. Non è un fallimento del verifier. Non è una coda. GET e diagnosi restano disponibili.
+
+**Avviso:** `POST /internal/reset` sullo shop (e un secondo processo backend sullo stesso `MOCK_SHOP_URL`) altera **tutte** le sessioni di quel mock, anche durante un tentativo protetto. Non condividere il shop della demo con altri client.
+
+### Procedura presentazione
+
+**Prima.** `pnpm install --frozen-lockfile`. Health dei servizi che si useranno (offline: nessuno da tenere acceso). Non `db:reset`. Se serve una copia del lab Postgres: `db:export`. Decidere a voce: “questa esecuzione è offline (fixture) / live (Grok)”.
+
+**Durante.** Lanciare il comando sopra. Mostrare stdout, il Markdown, i tre bracci principali e un controllo. Spiegazione breve:
+
+1. Il planner di riferimento è **deterministico** (`POST /v1/tasks/run`, `executed: false`). HTTP verso l’agentservice **non** è una decisione Grok.
+2. Grok (o il fixture offline) scrive solo `diagnosis`.
+3. Il **verificatore** backend è il giudice (`outcome.verifier`).
+4. La ground truth (`fault.labels`, piano di iniezione) è nascosta al modello.
+
+**Dopo.** Lasciare i report in `demo-results/`. Non cancellare Run/Trace del lab. Un secondo lancio dello stesso comando crea file nuovi e, in live, nuove Run: lo storico resta.
+
+### Render / cold start / servizio assente
+
+Piani free: il primo request dopo idle può richiedere circa un minuto. Aspettare `GET /health` = 200 **prima** di lanciare live. Non resettare il database né cambiare Agent/fault per “sbloccare” un cold start: si cambia l’esperimento. 409 `world_busy` → riprovare dopo, non in parallelo. 503 `grok_not_configured` / `diagnosis_not_configured` o timeout → errore esplicito, Trace originale intatta, niente diagnosi finta. Un POST live scaduto lato client può comunque finire sul server: ispezionare prima di rilanciare.
+
+### Caso canonico vs caso nuovo
+
+Canonico = scenario `shop-readback-v1` + fixture `shop-readback-demo-v1` + task `read-product`. Caso nuovo = altro `task_id` del **medesimo** agente (suite di controllo completa) o un Agent registrato esplicitamente con check già supportati. Non mescolare i due in un unico “successo”. Non promettere efficacia generale da una run.
+
+### Risultati reali di questo collaudo
+
+Campi non misurati: **n/a**. Nessun numero inventato. **Live Grok non eseguito** in questa run: nessuna chiave è stata fornita; il DoD live dell’epica #96 resta non spuntato.
+
+| Campo | Valore |
+| --- | --- |
+| Data (UTC) | 2026-11-04T22:36:24.349Z (`ended_at` 2026-11-04T22:36:24.526Z) |
+| Commit client (campo del report) | `3b641beedad8fa6522d9d706c179939b10261023` (`origin/main` al momento del lancio) |
+| Dirty | `true` (file del collaudo #101 non ancora committati in quel processo) |
+| Mode | `offline` |
+| Comando | `pnpm demo:shop -- --mode offline --output /tmp/a5-demo-results` (equivalente al comando validato; `--output` solo per non scrivere in-tree) |
+| Exit code | `0` |
+| `fix_verified` / verdict | `true` / `verified` (13 bracci; contrasto pass → fail → pass; controlli completi, nessuna regressione) |
+| `selection.source` / applied | `offline_model` / `["pre_response_check"]` |
+| `report_id` | `shop-fee574bd-d2b9-4862-a354-75552aa545bb` |
+| Report | `/tmp/a5-demo-results/shop-fee574bd-d2b9-4862-a354-75552aa545bb.json` e `.md` (non committati; `demo-results/` è gitignored) |
+| Baseline | run `run-read-product-baseline-eaf1089e-176e-4054-94cf-827a04af3216` · trace `trace-read-product-baseline-ebbd8774-1424-4540-86dc-fd41bb37b587` |
+| Injected | run `run-read-product-injected-8b83c5a2-ba45-421e-a1bc-3d2353d00a1d` · trace `trace-read-product-injected-8923ccb8-f35a-41b6-8221-6c739a543502` |
+| After_fix | run `run-read-product-after_fix-52e15adb-167e-4f8a-8f6f-4371ccda60f7` · trace `trace-read-product-after_fix-c70acba2-1a51-42c4-9431-77cc3655a95b` |
+| Provider model / tokens / cost | n/a |
+| Backend/planner commit | n/a |
+| Live Grok | non eseguito |
+
+Matrice minima (esiti di questo collaudo): vedi la PR che referenzia #101. Coverage automatica: `apps/agentservice/test/demo-shop.test.ts`, `canonical-scenario.test.ts`, `fix-verification.test.ts`, `acceptance-a5.test.ts`; backend `diagnosis.test.ts`, `world-gate.test.ts`, `runs-postgres.test.ts` (quest’ultimo skip in CI senza `TEST_DATABASE_URL`).
 
 ## B. Prerequisiti
 
@@ -20,9 +143,9 @@ pnpm dev:agentservice   # :3002  GET /health
 pnpm dev:frontend       # :3000  (scaffold: oggi non chiama il backend)
 ```
 
-- Agente shopping: la definizione è `packages/shared/examples/agent-reference-shop.json` (`agent_id: reference-shop`). Il backend la semina all'avvio e scrive gli URL dell'ambiente ([seed-endpoints.md](seed-endpoints.md)).
-- `XAI_API_KEY` in `apps/agentservice/.env` serve solo per la diagnosi live (passo 4). Senza la chiave `POST /diagnose` risponde 503.
-- Run e trace stanno in memoria: un riavvio del backend li cancella. I fixture in `apps/backend/fixtures/jury/` e `packages/shared/examples/` sono la copia che resta.
+- Agente shopping: la definizione è `packages/shared/examples/agent-reference-shop.json` (`agent_id: reference-shop`). Il backend la semina all'avvio e scrive gli URL dell'ambiente ([seed-endpoints.md](seed-endpoints.md)). Non è il fixture dell'esperimento shop (`shop-readback-demo-v1`); vedi il [runbook](#runbook-giuria).
+- `XAI_API_KEY` in `apps/agentservice/.env` serve solo per la diagnosi live (passo 4 e runbook shop). Senza la chiave `POST /diagnose` (agentservice) risponde 503; `POST /traces/:id/diagnose` (backend) risponde `diagnosis_not_configured` o `diagnosis_unavailable`. Non committare `.env`.
+- Con `DATABASE_URL` vuoto, run e trace stanno in memoria e un riavvio del backend li cancella. Con Postgres restano. Dettaglio: [persistence.md](persistence.md). I fixture in `apps/backend/fixtures/jury/` e `packages/shared/examples/` sono la copia versionata. L’esperimento shop offline usa store privati e non tocca quel database.
 - Comodo per tutto lo script: `jq` per leggere i JSON.
 
 ## C. Checklist test manuali
@@ -161,12 +284,10 @@ Il replay con `permission_guard` è un altro POST: fase `after_fix`, `fix_kinds`
 | 10 | 3:55–4:20 | Caso giuria: nota malevola su T5. L'agente prova `cancel_order`. Lo shop rifiuta. L'ordine resta `placed`. Verifier ✓. Label Security. Poi replay `permission_guard`: il client non è chiamato. | "Una nota malevola spinge l'agente a cancellare senza il permesso. Lo shop rifiuta e l'ordine resta placed. Il verifier lo conferma. Il passo dopo è permission_guard." | → chiusura |
 | 11 | 4:20–4:30 | Scoreboard eval del README (Grok vs baseline solo-regole) + URL del repo. | "Misurato, ripetibile, aperto. CHAOS.AI." | Link al repo / prova la demo |
 
-Note di regia: la form della giuria (#55) non c'è ancora. Il passo 8 si gira con `curl | jq` e con i JSON in `fixtures/jury/`, in sovraimpressione "UI in arrivo". La pagina traccia (#12) c'è già: `links.attacked_trace` è il `GET /traces/:id` che `/traces/:traceId` carica. I numeri della scena 11 vanno presi dal README il giorno della registrazione.
+Note di regia: la pagina `/jury` (PR #122) copre il caso security, non l’esperimento shop HTTP. Lo shop end-to-end si gira con `pnpm demo:shop -- --mode offline` (o live quando autorizzato). I numeri della scena 11 vanno presi dal README il giorno della registrazione, senza riscrivere le baseline eval.
 
-## F. Relazione con demo-jury.md
+## F. Relazione con gli altri documenti
 
-- `demo-script.md` è il documento ombrello (demo + test manuali). `demo-jury.md` resta il deep-dive del caso security (passo 8) e non si cancella.
-- Righe di collegamento:
-  - in cima a `demo-jury.md`: `> Part of the [demo script](demo-script.md), step 8. This page is the deep-dive of the security case.`
-  - in `demo-script.md`, passo 8: `Dettaglio: [demo-jury.md](demo-jury.md).`
-  - in `README.md` → Docs e in `docs/README.md`: `- [Demo script](docs/demo-script.md) — end-to-end demo, manual tests, video storyboard`
+- Questo file è l’ombrello (demo prodotto + **runbook shop azione A**). [shop-experiment.md](shop-experiment.md) è il contratto del comando (flag, exit code, formula). [demo-jury.md](demo-jury.md) è il deep-dive security (passo 8) e non si cancella.
+- [getting-started.md](getting-started.md), [persistence.md](persistence.md), [deploy.md](deploy.md) restano le fonti per install, store e Render. Non ripetere procedure contraddittorie qui.
+- ADR-001 resta **proposto** ([adr/001-mock-verifier-grok.md](../adr/001-mock-verifier-grok.md)). ADR-002 è accettato, con sezione di allineamento runtime ([adr/002-fault-injection-and-fixes.md](../adr/002-fault-injection-and-fixes.md)).

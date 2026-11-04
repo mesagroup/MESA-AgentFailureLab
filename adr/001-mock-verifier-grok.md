@@ -41,6 +41,17 @@ Tre componenti con responsabilità esclusive.
 - OpenAPI mock può `$ref` JSON Schema in `/packages/shared`; SoT schemi = JSON Schema, non OpenAPI.
 - Fuori MVP: auth, aggregazione multi-run, LLM-as-judge sull’esito.
 
+## Stato e proposta per il team (issue #101)
+
+Lo **stato resta proposto**. Il runtime su `main` già rispetta i confini sopra (verificatore su `outcome.verifier`, iniettore/attaccante su `fault.*`, Grok solo su `diagnosis`, persistenza della diagnosi via `POST /traces/:traceId/diagnose` nelle PR #98/#102). Questa issue **non** marca ADR-001 come accettato.
+
+Proposta da votare in team, senza effetto finché non c’è consenso:
+
+- passare lo stato a **accettato** se i tre confini e la ground truth di questa ADR restano la regola;
+- lasciare **proposto** se si vuole un freeze formale successivo, dopo la prova live autorizzata.
+
+Non è un’accettazione implicita. Non cambia ADR-002.
+
 ## Allineamento giuria (Track 03)
 - Accuratezza classificazione su GT annotate / iniettore.
 - Precisione step.

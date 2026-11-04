@@ -2,6 +2,8 @@
 
 Work in the app you own. Shared contracts and docs stay outside the apps so the three teams do not edit the same package for day-to-day features.
 
+The jury shop experiment (azione A) is a documented command, not a new platform. Repeatable offline runbook: [demo-script.md](demo-script.md#runbook-giuria). Flags and exit codes: [shop-experiment.md](shop-experiment.md). Persistence (memory vs Postgres): [persistence.md](persistence.md). Hosted URLs and cold start: [deploy.md](deploy.md).
+
 ## Prerequisites
 
 - Node.js 22.12 or newer
