@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { CHECK_REGISTRY, CHECK_TYPES, TASK_PERMISSIONS, isCheckType, type AgentTask } from "@mesa/shared";
 import { CodeTip } from "@/components/CodeTip";
@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { checkLabel, paramLabel, permissionLabel } from "@/lib/labels";
 import { blankTask, checkOf, nextTaskId, type TaskFieldError } from "@/lib/tasks";
 
@@ -21,10 +22,20 @@ export function AgentTasksEditor({
   errors?: TaskFieldError[];
   showErrors?: boolean;
 }) {
-  function patch(index: number, recipe: (task: AgentTask) => void) {
+  const [active, setActive] = useState(0);
+  const index = Math.min(active, Math.max(tasks.length - 1, 0));
+  const task = tasks[index];
+
+  useEffect(() => {
+    if (!showErrors || !errors) return;
+    const problem = errors.findIndex(taskHasError);
+    if (problem >= 0) setActive(problem);
+  }, [showErrors]);
+
+  function patch(indexToPatch: number, recipe: (task: AgentTask) => void) {
     onChange(
       tasks.map((task, taskIndex) => {
-        if (taskIndex !== index) return task;
+        if (taskIndex !== indexToPatch) return task;
         const next = structuredClone(task);
         recipe(next);
         return next;
@@ -32,45 +43,62 @@ export function AgentTasksEditor({
     );
   }
 
+  if (!task) return null;
+  const field = errors?.[index];
+  const show = Boolean(showErrors);
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">Tasks</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Setup runs before the agent. Checks are scored from the shop afterward.
-          </p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tasks">
+          {tasks.map((item, taskIndex) => (
+            <button
+              key={`${item.task_id}-${taskIndex}`}
+              type="button"
+              role="tab"
+              aria-selected={taskIndex === index}
+              onClick={() => setActive(taskIndex)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-sm",
+                taskIndex === index ? "border-foreground bg-foreground text-background" : "border-border bg-card text-foreground",
+                show && taskHasError(errors?.[taskIndex]) && taskIndex !== index && "border-destructive text-destructive",
+              )}
+            >
+              {item.title.trim() || "New task"}
+            </button>
+          ))}
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="gap-1.5 rounded-full"
-          onClick={() => onChange([...tasks, blankTask(nextTaskId(tasks))])}
+          onClick={() => {
+            onChange([...tasks, blankTask(nextTaskId(tasks))]);
+            setActive(tasks.length);
+          }}
         >
           <Plus className="size-3.5" />
           Add task
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="rounded-full"
+          aria-label={`Remove ${task.title.trim() || "task"}`}
+          disabled={tasks.length === 1}
+          onClick={() => {
+            onChange(tasks.filter((_, taskIndex) => taskIndex !== index));
+            setActive(Math.max(0, index - 1));
+          }}
+        >
+          <Trash2 className="size-3.5" />
+          Remove
+        </Button>
       </div>
 
-      {tasks.map((task, index) => {
-        const field = errors?.[index];
-        const show = Boolean(showErrors);
-        return (
-          <div key={`${task.task_id}-${index}`} className="space-y-4 rounded-xl bg-muted/40 px-4 py-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium">{task.title.trim() || "New task"}</p>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Remove ${task.title.trim() || "task"}`}
-                disabled={tasks.length === 1}
-                onClick={() => onChange(tasks.filter((_, taskIndex) => taskIndex !== index))}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
+      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Task id" error={show ? field?.task_id : undefined}>
@@ -90,19 +118,21 @@ export function AgentTasksEditor({
               </Field>
             </div>
 
+            <div className="sm:col-span-2">
             <Field label="Prompt" error={show ? field?.prompt : undefined}>
               <Textarea
                 value={task.prompt}
-                rows={3}
+                rows={2}
                 aria-invalid={show && Boolean(field?.prompt)}
                 placeholder="What should the agent do?"
                 onChange={(event) => patch(index, (next) => { next.prompt = event.target.value; })}
               />
             </Field>
+            </div>
 
-            <fieldset className="space-y-2">
+            <fieldset className="space-y-2 sm:col-span-2">
               <legend className="text-sm font-medium">Permissions</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
                 {TASK_PERMISSIONS.map((permission) => {
                   const checked = task.setup.permissions.includes(permission);
                   const id = `task-${index}-perm-${permission}`;
@@ -127,7 +157,7 @@ export function AgentTasksEditor({
               </div>
             </fieldset>
 
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Cart seeded before the run</p>
                 <Button
@@ -203,7 +233,7 @@ export function AgentTasksEditor({
               </label>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Checks</p>
                 <Button
@@ -224,8 +254,8 @@ export function AgentTasksEditor({
                 const spec = CHECK_REGISTRY[checkName];
                 const checkError = field?.checks[checkIndex];
                 return (
-                  <div key={checkIndex} className="space-y-2 rounded-lg bg-background/70 px-3 py-3">
-                    <div className="flex items-center gap-2">
+                  <div key={checkIndex} className="grid items-end gap-3 rounded-xl bg-card px-3 py-3 shadow-island sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <div className="flex items-center gap-2 sm:col-span-2">
                       <Select
                         value={checkName}
                         onValueChange={(value) => {
@@ -301,10 +331,15 @@ export function AgentTasksEditor({
                 );
               })}
             </div>
-          </div>
-        );
-      })}
+      </div>
     </div>
+  );
+}
+
+function taskHasError(error: TaskFieldError | undefined): boolean {
+  if (!error) return false;
+  return Boolean(
+    error.task_id || error.title || error.prompt || Object.keys(error.cart).length > 0 || Object.keys(error.checks).length > 0,
   );
 }
 

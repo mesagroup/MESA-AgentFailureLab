@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Bot, PlusCircle, Search } from "lucide-react";
@@ -81,6 +81,7 @@ export function AgentsPage() {
   const [state, setState] = useState<LoadState>({ phase: "loading" });
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [formStep, setFormStep] = useState<"agent" | "tasks">("agent");
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -124,6 +125,7 @@ export function AgentsPage() {
     setErrors({});
     setTaskErrors([]);
     setShowErrors(false);
+    setFormStep("agent");
     setSheetOpen(true);
   }
 
@@ -133,6 +135,7 @@ export function AgentsPage() {
     setErrors({});
     setTaskErrors([]);
     setShowErrors(false);
+    setFormStep("agent");
     setSheetOpen(true);
   }
 
@@ -163,7 +166,14 @@ export function AgentsPage() {
     setErrors(nextErrors);
     setTaskErrors(nextTaskErrors);
     setShowErrors(true);
-    if (Object.keys(nextErrors).length > 0 || tasksHaveErrors(nextTaskErrors)) return;
+    if (Object.keys(nextErrors).length > 0) {
+      setFormStep("agent");
+      return;
+    }
+    if (tasksHaveErrors(nextTaskErrors)) {
+      setFormStep("tasks");
+      return;
+    }
     const draft: AgentDraft = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -184,6 +194,26 @@ export function AgentsPage() {
 
   return (
     <Page>
+      {sheetOpen ? (
+        <AgentForm
+          editing={editing}
+          form={form}
+          step={formStep}
+          showErrors={showErrors}
+          errors={errors}
+          taskErrors={taskErrors}
+          nameRef={nameRef}
+          onStep={setFormStep}
+          onField={setField}
+          onTasks={(tasks) => {
+            setForm((current) => ({ ...current, tasks }));
+            if (showErrors) setTaskErrors(taskFieldErrors(tasks));
+          }}
+          onCancel={() => setSheetOpen(false)}
+          onSave={() => void handleSave()}
+        />
+      ) : (
+      <>
       <PageHeader
         title="Agents"
         subtitle="Register an agent, then launch a test."
@@ -294,93 +324,8 @@ export function AgentsPage() {
         />
       )}
       {selected && <AgentDetails agent={selected} />}
-
-      <Sheet open={sheetOpen} onOpenChange={(open: boolean) => setSheetOpen(open)}>
-        <SheetContent side="bottom" className="flex h-[95vh] flex-col rounded-t-2xl p-0">
-          <div className="shrink-0 border-b border-border/40 px-5 pt-6 pb-5 sm:px-8">
-            <p className="mb-0.5 text-xs text-muted-foreground">{editing ? "Editing agent" : "New agent"}</p>
-            <SheetTitle className="text-base font-medium tracking-tight">{editing ? editing.name : "Register an agent"}</SheetTitle>
-          </div>
-          <div className="flex flex-1 flex-col overflow-hidden sm:flex-row">
-            <div className="w-full shrink-0 space-y-5 overflow-y-auto border-b border-border/40 px-5 py-6 sm:w-[38%] sm:border-r sm:border-b-0 sm:px-8">
-              <FormField label="Name" error={showErrors ? errors.name : undefined} required>
-                <Input
-                  ref={nameRef}
-                  value={form.name}
-                  onChange={(event) => setField("name", event.target.value)}
-                  placeholder="Support agent"
-                  aria-invalid={showErrors && Boolean(errors.name)}
-                />
-              </FormField>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" id="agent-kind-label">Kind</label>
-                <Select
-                  value={form.instance_kind}
-                  disabled={editing?.instance.kind === "reference"}
-                  onValueChange={(value) => {
-                    if (value === "external" || value === "reference") setField("instance_kind", value);
-                  }}
-                >
-                  <SelectTrigger aria-labelledby="agent-kind-label">
-                    <SelectValue>{(value: string | null) => (value === "reference" || value === "external" ? KIND_LABEL[value] : "Kind")}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="external">external</SelectItem>
-                    <SelectItem value="reference">reference</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <FormField label="Description">
-                <Textarea
-                  value={form.description}
-                  onChange={(event) => setField("description", event.target.value)}
-                  placeholder="What does this agent do?"
-                  rows={4}
-                />
-              </FormField>
-            </div>
-            <div className="flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-8">
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Endpoint</p>
-                <FormField label="Instance URL" error={showErrors ? errors.instance_base_url : undefined} required>
-                  <Input
-                    value={form.instance_base_url}
-                    onChange={(event) => setField("instance_base_url", event.target.value)}
-                    placeholder="http://127.0.0.1:3002"
-                    className="font-mono text-xs"
-                    aria-invalid={showErrors && Boolean(errors.instance_base_url)}
-                  />
-                </FormField>
-                <FormField label="Test URL">
-                  <Input
-                    value={form.test_instance_base_url}
-                    onChange={(event) => setField("test_instance_base_url", event.target.value)}
-                    placeholder={form.instance_base_url || "Same as the instance URL"}
-                    className="font-mono text-xs"
-                  />
-                </FormField>
-                <p className="text-xs text-muted-foreground">The test URL falls back to the instance URL when it is empty.</p>
-              </div>
-              <AgentTasksEditor
-                tasks={form.tasks}
-                errors={taskErrors}
-                showErrors={showErrors}
-                onChange={(tasks) => {
-                  setForm((current) => ({ ...current, tasks }));
-                  if (showErrors) setTaskErrors(taskFieldErrors(tasks));
-                }}
-              />
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-3 border-t border-border/40 px-5 py-4 sm:px-8">
-            {errors.save && <span className="flex-1 text-sm text-destructive">{errors.save}</span>}
-            <div className="ml-auto flex gap-2">
-              <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
-              <Button onClick={() => void handleSave()}>{editing ? "Save changes" : "Register agent"}</Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      </>
+      )}
 
       <Dialog.Root open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <Dialog.Portal>
@@ -401,6 +346,135 @@ export function AgentsPage() {
 
       <RunSheet agent={runAgent} onClose={() => setRunAgent(null)} />
     </Page>
+  );
+}
+
+function AgentForm({
+  editing,
+  form,
+  step,
+  showErrors,
+  errors,
+  taskErrors,
+  nameRef,
+  onStep,
+  onField,
+  onTasks,
+  onCancel,
+  onSave,
+}: {
+  editing: Agent | null;
+  form: FormState;
+  step: "agent" | "tasks";
+  showErrors: boolean;
+  errors: FormErrors;
+  taskErrors: TaskFieldError[];
+  nameRef: RefObject<HTMLInputElement | null>;
+  onStep: (step: "agent" | "tasks") => void;
+  onField: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  onTasks: (tasks: AgentTask[]) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      <PageHeader
+        title={editing ? editing.name : "Register an agent"}
+        subtitle={step === "agent" ? "Name and endpoint." : "One task at a time."}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" className="rounded-full" onClick={onCancel}>Cancel</Button>
+            {step === "tasks" && (
+              <Button variant="outline" className="rounded-full" onClick={() => onStep("agent")}>Back</Button>
+            )}
+            {step === "agent" ? (
+              <Button className="rounded-full" onClick={() => onStep("tasks")}>Tasks</Button>
+            ) : (
+              <Button className="rounded-full" onClick={onSave}>{editing ? "Save changes" : "Register agent"}</Button>
+            )}
+          </div>
+        }
+      />
+      <div className="flex gap-2" role="tablist" aria-label="Agent form">
+        {(["agent", "tasks"] as const).map((item, index) => (
+          <button
+            key={item}
+            type="button"
+            role="tab"
+            aria-selected={step === item}
+            onClick={() => onStep(item)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm",
+              step === item ? "border-foreground bg-foreground text-background" : "border-border text-foreground",
+            )}
+          >
+            {index + 1}. {item === "agent" ? "Agent" : "Tasks"}
+          </button>
+        ))}
+      </div>
+      {errors.save && <p className="text-sm text-destructive">{errors.save}</p>}
+      {step === "agent" ? (
+        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          <FormField label="Name" error={showErrors ? errors.name : undefined} required>
+            <Input
+              ref={nameRef}
+              value={form.name}
+              onChange={(event) => onField("name", event.target.value)}
+              placeholder="Support agent"
+              aria-invalid={showErrors && Boolean(errors.name)}
+            />
+          </FormField>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" id="agent-kind-label">Kind</label>
+            <Select
+              value={form.instance_kind}
+              disabled={editing?.instance.kind === "reference"}
+              onValueChange={(value) => {
+                if (value === "external" || value === "reference") onField("instance_kind", value);
+              }}
+            >
+              <SelectTrigger aria-labelledby="agent-kind-label">
+                <SelectValue>{(value: string | null) => (value === "reference" || value === "external" ? KIND_LABEL[value] : "Kind")}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="external">external</SelectItem>
+                <SelectItem value="reference">reference</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="sm:col-span-2">
+            <FormField label="Description">
+              <Textarea
+                value={form.description}
+                onChange={(event) => onField("description", event.target.value)}
+                placeholder="What does this agent do?"
+                rows={2}
+              />
+            </FormField>
+          </div>
+          <FormField label="Instance URL" error={showErrors ? errors.instance_base_url : undefined} required>
+            <Input
+              value={form.instance_base_url}
+              onChange={(event) => onField("instance_base_url", event.target.value)}
+              placeholder="http://127.0.0.1:3002"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.instance_base_url)}
+            />
+          </FormField>
+          <FormField label="Test URL">
+            <Input
+              value={form.test_instance_base_url}
+              onChange={(event) => onField("test_instance_base_url", event.target.value)}
+              placeholder={form.instance_base_url || "Same as the instance URL"}
+              className="font-mono text-xs"
+            />
+          </FormField>
+          <p className="text-sm text-muted-foreground sm:col-span-2">The test URL falls back to the instance URL when it is empty.</p>
+        </div>
+      ) : (
+        <AgentTasksEditor tasks={form.tasks} errors={taskErrors} showErrors={showErrors} onChange={onTasks} />
+      )}
+    </>
   );
 }
 
