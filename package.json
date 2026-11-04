@@ -18,7 +18,8 @@
     "dev:mock-shop": "turbo run dev --filter=@mesa/mock-shop",
     "eval": "pnpm --filter @mesa/agentservice eval",
     "eval:gate": "pnpm --filter @mesa/agentservice eval:gate",
-    "generate-dataset": "pnpm --filter @mesa/agentservice generate-dataset"
+    "generate-dataset": "pnpm --filter @mesa/agentservice generate-dataset",
+    "demo:shop": "pnpm --filter @mesa/shared build && pnpm --filter @mesa/agentservice demo:shop"
   },
   "devDependencies": {
     "turbo": "2.11.10"

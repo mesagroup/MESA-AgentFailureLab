@@ -3,6 +3,7 @@ import { LAB_TASK_IDS, type LabTaskId } from "../fixes/domain.js";
 import { runApplicatorProbes } from "../fixes/probes.js";
 import { GUARD_GAP, HARNESS_GAP, OWNER_REQUESTS, RETRY_GAP } from "./requests.js";
 import { selectFixes } from "./select.js";
+import { verifyFix } from "./verification.js";
 import type { AttemptScore, ReplayPort, ReplayReport, ScoredArm, TaskReplayRow } from "./types.js";
 
 export async function runReplay(input: {
@@ -28,7 +29,7 @@ export async function runReplay(input: {
     label:
       "Harness verifier scores for T1–T5. The agent service does not write outcome.verifier or fault.*.",
     decision:
-      "fix_verified is true only when injected_after passes the backend verifier and injected_before does not, and regression is false.",
+      "fix_verified requires a passing clean baseline, a failing injected_before, a passing injected_after and a completed non-regressing clean control. Skipped evidence is inconclusive.",
     runs_per_arm: 1,
     spread: "not applicable: verifier.passed is a deterministic function of the shop seed and the preset.",
     timing: {
@@ -77,8 +78,11 @@ async function runTask(
   });
   const before = await input.port.run({ taskId, phase: "injected", fixes: [] });
   const after = await runAfter(input.port, taskId, selected.kinds, before.run_id);
-  const fixVerified =
-    after.status === "ran" ? after.attempt.passed && !before.passed : null;
+  // Legacy replay uses its existing all-fixes control. The HTTP demo command
+  // uses a complete control suite with exactly the selected treatment instead.
+  const verdict = verifyFix({ baseline: baseline.passed, before: before.passed,
+    after: after.status === "ran" ? after.attempt.passed : null,
+    expectedControls: [taskId], controls: [{ taskId, baseline: baseline.passed, treated: baselineAll.passed }] });
   return {
     task_id: taskId,
     preset_category: category,
@@ -88,7 +92,7 @@ async function runTask(
     baseline_all_fixes: baselineAll,
     injected_before: before,
     injected_after: after,
-    fix_verified: fixVerified,
+    fix_verified: verdict.fix_verified,
     regression: baseline.passed && !baselineAll.passed,
   };
 }

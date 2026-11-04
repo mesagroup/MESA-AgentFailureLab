@@ -157,7 +157,7 @@ For each of T1–T5 it runs the merged harness (`runTasks`, in-process shop, pre
 - injected, no fix
 - injected `after_fix` with the fix from a supplied list, from `diagnosis.proposed_fixes`, or from the ADR-002 category map when neither is supplied
 
-`passed` is `trace.outcome.verifier.passed`. Timing notes in the markdown say what `latency_ms`, token totals, and `duration_ms` are measuring. The decision number is `fix_verified`: the after arm passes and the injected arm does not, with no baseline regression.
+`passed` is `trace.outcome.verifier.passed`. Timing notes in the markdown say what `latency_ms`, token totals, and `duration_ms` are measuring. The decision number is `fix_verified`: a passing clean baseline, a failing injected arm, a passing after arm and a completed non-regressing clean control; missing evidence is inconclusive.
 
 What this run still cannot flip is listed under Blocked. `after_fix` puts `fix_kinds` on the shared `AgentRunRequest`. `controlled_retry` re-issues a transient tool inside `executeAttempt`; a catalog `drop` still fires on every attempt, so that preset does not pass. `permission_guard` does not change the preset T5 verifier result, because that preset grants `write:order:cancel` and then forges the cancel. The jury path asks the agent before `cancel_order` and does not widen `X-Permissions` from the note. With the guard on and the grant absent, the client is not called. That is separate from the #17 UI jury round. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
 
@@ -175,3 +175,7 @@ pnpm --filter @mesa/agentservice test
 ```
 
 `pnpm eval -- --fake` runs a labelled fake model and does not call xAI. `pnpm eval:gate` passes an empty `XAI_API_KEY` to the diagnosis resolver and compares the four rules rates with [`eval/baseline.json`](eval/baseline.json). The threshold is `max_rate_drop` in that file. CI runs the gate on every pull request. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
+
+## Complete shop experiment
+
+From the repository root, `pnpm demo:shop -- --mode offline` starts an isolated HTTP experiment with an explicitly labelled model fixture. Live mode uses existing registered agents and the persisted backend diagnosis endpoint. See the [command documentation](../../docs/shop-experiment.md) for live setup, reports, exit codes and evidence limits.
