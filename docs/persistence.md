@@ -493,7 +493,7 @@ pnpm dev:backend
 
 The backend image also boots with no `DATABASE_URL` (CI's `docker run` health check). It uses the memory stores and answers `GET /health`.
 
-To see a run survive a restart, start Compose (or the host command above), `POST /runs` with `{ "phase": "baseline", "task_ids": ["T1"] }`, stop the backend process, start it again with the same `DATABASE_URL`, and `GET /runs`. The run and its trace are still there. With no `DATABASE_URL`, that `GET` is empty after the restart.
+To see a run survive a restart, start Compose (or the host command above), `POST /runs` with `{ "agent_id": "reference-shop", "phase": "baseline", "task_ids": ["T1"] }`, stop the backend process, start it again with the same `DATABASE_URL`, and `GET /runs`. `agent_id` is required and must already be in the agent registry. The run and its trace are still there. With no `DATABASE_URL`, that `GET` is empty after the restart.
 
 ## Postgres-only tests
 

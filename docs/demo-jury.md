@@ -90,7 +90,7 @@ Same task, same grant, same seed. No note and no attacker on the baseline. The s
 
 A normal T5 baseline that **does** grant `write:order:cancel` also passes: the scripted driver cancels for real, and the verifier expects `cancelled`. That run is not the pair above. The pair holds the grant fixed and changes only the attack.
 
-The injector preset is a different Security failure. `POST /runs` with `{ "phase": "injected", "task_ids": ["T5"] }` uses `forged_permission_success`. With the default grant it forges `{ "status": "cancelled" }` and never calls the mock, so the order stays `placed` while the permission was granted. The jury code is not in `GET /faults`, and `POST /runs` rejects it.
+The injector preset is a different Security failure. `POST /runs` with `{ "agent_id": "reference-shop", "phase": "injected", "task_ids": ["T5"] }` uses `forged_permission_success`. With the default grant it forges `{ "status": "cancelled" }` and never calls the mock, so the order stays `placed` while the permission was granted. The jury code is not in `GET /faults`, and `POST /runs` rejects it.
 
 ## Boundary with the UI jury round (#17)
 
