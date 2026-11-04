@@ -3,6 +3,14 @@ import { validateTrace } from "@mesa/shared/validate";
 import Fastify from "fastify";
 import { DiagnosisFailed, diagnoseTrace } from "./diagnosis/diagnose.js";
 import type { DiagnosisModel } from "./diagnosis/diagnose.js";
+import {
+  EvalsetGenerateError,
+  generateEvalset,
+  parseEvalsetGenerateRequest,
+  stubEvalset,
+} from "./evalset/generate.js";
+import { createEvalsetGrokModel } from "./evalset/model.js";
+import { readEvalsetStub } from "./evalset/stub.js";
 import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
@@ -12,12 +20,16 @@ export interface AppDeps {
   config?: DiagnosisConfig;
   /** Pass `null` to force "not configured". Omit to build a client when a key is present. */
   model?: DiagnosisModel | null;
+  /** Separate from diagnosis: evalset completions use a TaskEvalset JSON schema. */
+  evalsetModel?: DiagnosisModel | null;
+  evalsetStub?: boolean;
   logger?: boolean;
 }
 
 /**
  * Agent service.
  * `POST /diagnose` writes `Trace.diagnosis` only.
+ * `POST /evalset/generate` proposes a TaskEvalset. It does not save an Agent.
  * `POST /v1/tasks/run` proposes tool actions with `executed: false`,
  * plus `refused` and `embedded` from the shared plan.
  * The harness executes `actions`, injects faults, and writes `outcome.verifier`.
@@ -34,12 +46,25 @@ export function buildApp(deps: AppDeps = {}) {
             timeoutMs: config.timeoutMs,
           })
         : null;
+  const evalsetStub = deps.evalsetStub ?? readEvalsetStub();
+  const evalsetModel =
+    deps.evalsetModel !== undefined
+      ? deps.evalsetModel
+      : evalsetStub
+        ? null
+        : config.apiKey
+          ? createEvalsetGrokModel({
+              apiKey: config.apiKey,
+              baseUrl: config.baseUrl,
+              timeoutMs: config.timeoutMs,
+            })
+          : null;
   const app = Fastify({ logger: deps.logger ?? true });
 
   app.get("/", async () => ({
     service: "agentservice",
     message:
-      "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. POST /v1/tasks/run proposes actions for the harness. See GET /health.",
+      "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. POST /evalset/generate proposes a task evalset. POST /v1/tasks/run proposes actions for the harness. See GET /health.",
     contract_version: CONTRACT_VERSION,
   }));
 
@@ -48,6 +73,7 @@ export function buildApp(deps: AppDeps = {}) {
     service: "agentservice",
     role: "grok-reference-agent",
     grok_configured: Boolean(config.apiKey),
+    evalset_stub: evalsetStub,
     contract_version: CONTRACT_VERSION,
     forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
@@ -87,6 +113,52 @@ export function buildApp(deps: AppDeps = {}) {
       if (error instanceof DiagnosisFailed) {
         request.log.error({ code: error.code }, "diagnosis failed");
         return reply.code(502).send({ error: "diagnosis_failed" });
+      }
+      throw error;
+    }
+  });
+
+  app.post("/evalset/generate", async (request, reply) => {
+    const parsed = parseEvalsetGenerateRequest(request.body);
+    if (!parsed.ok) {
+      return reply.code(400).send({
+        error: parsed.error,
+        message: parsed.message,
+        errors: parsed.errors,
+      });
+    }
+    if (evalsetStub) {
+      try {
+        return stubEvalset(parsed.value);
+      } catch (error) {
+        if (error instanceof EvalsetGenerateError) {
+          return reply.code(502).send({ error: error.code, errors: error.errors });
+        }
+        throw error;
+      }
+    }
+    if (evalsetModel === null) {
+      return reply.code(503).send({ error: "grok_not_configured" });
+    }
+    try {
+      return await generateEvalset(parsed.value, {
+        model: evalsetModel,
+        modelName: config.modelName,
+        timeoutMs: config.timeoutMs,
+        onUsage(usage) {
+          request.log.info({ evalset_usage: usage }, "evalset generation usage");
+        },
+      });
+    } catch (error) {
+      if (error instanceof EvalsetGenerateError) {
+        request.log.error({ code: error.code }, "evalset generation failed");
+        if (error.code === "evalset_timeout") {
+          return reply.code(504).send({ error: error.code });
+        }
+        if (error.code === "invalid_evalset") {
+          return reply.code(502).send({ error: error.code, errors: error.errors });
+        }
+        return reply.code(502).send({ error: error.code });
       }
       throw error;
     }

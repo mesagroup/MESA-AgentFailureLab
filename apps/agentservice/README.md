@@ -4,6 +4,8 @@ Grok diagnosis for one `Trace`, the fix applicator for `controlled_retry`, `pre_
 
 `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
 
+`POST /evalset/generate` proposes a `TaskEvalset` (`version` 1) from a task's prompt, setup, checks, optional agent docs, optional existing evalset, and an optional operator instruction. The body is not saved. Invalid model JSON is `502 invalid_evalset` with `errors[]`. `MESA_EVALSET_STUB=1` returns a local proposal and does not call the provider. The AI does not judge a Trace or Run on this route.
+
 `POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` on the shared `AgentRunRequest` (`@mesa/shared`) are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
@@ -18,6 +20,7 @@ Equivalent root script: `pnpm dev:agentservice`.
 - Dev server: http://127.0.0.1:3002
 - Health: http://127.0.0.1:3002/health
 - Diagnose: `POST /diagnose` with a JSON `Trace`
+- Propose evalset: `POST /evalset/generate` with a task (optional `instruction`, `docs`, `mode`)
 - Production build: `pnpm exec turbo run build --filter=@mesa/agentservice` then `pnpm --filter @mesa/agentservice start`
 
 Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally. `.env` is gitignored. `XAI_API_KEY=` in the example stays empty.
@@ -46,6 +49,34 @@ The body is a `Trace`. `run_id` is already a field on it. There is no second wra
 | 400 | `{ "error": "invalid_trace", "errors": string[] }` | Body failed `validateTrace` |
 | 503 | `{ "error": "grok_not_configured" }` | `XAI_API_KEY` is empty and no model was injected |
 | 502 | `{ "error": "diagnosis_failed" }` | The provider failed, or the model JSON was not a schema-valid diagnosis |
+
+## Propose an evalset
+
+`POST /evalset/generate` body:
+
+```json
+{
+  "mode": "generate",
+  "task": { "task_id": "search", "title": "…", "prompt": "…", "setup": {}, "success_test": {} },
+  "docs": { "prompt_summary": "", "tools": [], "constraints": [], "config_notes": "" },
+  "instruction": "Optional operator note"
+}
+```
+
+`mode` is `generate` or `revise` (inferred when omitted). `revise` requires `task.evalset`. `instruction` is optional, max 4000 characters. The response is `{ "evalset": { "version": 1, "cases": […] } }`. At most 12 cases. This route does not write an Agent and does not judge a Trace or Run.
+
+The backend exposes the same path as a proxy so the browser never sees `XAI_API_KEY`.
+
+| Status | Body | When |
+| --- | --- | --- |
+| 200 | `{ "evalset": TaskEvalset }` | Output passed `validateTaskEvalset` |
+| 400 | `{ "error": "invalid_request" \| "invalid_task", "message"?, "errors"? }` | Body or task failed validation |
+| 503 | `{ "error": "grok_not_configured" }` | No key, no stub, no injected model |
+| 504 | `{ "error": "evalset_timeout" }` | Provider timeout after the configured budget |
+| 502 | `{ "error": "invalid_evalset", "errors": string[] }` | Model JSON was not a valid evalset |
+| 502 | `{ "error": "evalset_generation_failed" }` | Other provider failure |
+
+`MESA_EVALSET_STUB=1` skips the provider. Tests inject `evalsetModel` the same way diagnosis injects `model`. Usage, when present, is logged as `evalset generation usage` and is not returned on the body.
 
 Token use and cost are not fields on the trace. When the completion includes usage, the process logs `diagnosis usage` with `diagnosis_usage`. xAI's `usage.cost_in_usd_ticks` is divided by 10^10 to get USD. If the provider omits usage, nothing is logged.
 

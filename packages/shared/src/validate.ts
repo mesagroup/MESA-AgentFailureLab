@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
-import { validateAgentTasks, validateOtelSource, validateTaskChecks } from "./checks.js";
-import type { Agent, AgentTask, Run, Trace } from "./types.js";
+import { evalsetDuplicateCaseIds, validateAgentTasks, validateOtelSource, validateTaskChecks } from "./checks.js";
+import type { Agent, AgentTask, Run, TaskEvalset, Trace } from "./types.js";
 
 const schemaDir = join(dirname(fileURLToPath(import.meta.url)), "..", "schemas");
 
@@ -45,6 +45,9 @@ const validateAgentSchema: ValidateFunction = ajv.compile(agentSchema as AnySche
 const validateRunSchema: ValidateFunction = ajv.compile(runSchema as AnySchema);
 const validateOtelImportSchema: ValidateFunction = ajv.compile(otelImportSchema as AnySchema);
 const validateTaskSchema: ValidateFunction = ajv.compile({ $ref: `${AGENT_SCHEMA_ID}#/$defs/task` });
+const validateEvalsetSchema: ValidateFunction = ajv.compile({
+  $ref: `${AGENT_SCHEMA_ID}#/$defs/task/properties/evalset`,
+});
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
   return (errors ?? []).map((error) => {
@@ -80,6 +83,15 @@ export function validateAgentTask(data: unknown): ValidationResult<AgentTask> {
   if (!structural.ok) return structural;
   const taskErrors = validateTaskChecks(structural.value);
   if (taskErrors.length > 0) return { ok: false, errors: taskErrors };
+  return structural;
+}
+
+/** Standalone `tasks[].evalset` document. Same shape and duplicate `case_id` rule as on a task. */
+export function validateTaskEvalset(data: unknown): ValidationResult<TaskEvalset> {
+  const structural = check<TaskEvalset>(validateEvalsetSchema, data);
+  if (!structural.ok) return structural;
+  const duplicates = evalsetDuplicateCaseIds(structural.value.cases);
+  if (duplicates.length > 0) return { ok: false, errors: duplicates };
   return structural;
 }
 

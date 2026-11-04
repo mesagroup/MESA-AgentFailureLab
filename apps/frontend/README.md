@@ -36,6 +36,6 @@ Keep product docs in `docs/` and architecture decisions in `adr/`. See [ADR-001]
 
 ## Agents form
 
-Create and edit store `tasks[].evalset` and optional `Agent.otel` through `POST /agents` and `PUT /agents/:agent_id`. Evalset cases are judge input for a later Grok read of that task's Trace or Run. They do not replace the verifier. There is no generate-evalset control (#121).
+Create and edit store `tasks[].evalset` and optional `Agent.otel` through `POST /agents` and `PUT /agents/:agent_id`. Evalset cases are judge input for a later Grok read of that task's Trace or Run. They do not replace the verifier. **Genera evalset** / **Modifica con AI** call `POST /evalset/generate` on the harness (which proxies agentservice). The proposal lands in the form. Save still uses Agent CRUD. The browser never receives `XAI_API_KEY`.
 
 The Agents page pastes or uploads a version 1 span batch for a saved agent to `POST /agents/:agentId/otel/import` and opens the stored Trace. The form stores `auth.token_env` as an environment variable name and never sends a bearer token. Import does not call the source endpoint and does not invent `fault.labels` or `outcome.verifier`. See [docs/otel.md](../../docs/otel.md).

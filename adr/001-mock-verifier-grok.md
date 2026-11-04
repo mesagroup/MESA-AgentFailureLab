@@ -32,7 +32,7 @@ Tre componenti con responsabilità esclusive.
 - `Agent.tasks[].evalset` è materiale fornito dall’utente, opzionale. Un giudizio Grok successivo può leggerlo insieme alla Trace o alla Run di quel task.
 - Non è input del verificatore deterministico. Non scrive `outcome.verifier`.
 - L’esito resta `success_test.checks` sullo stato del mondo nel mock.
-- Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. Non esiste un endpoint che genera l’evalset.
+- Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. `POST /evalset/generate` propone casi che l’utente revisiona; non scrive `outcome.verifier` e non giudica una Trace o una Run.
 
 ### Import OpenTelemetry
 
