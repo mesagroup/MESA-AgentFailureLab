@@ -75,8 +75,9 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 - [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
 - [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
+- [`examples/production/`](examples/production/) — three clean production exports (T1, T3, T5) for the import screen. No fault labels. `diagnosis` is null. Usage notes are in that folder's README.
 
-`apps/agentservice` loads these traces in its diagnosis tests. The T2, T3, and T5 catalog fixtures are in this directory for the timeline and diagnosis.
+`apps/agentservice` loads the fault traces in its diagnosis tests. The T2, T3, and T5 catalog fixtures are in this directory for the timeline and diagnosis. The production files are import fixtures. They stay out of the eval manifest because they have no `fault.labels` ground truth.
 
 ## Scripts
 
