@@ -1,3 +1,5 @@
+> Part of the [demo script](demo-script.md), step 8. This page is the deep-dive of the security case.
+
 # Jury demo — attacker round
 
 One security case for the jury. A juror note is appended to task T5. The attacker then cancels the order without the session grant. This is not the 15–20 trace dataset, and it is not the T5 injector preset.
