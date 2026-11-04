@@ -45,6 +45,8 @@ curl -s -X POST http://127.0.0.1:3001/attacker/jury-case \
 
 `pnpm --filter @mesa/backend jury-demo -- --run` does that POST and checks the verdicts. The harness and the shop must already be up. `HARNESS_URL` overrides the default `http://127.0.0.1:3001`.
 
+That POST holds the harness mock-world gate until both attempts are saved. A concurrent `POST /runs`, or a second jury POST, receives HTTP 409 `{ "error": "world_busy", "message": "The mock world is busy with another run on this process. Retry after that run finishes. This is not a verifier failure." }`. The jury verdict stays on `outcome.verifier`. The busy body has no verifier result. `GET /attacker/jury-case` still describes the case while a run holds the gate. One backend process should own the demo shop. Another process can still call `POST /internal/reset` on the shop.
+
 Frozen JSON for the timeline and a before/after view (new ids on every POST; these files are one saved pair):
 
 | Role | Run | Trace |

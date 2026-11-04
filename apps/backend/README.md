@@ -11,9 +11,113 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `outcome.verifier` and `outcome.success` | Deterministic verifier, from `GET /internal/state` and the task's `success_test.checks` |
 | `fault.labels`, `fault.injected`, `fault.attacker` | Injector, from the Run's `injection_plan`. The jury attacker and the T5 security attacker set `attacker.used` on their own runs |
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
-| `diagnosis` | Nobody here. It stays `null` until Grok, which must not write the rows above |
+| `diagnosis` | Produced by Grok in agentservice; the explicit stored-trace endpoint validates and persists only this field |
 
 `outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. An `after_fix` run stores `fix_kinds` and copies that list onto the shared `AgentRunRequest` for `POST /v1/tasks/run`. Baseline and injected runs omit the field. The scripted action planner does not read it. `controlled_retry` is applied in `executeAttempt` on the same injector path. `pre_response_check` and `permission_guard` are for the agent service that receives the request.
+
+## Diagnose a stored trace
+
+Issue #98 wires the existing agentservice into persisted traces. It does not
+execute a run, reset the shop, select fixes or start a replay. The normal runner
+still saves `diagnosis: null`. ADR-001/002 ownership boundaries and shared JSON
+Schemas remain unchanged.
+
+### HTTP contract
+
+`POST /traces/:traceId/diagnose` accepts **no body or `{}` only**. The backend
+loads the authoritative trace by ID; it never accepts a replacement Trace,
+caller-supplied URL, Diagnosis, or force/re-diagnose flag. On success, HTTP 200
+returns the canonical saved **Trace**, the same shape as `GET /traces/:traceId`.
+
+```bash
+# Configure backend AGENTSERVICE_URL and configure XAI_API_KEY on agentservice.
+# Replace TRACE_ID with an ID obtained from a run; do not send the trace body.
+curl --fail-with-body -X POST \
+  http://127.0.0.1:3001/traces/TRACE_ID/diagnose
+curl --fail-with-body http://127.0.0.1:3001/traces/TRACE_ID
+```
+
+The server calls `AGENTSERVICE_URL/diagnose` using the stored trace. It validates
+the full response with `validateTrace`, requires a non-null Diagnosis with an
+existing culprit step, and checks that **every field except `diagnosis`** is
+semantically identical (object-key order is irrelevant). It constructs the saved
+document from the authoritative original plus that Diagnosis. It never trusts
+remote copies of outcome, fault, steps, totals, IDs or timestamps.
+
+The store atomically compares the current trace with the original before saving
+diagnosis. An intervening update/deletion yields `409 trace_changed` instead of
+overwriting it. Existing diagnoses are returned without contacting the service,
+even if the service is now unavailable or disabled. There is no force option in
+this MVP. A failed diagnosis does not change the Run's verdict or clear data.
+
+Requests for the same trace sharing a store in this process are gated: the second
+request receives `409 diagnosis_busy`. The gate is released on every outcome.
+Reads and diagnoses of other traces remain available. This gate does not use or
+replace the mock/world gate in #97. Separate backend processes/stores can still
+issue duplicate paid calls; PostgreSQL CAS prevents lost updates, not duplicate
+provider usage. Use one backend process for this MVP. A failure after upstream
+success but before persistence can require another paid call on retry.
+
+### Configuration and metadata
+
+- `AGENTSERVICE_URL`: backend-controlled http(s) base URL, already wired in
+  Compose/Render. Missing/blank disables new calls. Credentials, query strings,
+  fragments and non-http(s) URLs are rejected without echoing their values.
+- `DIAGNOSIS_TIMEOUT_MS`: total upstream fetch/body deadline, default `45000`,
+  integer `1..300000`. Set above agentservice `GROK_TIMEOUT_MS` and its retry
+  budget. Invalid configuration fails startup. The backend does not retry the
+  provider request automatically or fall back to a fake diagnosis.
+- `XAI_API_KEY` remains on agentservice. The backend never needs it.
+- `x-diagnosis-cached`: `false` on a newly saved diagnosis, `true` for an existing
+  diagnosis. Cached responses do not claim original-call timing or usage.
+- `x-diagnosis-duration-ms`: on a new successful diagnosis only, backend wall
+  time from lookup through upstream request and save. It is not model-only
+  latency and is not added to `Trace.totals`.
+- Model name, provider tokens and provider cost are **not returned by the
+  existing upstream contract**; callers must report n/a. Existing agentservice
+  usage logs remain separate. Never infer these numbers from harness totals or
+  synthetic step latency. No schema change is introduced just for telemetry.
+
+Headers above are intended for server/CLI consumers; this change does not add
+browser UI or CORS exposed headers. The canonical Trace body is usable by the UI.
+
+| HTTP | `error` | Meaning |
+| --- | --- | --- |
+| 400 | `invalid_request` | Nonempty or invalid request body |
+| 404 | `not_found` | Trace does not exist |
+| 409 | `diagnosis_busy` | Same trace already being diagnosed in this process/store |
+| 409 | `trace_changed` | Stored document changed or disappeared before CAS |
+| 503 | `diagnosis_not_configured` | Backend service URL unset/blank |
+| 503 | `diagnosis_unavailable` | Agentservice returned 503, including missing Grok config |
+| 504 | `diagnosis_timeout` | Upstream fetch/body deadline expired |
+| 502 | `diagnosis_upstream_error` | Transport, non-success upstream response or unreadable JSON |
+| 502 | `invalid_diagnosis_response` | Invalid schema, null diagnosis, unknown culprit step or changed protected fields |
+| 500 | `diagnosis_store_error` | Trace lookup or conditional persistence failed |
+
+Errors return a stable code, not upstream bodies, database URLs or raw exception
+messages. No HTTP route accepts arbitrary full-document uploads for this flow.
+The upstream diagnostic prompt continues to omit ground-truth labels and verifier
+snapshots; that filtering remains in agentservice.
+
+### Verification
+
+Offline route tests use fake upstream responses for failures and a real
+agentservice over loopback with an explicitly injected offline model for the
+integration case. They never call xAI. From the repository root:
+
+```bash
+pnpm --filter @mesa/shared build
+pnpm --filter @mesa/backend typecheck
+pnpm --filter @mesa/backend exec node --import tsx --test test/diagnosis.test.ts
+# Use a disposable local database only. Never point this at the demo database.
+TEST_DATABASE_URL=postgres://USER:PASSWORD@127.0.0.1:5432/TEST_DB \
+  pnpm --filter @mesa/backend exec node --import tsx --test test/runs-postgres.test.ts
+```
+
+The Postgres suite uses its own schema and checks a new pool can read diagnosis,
+unchanged Run/first-insert time, one winner for simultaneous CAS operations, and
+stale-write rejection. Without `TEST_DATABASE_URL` it explicitly skips. These
+tests do not prove live model quality, and no live Grok result is fabricated.
 
 ## Run from the monorepo root
 
@@ -45,9 +149,9 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `PUT` | `/agents/:agent_id` | Replace. Server sets `updated_at`. Omitted `created_at` keeps the stored value. 404 if absent, 400 if invalid |
 | `DELETE` | `/agents/:agent_id` | 204. 404 if absent. `reference-shop` and `external-library` return 409 |
 | `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
-| `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. See [POST /runs](#post-runs) |
-| `GET` | `/attacker/jury-case` | Juror note, the security plan, and the structured request fields. Does not start a run |
-| `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id` |
+| `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. 409 `world_busy` when this process already holds the mock-world gate. See [POST /runs](#post-runs) |
+| `GET` | `/attacker/jury-case` | Juror note, the security plan, and the structured request fields. Does not start a run. Stays available while the mock-world gate is held |
+| `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
@@ -59,6 +163,18 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 The server loads that agent and runs its `tasks`, in document order, when `task_ids` is omitted. `phase` defaults to `baseline`. A `task_ids` entry that is not on that agent is 400, including a demo task id that only another agent has. An edited `reference-shop` or `external-library` is the document in the store, not a fresh read of the fixture.
 
 Success is 200 `{ "results": [ { "run", "trace", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged.
+
+A second `POST /runs` or `POST /attacker/jury-case`, while this process is between reset and result save, is HTTP 409:
+
+```json
+{
+  "error": "world_busy",
+  "message": "The mock world is busy with another run on this process. Retry after that run finishes. This is not a verifier failure."
+}
+```
+
+The gate is in-process and covers the whole request: every task in the batch, and both jury attempts. The same request may re-enter it, so the jury case can call the runner. A busy response is rejected, and the harness does not queue the caller. A verifier failure remains HTTP 200 with `outcome.verifier.passed` false. An agent id that already exists is a different 409, `error: "conflict"`, from `POST /agents`. `GET` routes stay available. Post-hoc `POST /traces/:traceId/diagnose` does not take this gate; a 409 from that route is `diagnosis_busy` or `trace_changed`. A second backend process, or `POST /internal/reset` on the shop, is outside this gate. See [architecture](../../docs/architecture.md#one-writer-for-the-mock-world).
+
 ### CORS
 
 Browser calls from the UI send `Content-Type: application/json`, so the browser preflights with `OPTIONS` before GET, POST, PUT, and DELETE. This app registers `@fastify/cors`. There is no `*` origin.

@@ -1,16 +1,22 @@
 import type { AgentTask } from "@mesa/shared";
 import type { MockShopClient } from "../mock/client.js";
+import { assertWorldGateHeld } from "./world-gate.js";
 
 /**
  * Harness-side world setup. These calls are not agent steps and are not injected.
- * The task's `setup` is the only input: cart lines, then one checkout per seeded order.
- * The last checkout's `order_id` is returned for the agent request.
+ * Shop tasks seed cart lines, then one checkout per seeded order.
+ * Library tasks seed `setup.library.loans` and do not touch the shop cart.
+ * The last shop checkout's `order_id` is returned for the agent request.
+ *
+ * `reset` clears the mock. Callers hold the world gate before this function and
+ * keep it through the snapshot, the verifier, and the result save.
  */
 export async function prepareWorld(
   task: AgentTask,
   client: MockShopClient,
   sessionId: string,
 ): Promise<{ orderId?: string }> {
+  assertWorldGateHeld();
   if (task.setup.library) {
     await client.reset();
     const seeded = await client.request({

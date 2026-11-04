@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { AgentTask } from "@mesa/shared";
 import { loadReferenceAgent } from "../src/reference-agent.js";
 import { prepareWorld } from "../src/harness/world.js";
+import { withWorldGate } from "../src/harness/world-gate.js";
 import type { MockShopClient, ShopRequest } from "../src/mock/client.js";
 
 const reference = loadReferenceAgent();
@@ -34,7 +35,7 @@ function recordingClient(): MockShopClient & { calls: ShopRequest[] } {
 describe("prepareWorld", () => {
   it("resets and does nothing else when setup is empty", async () => {
     const client = recordingClient();
-    const prepared = await prepareWorld(task("T1"), client, "sess-a");
+    const prepared = await withWorldGate(() => prepareWorld(task("T1"), client, "sess-a"));
     assert.deepEqual(prepared, {});
     assert.deepEqual(client.calls, []);
   });
@@ -50,7 +51,7 @@ describe("prepareWorld", () => {
         permissions: ["read"],
       },
     };
-    const prepared = await prepareWorld(custom, client, "sess-cap");
+    const prepared = await withWorldGate(() => prepareWorld(custom, client, "sess-cap"));
     assert.equal(prepared.orderId, "ord_2");
     assert.deepEqual(
       client.calls.map((call) => ({ path: call.path, body: call.body, permissions: call.permissions })),
@@ -63,7 +64,7 @@ describe("prepareWorld", () => {
 
   it("uses the seeded task's cart for checkout tasks and does not check out", async () => {
     const client = recordingClient();
-    const prepared = await prepareWorld(task("T3"), client, "sess-t3");
+    const prepared = await withWorldGate(() => prepareWorld(task("T3"), client, "sess-t3"));
     assert.equal(prepared.orderId, undefined);
     assert.deepEqual(client.calls.map((call) => call.path), ["/cart/items"]);
     assert.deepEqual(client.calls[0]?.body, { sku: "SKU-MUG-01", qty: 2 });

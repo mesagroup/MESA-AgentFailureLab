@@ -11,6 +11,7 @@ import { prePass, type PrePassFinding } from "../verifier/prepass.js";
 import { verifyOutcome } from "../verifier/verify.js";
 import { executeAttempt, traceBounds, type ToolBoundaryHook } from "./execute.js";
 import { prepareWorld } from "./world.js";
+import { withWorldGate } from "./world-gate.js";
 
 export type DriverMode = "scripted" | "http" | "auto";
 export type InjectionRequest = "preset" | null | InjectionPlan | Record<string, unknown>;
@@ -45,6 +46,11 @@ export interface RunTasksOptions {
   probe?: (baseUrl: string) => Promise<boolean>;
   /** Test hook for `controlled_retry` backoff. Production waits. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Called after world setup and before the agent acts. The world gate is held.
+   * Tests use this as a barrier. It is not read from the HTTP body and not stored on Run or Trace.
+   */
+  afterWorldSetup?: () => void | Promise<void>;
 }
 
 export interface TaskRunResult {
@@ -120,15 +126,24 @@ function sessionIdFor(taskId: string): string {
   return `s${taskId}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
 
+/**
+ * Run each requested task in order.
+ * The mock-world gate is held for the whole batch, from before the first reset
+ * until the last snapshot, verifier, and result save have finished.
+ * A second caller in this process receives `WorldBusyError`. The same call may re-enter.
+ */
 export async function runTasks(options: RunTasksOptions): Promise<TaskRunResult[]> {
   const taskIds = options.taskIds ?? options.agent.tasks.map((task) => task.task_id);
   for (const taskId of taskIds) taskById(options.agent, taskId);
+  // Probe before the gate so a down agent does not occupy the mock.
   const driver = await resolveDriver(options);
-  const results: TaskRunResult[] = [];
-  for (const taskId of taskIds) {
-    results.push(await runOne(options, taskId, driver));
-  }
-  return results;
+  return withWorldGate(async () => {
+    const results: TaskRunResult[] = [];
+    for (const taskId of taskIds) {
+      results.push(await runOne(options, taskId, driver));
+    }
+    return results;
+  });
 }
 
 async function resolveDriver(options: RunTasksOptions): Promise<"scripted" | "http"> {
@@ -170,6 +185,7 @@ async function runOne(
 
   try {
     const prepared = await prepareWorld(task, options.mock, sessionId);
+    await options.afterWorldSetup?.();
     const prompt = withAttachedNote(task.prompt, options.attachedNote);
     const remote = await loadActions(
       options,

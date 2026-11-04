@@ -1,5 +1,5 @@
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS, type Agent, type RunPhase } from "@mesa/shared";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
@@ -9,9 +9,11 @@ import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
+import { WORLD_BUSY_ERROR, WorldBusyError } from "./harness/world-gate.js";
 import { sessionView } from "./harness/session.js";
 import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
+import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/routes.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -20,6 +22,12 @@ export interface BuildAppOptions {
   agent?: Agent;
   mockBaseUrl?: string;
   mock?: MockShopClient;
+  /**
+   * Called after each mock setup while the world gate is held.
+   * Tests use it as a barrier. It is not read from the HTTP body.
+   */
+  afterWorldSetup?: () => void | Promise<void>;
+  diagnosis?: DiagnosisOptions;
 }
 
 /**
@@ -27,7 +35,11 @@ export interface BuildAppOptions {
  * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
  * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
- * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
+ * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
+ * POST /traces/:traceId/diagnose route calls agentservice and persists diagnosis only.
+ * `POST /runs` and `POST /attacker/jury-case` share one in-process mock-world gate.
+ * A second mutating request gets HTTP 409 `world_busy`. GET routes and
+ * POST /traces/:traceId/diagnose do not take that gate.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
@@ -46,6 +58,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof WorldBusyError) {
+      return reply.code(409).send({ error: WORLD_BUSY_ERROR, message: error.message });
+    }
     request.log.error(error);
     const message = error instanceof Error ? error.message : "Internal harness error";
     reply.code(500).send({ error: "error", message });
@@ -69,6 +84,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   registerAgentRoutes(app, agents);
+  registerDiagnosisRoutes(app, store, options.diagnosis);
 
   app.get("/faults", async () => ({
     faults: FAULT_CATALOG.map((entry) => ({
@@ -123,13 +139,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         taskId: parsed.taskId,
         permissions: parsed.permissions,
         parentRunId: parsed.parentRunId,
+        afterWorldSetup: options.afterWorldSetup,
       });
     } catch (error) {
-      if (error instanceof ContractError) {
-        return reply.code(500).send({ error: "error", message: error.message });
-      }
-      const message = error instanceof Error ? error.message : "Bad request";
-      return reply.code(400).send({ error: "invalid_request", message });
+      return replyForHarnessFailure(error, reply);
     }
   });
 
@@ -158,18 +171,26 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         parentRunId: parsed.value.parentRunId,
         grantCancel: parsed.value.grantCancel,
         timeoutMs: parsed.value.timeoutMs,
+        afterWorldSetup: options.afterWorldSetup,
       });
       return { results };
     } catch (error) {
-      if (error instanceof ContractError) {
-        return reply.code(500).send({ error: "error", message: error.message });
-      }
-      const message = error instanceof Error ? error.message : "Bad request";
-      return reply.code(400).send({ error: "invalid_request", message });
+      return replyForHarnessFailure(error, reply);
     }
   });
 
   return app;
+}
+
+function replyForHarnessFailure(error: unknown, reply: FastifyReply) {
+  if (error instanceof WorldBusyError) {
+    return reply.code(409).send({ error: WORLD_BUSY_ERROR, message: error.message });
+  }
+  if (error instanceof ContractError) {
+    return reply.code(500).send({ error: "error", message: error.message });
+  }
+  const message = error instanceof Error ? error.message : "Bad request";
+  return reply.code(400).send({ error: "invalid_request", message });
 }
 
 interface RunRequest {

@@ -1,6 +1,7 @@
 import type { Agent, AgentRunRequest, FaultCategory, FixKind } from "@mesa/shared";
 import { permissionsFor } from "../../backend/src/agent/scripted.js";
 import { prepareWorld } from "../../backend/src/harness/world.js";
+import { withWorldGate } from "../../backend/src/harness/world-gate.js";
 import { runTasks } from "../../backend/src/harness/runner.js";
 import { presetPlan } from "../../backend/src/injector/catalog.js";
 import type { MockShopClient } from "../../backend/src/mock/client.js";
@@ -115,8 +116,18 @@ export interface ScriptedBaselineRow {
 /**
  * The labelled scripted agent calls the shop itself, so nothing is injected.
  * `verifyOutcome` is the scorer. This function does not assign `outcome.verifier`.
+ * The in-process world gate is held for the whole loop, so one task's reset cannot
+ * land inside another's setup-to-snapshot sequence in this process.
  */
 export async function scoreScriptedBaseline(input: {
+  baseUrl: string;
+  mock: MockShopClient;
+  agent: Agent;
+}): Promise<ScriptedBaselineRow[]> {
+  return withWorldGate(() => scoreScriptedBaselineHeld(input));
+}
+
+async function scoreScriptedBaselineHeld(input: {
   baseUrl: string;
   mock: MockShopClient;
   agent: Agent;
