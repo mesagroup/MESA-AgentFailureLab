@@ -10,7 +10,7 @@ import { DATASET_PLAN } from "../src/eval/dataset-plan.js";
 import { METRIC_DEFINITIONS, evaluateDataset, scoreJudgement } from "../src/eval/evaluate.js";
 import { loadDataset } from "../src/eval/load-dataset.js";
 import { MANIFEST_PATH } from "../src/eval/dataset-plan.js";
-import { GROK_PLACEHOLDER, ITALIAN_METRIC_DEFINITIONS, formatMs, limitsBody, markerBody } from "../src/eval/report.js";
+import { GROK_PLACEHOLDER, ITALIAN_METRIC_DEFINITIONS, formatCost, formatMs, limitsBody, markerBody } from "../src/eval/report.js";
 import { repoRoot } from "../src/eval/repo-root.js";
 import { LEAKAGE_NOTE, baselineMappingLines, hintsInSteps, rulesBaseline } from "../src/eval/rules.js";
 
@@ -252,14 +252,37 @@ describe("published numbers", () => {
     const board = markerBody(readme);
     const limits = limitsBody(readme);
     const scored = fresh.methods.baseline.scored;
-    for (const line of [
+    const lines = [
       `Set valutato: ${fresh.dataset.scored_count} trace, ${fresh.dataset.categories.length} categorie (${fresh.dataset.categories.join(", ")}).`,
       `| Accuratezza di categoria | ${fresh.methods.baseline.category_correct}/${scored} |`,
       `| Step esatto | ${fresh.methods.baseline.step_exact}/${scored} |`,
       `| Step entro ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} |`,
       `| Hit del fix proposto | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} |`,
-      GROK_PLACEHOLDER,
-    ]) {
+    ];
+    const grokMode = readString(latestJson, ["methods", "grok", "mode"]);
+    if (grokMode === "skipped") {
+      lines.push(GROK_PLACEHOLDER);
+    } else if (grokMode === "live") {
+      const model = readString(latestJson, ["methods", "grok", "model"]);
+      assert.notEqual(model, "");
+      const grokScored = readNumber(latestJson, ["methods", "grok", "scored"]);
+      const grokApplicable = readNumber(latestJson, ["methods", "grok", "fix_applicable"]);
+      const category = `${readNumber(latestJson, ["methods", "grok", "category_correct"])}/${grokScored}`;
+      const stepExact = `${readNumber(latestJson, ["methods", "grok", "step_exact"])}/${grokScored}`;
+      const stepTolerance = `${readNumber(latestJson, ["methods", "grok", "step_tolerance_1"])}/${grokScored}`;
+      const fixHits = `${readNumber(latestJson, ["methods", "grok", "fix_hits"])}/${grokApplicable}`;
+      lines.push(
+        `**Colonna Grok — live** (\`${model}\`)`,
+        `| Accuratezza di categoria | ${fresh.methods.baseline.category_correct}/${scored} | ${category} |`,
+        `| Step esatto | ${fresh.methods.baseline.step_exact}/${scored} | ${stepExact} |`,
+        `| Step entro ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} | ${stepTolerance} |`,
+        `| Hit del fix proposto | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} | ${fixHits} |`,
+      );
+      assert.equal(board.includes(GROK_PLACEHOLDER), false);
+    } else {
+      assert.fail(`published Grok mode must be skipped or live, got ${grokMode}`);
+    }
+    for (const line of lines) {
       assert.ok(board.includes(line), line);
     }
     for (const text of Object.values(ITALIAN_METRIC_DEFINITIONS)) {
@@ -278,7 +301,18 @@ describe("published numbers", () => {
     assert.ok(limits.includes("PR #21"));
     assert.ok(limits.includes("#15"));
     assert.ok(limits.includes("ADR-001"));
-    assert.ok(limits.includes("n/a"));
+    if (grokMode === "skipped") {
+      assert.ok(limits.includes("n/a"));
+    } else {
+      const cost = formatCost(readNumber(latestJson, ["methods", "grok", "cost_usd", "total"]));
+      const tokensIn = readNumber(latestJson, ["methods", "grok", "tokens", "input"]);
+      const tokensOut = readNumber(latestJson, ["methods", "grok", "tokens", "output"]);
+      assert.ok(
+        limits.includes(
+          `Costo Grok riportato dal provider: ${cost} USD (totale), token in/out ${tokensIn}/${tokensOut}. La baseline solo-regole non riporta token né costo.`,
+        ),
+      );
+    }
     assert.ok(readme.includes("## Dataset e risultati"));
     assert.ok(readme.includes("## Limiti noti"));
     assert.ok(latestMd.includes(LEAKAGE_NOTE));
@@ -385,15 +419,28 @@ function assertNoAnswerKey(value: unknown): void {
 }
 
 function readNumber(value: unknown, path: readonly string[]): number {
+  const current = readPath(value, path);
+  if (typeof current !== "number") {
+    throw new Error(`${path.join(".")} is not a number`);
+  }
+  return current;
+}
+
+function readString(value: unknown, path: readonly string[]): string {
+  const current = readPath(value, path);
+  if (typeof current !== "string") {
+    throw new Error(`${path.join(".")} is not a string`);
+  }
+  return current;
+}
+
+function readPath(value: unknown, path: readonly string[]): unknown {
   let current = value;
   for (const key of path) {
     if (!isRecord(current)) {
       throw new Error(`Missing ${path.join(".")}`);
     }
     current = current[key];
-  }
-  if (typeof current !== "number") {
-    throw new Error(`${path.join(".")} is not a number`);
   }
   return current;
 }
