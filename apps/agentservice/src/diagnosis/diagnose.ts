@@ -8,17 +8,22 @@ import { validateTrace } from "@mesa/shared/validate";
  */
 const REPAIRED_CONFIDENCE_CAP = 0.4;
 
-const FINDING_PRIORITY = [
+/**
+ * Repair order for a model `step_id` that is not on the trace, and the order
+ * `diagnosisFindings` uses so the rules baseline cites the same step the
+ * repair path would. Earlier kinds win.
+ */
+export const DIAGNOSIS_FINDING_PRIORITY = [
   "false_success_claim",
   "tool_error",
   "repeated_tool_call",
   "timeout",
 ] as const;
 
-type FindingKind = (typeof FINDING_PRIORITY)[number];
+export type DiagnosisFindingKind = (typeof DIAGNOSIS_FINDING_PRIORITY)[number];
 
-interface Finding {
-  kind: FindingKind;
+export interface DiagnosisFinding {
+  kind: DiagnosisFindingKind;
   step_ids: readonly [string, ...string[]];
   detail: string;
 }
@@ -46,7 +51,7 @@ interface PromptView {
   steps: Trace["steps"];
   totals: Trace["totals"];
   agent_claimed_success: boolean;
-  findings: Finding[];
+  findings: DiagnosisFinding[];
 }
 
 export interface ModelUsage {
@@ -124,8 +129,8 @@ export async function diagnoseTrace(trace: Trace, options: DiagnoseOptions): Pro
   return { ...validated.value, diagnosis };
 }
 
-function prePass(trace: Trace): Finding[] {
-  const findings: Finding[] = [];
+function prePass(trace: Trace): DiagnosisFinding[] {
+  const findings: DiagnosisFinding[] = [];
   if (trace.outcome.agent_claimed_success && trace.outcome.verifier.passed === false) {
     const stepId =
       lastStepId(trace, (step) => step.type === "message" && step.role === "assistant") ??
@@ -206,7 +211,20 @@ function prePass(trace: Trace): Finding[] {
   return findings;
 }
 
-function toPromptView(trace: Trace, findings: readonly Finding[]): PromptView {
+/**
+ * Mechanical findings in repair priority. The first item is the step and kind
+ * the rules baseline uses. This does not read `fault` and does not call a model.
+ */
+export function diagnosisFindings(trace: Trace): readonly DiagnosisFinding[] {
+  return prePass(trace)
+    .slice()
+    .sort(
+      (left, right) =>
+        DIAGNOSIS_FINDING_PRIORITY.indexOf(left.kind) - DIAGNOSIS_FINDING_PRIORITY.indexOf(right.kind),
+    );
+}
+
+function toPromptView(trace: Trace, findings: readonly DiagnosisFinding[]): PromptView {
   return {
     task_id: trace.task_id,
     started_at: trace.started_at,
@@ -270,7 +288,7 @@ function renderPrompt(view: PromptView): { system: string; user: string } {
   return { system, user: JSON.stringify(view) };
 }
 
-function alignModelObject(parsed: unknown, trace: Trace, findings: readonly Finding[]): unknown {
+function alignModelObject(parsed: unknown, trace: Trace, findings: readonly DiagnosisFinding[]): unknown {
   if (!isRecord(parsed)) {
     throw new DiagnosisFailed();
   }
@@ -326,8 +344,8 @@ function alignModelObject(parsed: unknown, trace: Trace, findings: readonly Find
   return aligned;
 }
 
-function fallbackStep(findings: readonly Finding[]): string | null {
-  for (const kind of FINDING_PRIORITY) {
+function fallbackStep(findings: readonly DiagnosisFinding[]): string | null {
+  for (const kind of DIAGNOSIS_FINDING_PRIORITY) {
     const found = findings.find((finding) => finding.kind === kind);
     if (found) {
       return found.step_ids[0];

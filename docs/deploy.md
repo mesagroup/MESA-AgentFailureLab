@@ -27,11 +27,11 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 | `XAI_API_KEY` | agent service, runtime | yes | `apps/agentservice/.env` only | Dashboard prompt, `sync: false` |
 | `XAI_BASE_URL` | agent service, runtime | no | `https://api.x.ai/v1` | same, in `render.yaml` |
 | `GROK_MODEL` | agent service, runtime | no | `grok-3` | same, in `render.yaml` |
-| `VITE_BACKEND_URL` | frontend, **build time** | no | `http://127.0.0.1:3001` | `https://mesa-backend.onrender.com` |
+| `VITE_BACKEND_URL` | frontend, **build time** | no | `http://127.0.0.1:3001` | `https://mesa-backend-itm4.onrender.com` |
 | `VITE_AGENTSERVICE_URL` | frontend, **build time** | no | `http://127.0.0.1:3002` | `https://mesa-agentservice.onrender.com` |
-| `BACKEND_URL` | agent service, runtime | no | Compose: `http://mesa-backend:3001` | public backend URL |
-| `AGENTSERVICE_URL` | backend, runtime | no | Compose: `http://mesa-agentservice:3002` | public agent service URL |
-| `FRONTEND_URL` | backend and agent service, runtime | no | Compose: `http://mesa-frontend:3000` | public frontend URL |
+| `BACKEND_URL` | agent service, runtime | no | Compose: `http://mesa-backend:3001` | `https://mesa-backend-itm4.onrender.com` |
+| `AGENTSERVICE_URL` | backend, runtime | no | Compose: `http://mesa-agentservice:3002` | `https://mesa-agentservice.onrender.com` |
+| `FRONTEND_URL` | backend and agent service, runtime | no | Compose: `http://mesa-frontend:3000` | `https://mesa-frontend-rleq.onrender.com` |
 | `MOCK_SHOP_URL` | backend, runtime | no | `http://127.0.0.1:8787` | not set; the shop is not a Render service |
 | `PORT` | all three | no | 3000 / 3001 / 3002 | same values in the Blueprint |
 | `HOST` | backend and agent service | no | `127.0.0.1` for `pnpm dev`; `0.0.0.0` in containers | `0.0.0.0` via env group `mesa-shared` |
@@ -93,29 +93,27 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 5. When Render prompts for `XAI_API_KEY`, paste the key or leave it blank until Grok is wired. `sync: false` means this prompt happens on first create. Later Blueprint syncs do not overwrite the value. To rotate it, edit the service env var in the Dashboard. Do not put the key in git, in GitHub Actions, or in the Blueprint.
 6. Apply. Render builds the three images and deploys them. The first request after idle can be slow because the free plan spins down.
 
-### After the first deploy
+### Public hosts
 
-Open each service and copy its real `onrender.com` URL (`RENDER_EXTERNAL_URL` in the Render docs). The Blueprint placeholders assume:
+Render assigned these public URLs in workspace `tea-dblh716417fc738hr7vg`. `render.yaml` stores the same values. `mesa-agentservice` kept `https://mesa-agentservice.onrender.com`. Frontend and backend received a suffix.
 
-- `https://mesa-frontend.onrender.com`
-- `https://mesa-backend.onrender.com`
-- `https://mesa-agentservice.onrender.com`
+| Service | Public URL |
+| --- | --- |
+| `mesa-frontend` | `https://mesa-frontend-rleq.onrender.com` |
+| `mesa-backend` | `https://mesa-backend-itm4.onrender.com` |
+| `mesa-agentservice` | `https://mesa-agentservice.onrender.com` |
 
-If Render appends a suffix because the name was taken, update the URL env vars in the Dashboard to the real public URLs:
+A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, and `FRONTEND_URL` from this file onto the services. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
 
-- On `mesa-frontend`: `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, then **redeploy** so Vite bakes the new values.
-- On `mesa-backend`: `AGENTSERVICE_URL`, `FRONTEND_URL` (runtime; a restart is enough).
-- On `mesa-agentservice`: `BACKEND_URL`, `FRONTEND_URL`, and `XAI_API_KEY` if you skipped it.
+After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, and `FRONTEND_URL` are read at runtime; a restart picks them up. Set `XAI_API_KEY` in the Dashboard when you want Grok calls.
 
 Confirm:
 
 ```bash
-curl -fsS https://mesa-frontend.onrender.com/health
-curl -fsS https://mesa-backend.onrender.com/health
+curl -fsS https://mesa-frontend-rleq.onrender.com/health
+curl -fsS https://mesa-backend-itm4.onrender.com/health
 curl -fsS https://mesa-agentservice.onrender.com/health
 ```
-
-Use the hostnames from the Dashboard if they differ.
 
 GitHub Actions does not deploy and does not need `XAI_API_KEY`. `.github/workflows/ci.yml` runs on pull requests and on pushes to `main`: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm test`, `docker compose config`, and a Docker build of each image plus a local `GET /health`. It does not push images. Render's own auto-deploy from `main` is separate (`autoDeployTrigger: commit`). A red CI run does not block that deploy.
 

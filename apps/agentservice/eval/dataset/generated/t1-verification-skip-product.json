@@ -1,0 +1,195 @@
+{
+  "trace_id": "trace-T1-injected-7f5802d6-d182-4c9b-9f0a-72b4c6bb2f2e",
+  "agent_id": "reference-shop",
+  "run_id": "run-T1-injected-1406dc64-8ec9-432e-a572-fd4af7011ebe",
+  "task_id": "T1",
+  "started_at": "2026-11-04T12:34:13.440Z",
+  "ended_at": "2026-11-04T12:34:13.446Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.441Z",
+      "role": "user",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Search the catalog for a ceramic mug and open the matching product page."
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T12:34:13.442Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "search_products",
+      "tool_input": {
+        "q": "mug"
+      }
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T12:34:13.443Z",
+      "role": "tool",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "search_products",
+      "tool_output": {
+        "products": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "system",
+      "timestamp": "2026-11-04T12:34:13.444Z",
+      "role": "system",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Injector skipped get_product."
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.445Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Success. T1 is done."
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "catalog_read",
+          "passed": true,
+          "detail": "Recorded 1 catalog read(s)."
+        },
+        {
+          "name": "product_viewed",
+          "passed": false,
+          "detail": "The session did not open SKU-MUG-01."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [],
+        "orders": [],
+        "inventory": [
+          {
+            "product_id": "SKU-BAG-04",
+            "sku": "SKU-BAG-04",
+            "name": "Tote Bag",
+            "description": "Heavy canvas tote, natural.",
+            "price_usd": 32,
+            "stock": 8
+          },
+          {
+            "product_id": "SKU-CAP-03",
+            "sku": "SKU-CAP-03",
+            "name": "Canvas Cap",
+            "description": "Unstructured cap, natural canvas.",
+            "price_usd": 18,
+            "stock": 10
+          },
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          },
+          {
+            "product_id": "SKU-NOTE-05",
+            "sku": "SKU-NOTE-05",
+            "name": "Notebook",
+            "description": "A5 ruled notebook, 80 pages.",
+            "price_usd": 9.5,
+            "stock": 30
+          },
+          {
+            "product_id": "SKU-TEE-02",
+            "sku": "SKU-TEE-02",
+            "name": "Cotton T-Shirt",
+            "description": "Unisex tee, washed black, size M.",
+            "price_usd": 25,
+            "stock": 15
+          }
+        ],
+        "observations": [
+          {
+            "session_id": "sT1_9ad8085f3f5547da",
+            "catalog_reads": [
+              {
+                "query": "mug",
+                "at": "2026-11-04T12:34:13.441Z"
+              }
+            ],
+            "product_views": [],
+            "order_reads": []
+          }
+        ]
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": {
+    "latency_ms": 5,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0
+  },
+  "fault": {
+    "injected": true,
+    "labels": [
+      {
+        "category": "Verification",
+        "code": "suppressed_readback",
+        "step_id": "step-3"
+      }
+    ],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": null
+}

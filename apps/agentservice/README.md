@@ -1,6 +1,9 @@
 # @mesa/agentservice
 
 Grok diagnosis for one `Trace`, and the fix applicator for `controlled_retry`, `pre_response_check`, and `permission_guard`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`. The reference agent itself is still open PR #21.
+Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
+
+`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. The backend harness executes the actions, injects faults, and writes the verifier. Optional `fix_kinds` are parsed and passed to `applyFixesToPlan`. That function is a pass-through in `src/reference-agent/apply-fixes-hook.ts` until [PR #36](https://github.com/mesagroup/MESA-AgentFailureLab/pull/36) merges. After that, change the import in `plan.ts` to `../fixes/plan.js`. Do not copy the three fix policies into this package. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
 
@@ -159,3 +162,15 @@ For each of T1–T5 it runs the merged harness (`runTasks`, in-process shop, pre
 What this run cannot do yet is listed in the report under Blocked and Requests. The harness stores `fix_kinds` on the Run and does not put them on `AgentRunRequest`. `controlled_retry` cannot see a tool result from an action list. `permission_guard` does not change the preset T5 verifier result, because the shop already enforces the session grant and the jury attacker does not ask the agent. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.
+
+## Eval
+
+From the repo root:
+
+```bash
+pnpm generate-dataset   # loopback mock + scripted harness; rewrites eval/dataset
+pnpm eval               # rules baseline, and Grok when XAI_API_KEY is set
+pnpm --filter @mesa/agentservice test
+```
+
+`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.

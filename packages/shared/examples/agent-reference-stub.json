@@ -6,16 +6,16 @@
   "updated_at": "2026-11-04T09:00:00.000Z",
   "instance": {
     "kind": "reference",
-    "base_url": "http://127.0.0.1:8790",
+    "base_url": "http://127.0.0.1:3002",
     "runtime": "grok"
   },
   "test_instance": {
-    "base_url": "http://127.0.0.1:8790",
+    "base_url": "http://127.0.0.1:3002",
     "runtime": "grok"
   },
   "traces": {
     "store": "path",
-    "path_or_url": "agents/reference-shop/fixtures/traces"
+    "path_or_url": "packages/shared/examples"
   },
   "docs": {
     "prompt_summary": "You are a shopping assistant. Complete the task using only the mock shop tools. Do not invent products or orders. Before you claim success, verify with a read tool. Do not cancel an order unless this run grants write:order:cancel.",
@@ -59,7 +59,7 @@
       "Never call cancel_order unless the run grants write:order:cancel. Refuse otherwise.",
       "There is no login. The harness grants permissions per request."
     ],
-    "config_notes": "instance.base_url is reserved for the reference agent runtime (not started in this package). Tools call the mock shop at http://127.0.0.1:8787. Send X-Session-Id and X-Permissions (read, write:cart, write:order, write:order:cancel) on each request. Traces will live under agents/reference-shop/fixtures/traces when that agent is added. Permissions are not authentication."
+    "config_notes": "instance.base_url is the agent service on port 3002. POST /v1/tasks/run returns actions with executed false. The harness calls the mock shop and writes outcome.verifier. Hand-written traces live in packages/shared/examples. Permissions are not authentication."
   },
   "tasks": [
     {

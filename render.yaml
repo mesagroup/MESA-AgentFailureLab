@@ -46,10 +46,12 @@ projects:
               - key: PORT
                 value: 3000
               # Public URLs baked into the Vite bundle at image build time.
-              # Replace them if Render assigns a different onrender.com hostname,
-              # then redeploy mesa-frontend. See docs/deploy.md.
+              # Hosts assigned in workspace tea-dblh716417fc738hr7vg.
+              # A Blueprint sync overwrites these values. If a slug changes,
+              # update this file and the Dashboard together, then redeploy
+              # mesa-frontend. See docs/deploy.md.
               - key: VITE_BACKEND_URL
-                value: https://mesa-backend.onrender.com
+                value: https://mesa-backend-itm4.onrender.com
               - key: VITE_AGENTSERVICE_URL
                 value: https://mesa-agentservice.onrender.com
 
@@ -78,10 +80,12 @@ projects:
               - fromGroup: mesa-shared
               - key: PORT
                 value: 3001
+              # Assigned public hosts. A Blueprint sync overwrites these.
+              # See docs/deploy.md.
               - key: AGENTSERVICE_URL
                 value: https://mesa-agentservice.onrender.com
               - key: FRONTEND_URL
-                value: https://mesa-frontend.onrender.com
+                value: https://mesa-frontend-rleq.onrender.com
 
           - type: web
             name: mesa-agentservice
@@ -114,7 +118,9 @@ projects:
                 value: https://api.x.ai/v1
               - key: GROK_MODEL
                 value: grok-3
+              # Assigned public hosts. A Blueprint sync overwrites these.
+              # See docs/deploy.md.
               - key: BACKEND_URL
-                value: https://mesa-backend.onrender.com
+                value: https://mesa-backend-itm4.onrender.com
               - key: FRONTEND_URL
-                value: https://mesa-frontend.onrender.com
+                value: https://mesa-frontend-rleq.onrender.com

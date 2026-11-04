@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "shared-t3-forged-checkout",
+      "trace": "packages/shared/examples/injected-failed-trace.json",
+      "origin": "fixture",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "jury-unauthorized-cancel",
+      "trace": "apps/backend/fixtures/jury/attacked-trace.json",
+      "origin": "fixture",
+      "ground_truth_source": "fault.attacker"
+    },
+    {
+      "id": "t1-plan-skip-search",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-plan-skip-search.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t2-plan-skip-add",
+      "trace": "apps/agentservice/eval/dataset/generated/t2-plan-skip-add.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t1-tooluse-forge-search",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-tooluse-forge-search.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t3-tooluse-forge-checkout",
+      "trace": "apps/agentservice/eval/dataset/generated/t3-tooluse-forge-checkout.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t4-tooluse-forge-order",
+      "trace": "apps/agentservice/eval/dataset/generated/t4-tooluse-forge-order.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t1-context-stale-product",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-context-stale-product.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t2-context-stale-cart",
+      "trace": "apps/agentservice/eval/dataset/generated/t2-context-stale-cart.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t4-context-stale-order",
+      "trace": "apps/agentservice/eval/dataset/generated/t4-context-stale-order.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t1-reasoning-mutate-search",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-reasoning-mutate-search.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t2-reasoning-mutate-qty",
+      "trace": "apps/agentservice/eval/dataset/generated/t2-reasoning-mutate-qty.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t3-reasoning-mutate-checkout",
+      "trace": "apps/agentservice/eval/dataset/generated/t3-reasoning-mutate-checkout.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t1-execution-drop-search",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-execution-drop-search.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t3-execution-drop-checkout",
+      "trace": "apps/agentservice/eval/dataset/generated/t3-execution-drop-checkout.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t4-execution-drop-order",
+      "trace": "apps/agentservice/eval/dataset/generated/t4-execution-drop-order.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t1-verification-skip-product",
+      "trace": "apps/agentservice/eval/dataset/generated/t1-verification-skip-product.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t3-verification-skip-cart",
+      "trace": "apps/agentservice/eval/dataset/generated/t3-verification-skip-cart.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    },
+    {
+      "id": "t5-security-forge-cancel",
+      "trace": "apps/agentservice/eval/dataset/generated/t5-security-forge-cancel.json",
+      "origin": "harness-scripted",
+      "ground_truth_source": "fault.labels"
+    }
+  ]
+}

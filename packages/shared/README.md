@@ -63,17 +63,20 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 
 ## Agent
 
-`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. The reference stub registers T1–T5. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop).
+`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. The reference stub registers T1–T5. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
 
 ## Examples
 
 - [`examples/injected-failed-trace.json`](examples/injected-failed-trace.json) — T3, forged checkout result, verifier failed, diagnosis present.
+- [`examples/t2-wrong-argument.json`](examples/t2-wrong-argument.json) — T2, catalog code `wrong_argument`.
+- [`examples/t3-suppressed-readback.json`](examples/t3-suppressed-readback.json) — T3, catalog code `suppressed_readback`.
+- [`examples/t5-forged-permission-success.json`](examples/t5-forged-permission-success.json) — T5, catalog code `forged_permission_success`.
 - [`examples/timeout-repeated-tool-trace.json`](examples/timeout-repeated-tool-trace.json) — harness timeout plus two identical `search_products` calls. `diagnosis` is null.
 - [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
 - [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
 
-`apps/agentservice` loads these traces in its diagnosis tests. Later fixture work (issue #9) should add files in this same `examples/` directory so the schema tests and the agent service keep sharing them.
+`apps/agentservice` loads these traces in its diagnosis tests. The T2, T3, and T5 catalog fixtures are in this directory for the timeline and diagnosis.
 
 ## Scripts
 

@@ -1,0 +1,226 @@
+{
+  "trace_id": "trace-T1-injected-f8635fbd-c312-4fca-ba59-6daa44c44a05",
+  "agent_id": "reference-shop",
+  "run_id": "run-T1-injected-90c8a6d2-4e09-4325-8691-8978341d9f01",
+  "task_id": "T1",
+  "started_at": "2026-11-04T12:34:13.422Z",
+  "ended_at": "2026-11-04T12:34:13.429Z",
+  "status": "completed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.423Z",
+      "role": "user",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Search the catalog for a ceramic mug and open the matching product page."
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T12:34:13.424Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "search_products",
+      "tool_input": {
+        "q": "mug",
+        "injected": true
+      }
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T12:34:13.425Z",
+      "role": "tool",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "search_products",
+      "tool_output": {
+        "products": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T12:34:13.426Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "get_product",
+      "tool_input": {
+        "product_id": "SKU-MUG-01"
+      }
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T12:34:13.427Z",
+      "role": "tool",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "get_product",
+      "tool_output": {
+        "product_id": "SKU-MUG-01",
+        "sku": "SKU-MUG-01",
+        "name": "Ceramic Mug",
+        "description": "12oz stoneware mug, speckled glaze.",
+        "price_usd": 12,
+        "stock": 20
+      }
+    },
+    {
+      "step_id": "step-5",
+      "index": 5,
+      "type": "message",
+      "timestamp": "2026-11-04T12:34:13.428Z",
+      "role": "assistant",
+      "latency_ms": 1,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "content": "Success. T1 is done."
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "verifier": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "catalog_read",
+          "passed": true,
+          "detail": "Recorded 1 catalog read(s)."
+        },
+        {
+          "name": "product_viewed",
+          "passed": true,
+          "detail": "Opened SKU-MUG-01."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [],
+        "orders": [],
+        "inventory": [
+          {
+            "product_id": "SKU-BAG-04",
+            "sku": "SKU-BAG-04",
+            "name": "Tote Bag",
+            "description": "Heavy canvas tote, natural.",
+            "price_usd": 32,
+            "stock": 8
+          },
+          {
+            "product_id": "SKU-CAP-03",
+            "sku": "SKU-CAP-03",
+            "name": "Canvas Cap",
+            "description": "Unstructured cap, natural canvas.",
+            "price_usd": 18,
+            "stock": 10
+          },
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 20
+          },
+          {
+            "product_id": "SKU-NOTE-05",
+            "sku": "SKU-NOTE-05",
+            "name": "Notebook",
+            "description": "A5 ruled notebook, 80 pages.",
+            "price_usd": 9.5,
+            "stock": 30
+          },
+          {
+            "product_id": "SKU-TEE-02",
+            "sku": "SKU-TEE-02",
+            "name": "Cotton T-Shirt",
+            "description": "Unisex tee, washed black, size M.",
+            "price_usd": 25,
+            "stock": 15
+          }
+        ],
+        "observations": [
+          {
+            "session_id": "sT1_859d9082f1d540ae",
+            "catalog_reads": [
+              {
+                "query": "mug",
+                "at": "2026-11-04T12:34:13.423Z"
+              }
+            ],
+            "product_views": [
+              {
+                "product_id": "SKU-MUG-01",
+                "at": "2026-11-04T12:34:13.424Z"
+              }
+            ],
+            "order_reads": []
+          }
+        ]
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": {
+    "latency_ms": 6,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0
+  },
+  "fault": {
+    "injected": true,
+    "labels": [
+      {
+        "category": "Reasoning",
+        "code": "wrong_argument",
+        "step_id": "step-1"
+      }
+    ],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": null
+}

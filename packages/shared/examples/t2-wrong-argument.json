@@ -1,0 +1,120 @@
+{
+  "trace_id": "trace-t2-wrong-argument",
+  "agent_id": "reference-shop",
+  "run_id": "run-fixture-t2",
+  "task_id": "T2",
+  "started_at": "2026-11-04T11:00:00.000Z",
+  "ended_at": "2026-11-04T11:00:00.210Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T11:00:00.010Z",
+      "role": "user",
+      "content": "Add 2 units of SKU-MUG-01 (Ceramic Mug) to the cart.",
+      "latency_ms": 10,
+      "token_usage": { "input": 20, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T11:00:00.110Z",
+      "role": "assistant",
+      "tool_name": "add_to_cart",
+      "tool_input": { "sku": "SKU-MUG-01", "qty": 1 },
+      "latency_ms": 100,
+      "token_usage": { "input": 30, "output": 8 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T11:00:00.130Z",
+      "role": "tool",
+      "tool_name": "add_to_cart",
+      "tool_output": {
+        "session_id": "demo",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 1,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 12
+      },
+      "latency_ms": 20,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "message",
+      "timestamp": "2026-11-04T11:00:00.210Z",
+      "role": "assistant",
+      "content": "Done. I added the Ceramic Mug to your cart.",
+      "latency_ms": 80,
+      "token_usage": { "input": 20, "output": 10 },
+      "cost_usd": 0
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "cart_contains",
+          "passed": false,
+          "detail": "Cart has SKU-MUG-01 qty 1; expected 2."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [
+          {
+            "session_id": "demo",
+            "items": [
+              {
+                "product_id": "SKU-MUG-01",
+                "sku": "SKU-MUG-01",
+                "name": "Ceramic Mug",
+                "qty": 1,
+                "unit_price_usd": 12
+              }
+            ],
+            "total_usd": 12
+          }
+        ],
+        "orders": [],
+        "inventory": [],
+        "observations": []
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": { "latency_ms": 210, "tokens_in": 70, "tokens_out": 18, "cost_usd": 0 },
+  "fault": {
+    "injected": true,
+    "labels": [{ "category": "Reasoning", "step_id": "step-1", "code": "wrong_argument" }],
+    "attacker": { "used": false, "payload_id": null }
+  },
+  "diagnosis": {
+    "category": "Reasoning",
+    "cause": "The task asks for quantity 2, but add_to_cart was called with quantity 1 and the cart kept that quantity.",
+    "step_id": "step-1",
+    "confidence": 0.9,
+    "evidence": [
+      "step-1 calls add_to_cart with qty 1.",
+      "The snapshot cart holds SKU-MUG-01 qty 1."
+    ],
+    "proposed_fixes": []
+  }
+}
