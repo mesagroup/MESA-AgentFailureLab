@@ -40,7 +40,8 @@ export interface BuildAppOptions {
  * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
- * POST /traces/:traceId/diagnose route calls agentservice and persists diagnosis only.
+ * POST /traces/:traceId/diagnose route calls agentservice with the stored trace
+ * (and the task evalset when present) and persists diagnosis only.
  * `POST /runs` and `POST /attacker/jury-case` share one in-process mock-world gate.
  * A second mutating request gets HTTP 409 `world_busy`. GET routes and
  * POST /traces/:traceId/diagnose do not take that gate.
@@ -89,7 +90,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerAgentRoutes(app, agents);
   registerOtelImportRoutes(app, agents, store);
-  registerDiagnosisRoutes(app, store, options.diagnosis);
+  registerDiagnosisRoutes(app, store, agents, options.diagnosis);
   registerEvalsetRoutes(app, options.evalset);
 
   app.get("/faults", async () => ({

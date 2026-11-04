@@ -62,21 +62,27 @@ The harness client is `apps/backend/src/mock/`. On a shop run it calls tool rout
 `diagnosis` stays null until that service fills it. A proposed fix counts only after a later run, once the agent owner has changed the agent on their own deploy, and the verifier passes.
 
 The explicit backend operation `POST /traces/:traceId/diagnose` loads a stored
-trace, posts it to `AGENTSERVICE_URL/diagnose`, validates that the response changes
-only `diagnosis`, and conditionally saves that field. A concurrent trace update
-causes 409 instead of overwriting it. Existing diagnoses are returned without a
-new provider call. The per-trace in-process gate is independent of the mock/world
-lock: no shop operation or run is executed by this endpoint. PostgreSQL uses an
-atomic jsonb comparison to prevent stale saves across processes, but separate
-processes can still incur duplicate provider calls. See the backend README for
-the HTTP contract and timeout. This documents runtime wiring, not a change to
-ADR-001's recorded status or ADR-002's ownership decisions.
+trace, resolves `tasks[].evalset` from that trace's `agent_id` + `task_id` when
+the Agent document has one, and posts either the bare Trace or `{ trace, evalset }`
+to `AGENTSERVICE_URL/diagnose`. It validates that the response changes only
+`diagnosis`, and conditionally saves that field. Assisted judgement from the
+evalset is folded into `diagnosis` (`cause` / `evidence`). There is no dedicated
+Trace field for it, and Grok still must not write `outcome.verifier` or `fault.*`.
+There is no `POST /runs/:runId/diagnose`. A concurrent trace update causes 409
+instead of overwriting it. Existing diagnoses are returned without a new provider
+call, even if the task evalset was edited afterwards: the cache key is the stored
+`trace_id` diagnosis, not a hash of the evalset. The per-trace in-process gate is
+independent of the mock/world lock: no shop operation or run is executed by this
+endpoint. PostgreSQL uses an atomic jsonb comparison to prevent stale saves across
+processes, but separate processes can still incur duplicate provider calls. See
+the backend README for the HTTP contract and timeout. This documents runtime
+wiring, not a change to ADR-001's recorded status or ADR-002's ownership decisions.
 
 `after_fix` is a new run after the agent owner has changed the agent on their own deploy. The harness calls that deploy (`test_instance.base_url` for injected and `after_fix`). It does not edit the owner's agent in place, and it does not patch the lab world as a stand-in for that change.
 
 On that new request the harness still copies `Run.fix_kinds` onto `AgentRunRequest` (issue #40). `controlled_retry` is applied inside `executeAttempt` for the attempt (issue #41). The reference agent can also shape the action list for that request from `fix_kinds` (`apps/agentservice/src/fixes/`, still `executed: false`). The library desk reads `permission_guard` the same way on its own `POST /v1/tasks/run`. Those flags are request behavior for the new run. They do not rewrite the stored agent. They do not inject faults and they do not write `outcome.verifier` or `fault.*`. See the agent service README for the shop policies, and for the replay that scores T1–T5 with the backend verifier.
 
-Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds both demo agents, `reference-shop` and `external-library`, on boot, and runs and traces start empty. The shop catalog and the library catalog stay in memory. Restarting a mock, or `POST /internal/reset` on that mock, restores its seed. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. The library seed and the docs in [seed-endpoints.md](seed-endpoints.md) and [agent-tasks.md](agent-tasks.md) are what is on main. Issue #109 is still open.
+Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds both demo agents, `reference-shop` and `external-library`, on boot, and runs and traces start empty. The shop catalog and the library catalog stay in memory. Restarting a mock, or `POST /internal/reset` on that mock, restores its seed. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. When a stored diagnosis is missing, this process looks up `tasks[].evalset` and, if present, sends it to agentservice as prompt guidance. The evalset is not copied onto the Trace. The library seed and the docs in [seed-endpoints.md](seed-endpoints.md) and [agent-tasks.md](agent-tasks.md) are what is on main. Issue #109 is still open.
 
 ## One writer for the mock world
 

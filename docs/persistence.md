@@ -278,7 +278,7 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 { "error": "not_found", "message": "No run missing-run" }
 ```
 
-`POST /runs` and `POST /attacker/jury-case` still return the same bodies. They write through whichever store `DATABASE_URL` selected. `POST /diagnose` on the agent service is not this store. Grok still writes `diagnosis` only, and only on the trace it is given. The harness does not call Grok.
+`POST /runs` and `POST /attacker/jury-case` still return the same bodies. They write through whichever store `DATABASE_URL` selected. `POST /diagnose` on the agent service is not this store. Grok still writes `diagnosis` only, and only on the trace it is given. When the backend resolved a task evalset it sends that object as prompt guidance; it is not persisted on the Trace. The harness does not call Grok.
 
 ### `GET /agents`
 

@@ -86,7 +86,10 @@ export function validateAgentTask(data: unknown): ValidationResult<AgentTask> {
   return structural;
 }
 
-/** Standalone `tasks[].evalset` document. Same shape and duplicate `case_id` rule as on a task. */
+/**
+ * Standalone `tasks[].evalset` document. Same shape and duplicate `case_id` rule as on a task.
+ * Judge input, not a Trace field. Used by diagnose guidance and by evalset generate.
+ */
 export function validateTaskEvalset(data: unknown): ValidationResult<TaskEvalset> {
   const structural = check<TaskEvalset>(validateEvalsetSchema, data);
   if (!structural.ok) return structural;
