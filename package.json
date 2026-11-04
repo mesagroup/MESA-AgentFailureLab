@@ -15,7 +15,9 @@
     "dev:frontend": "turbo run dev --filter=@mesa/frontend",
     "dev:backend": "turbo run dev --filter=@mesa/backend",
     "dev:agentservice": "turbo run dev --filter=@mesa/agentservice",
-    "dev:mock-shop": "turbo run dev --filter=@mesa/mock-shop"
+    "dev:mock-shop": "turbo run dev --filter=@mesa/mock-shop",
+    "eval": "pnpm --filter @mesa/agentservice eval",
+    "generate-dataset": "pnpm --filter @mesa/agentservice generate-dataset"
   },
   "devDependencies": {
     "turbo": "2.11.10"
