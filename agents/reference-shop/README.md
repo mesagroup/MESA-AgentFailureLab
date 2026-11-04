@@ -12,4 +12,4 @@ Hand-written traces are in [`packages/shared/examples`](../../packages/shared/ex
 
 The harness loads [`agent-reference-stub.json`](../../packages/shared/examples/agent-reference-stub.json). `instance.base_url` is `http://127.0.0.1:3002`.
 
-Fix ids, when sent as `fix_kinds`, are `controlled_retry`, `pre_response_check`, and `permission_guard`. There is no agent-side injector.
+`fix_kinds` accepts `controlled_retry`, `pre_response_check`, and `permission_guard`. The call is `applyFixesToPlan` in `apps/agentservice/src/reference-agent/plan.ts`. Until PR #36 merges, that function is a pass-through and does not change the action list. There is no agent-side injector.

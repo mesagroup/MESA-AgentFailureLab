@@ -1,9 +1,9 @@
 import { FIX_KINDS, type FixKind } from "@mesa/shared";
-
-export interface PlannedAction {
-  tool_name: string;
-  tool_input: Record<string, unknown>;
-}
+import {
+  applyFixesToPlan,
+  isLabTaskId,
+  type PlannedAction,
+} from "./apply-fixes-hook.js";
 
 export interface TaskRunInput {
   agent_id: string;
@@ -16,38 +16,31 @@ export interface TaskRunInput {
   fix_kinds: FixKind[];
 }
 
+/** Harness contract. No verifier and no fault labels. `claimed_success` stays unset. */
 export interface TaskRunPlan {
   executed: false;
-  claimed_success: boolean;
   actions: PlannedAction[];
 }
 
-const READ_TOOLS = new Set(["search_products", "get_product", "get_cart", "get_order"]);
-
 /**
  * Propose tool actions for the harness.
- * This process does not call the shop and does not write `outcome.verifier` or `fault.*`.
- * `executeAttempt` in the backend is the only tool boundary and the only injector.
- * `controlled_retry` is accepted as a fix id and does not duplicate calls here, because
- * a retry would be a second execution of the tool.
+ * Does not call the shop and does not write `outcome.verifier` or `fault.*`.
+ * Fix policy is the single `applyFixesToPlan` call below.
  */
 export function planTaskRun(input: TaskRunInput): TaskRunPlan {
-  let actions = defaultActions(input.task_id, input.order_id);
-  if (input.fix_kinds.includes("permission_guard")) {
-    const granted = input.permissions.includes("write:order:cancel");
-    actions = actions.filter((action) => action.tool_name !== "cancel_order" || granted);
+  if (!isLabTaskId(input.task_id)) {
+    return { executed: false, actions: [] };
   }
-  if (input.fix_kinds.includes("pre_response_check")) {
-    actions = withReadBack(input.task_id, actions, input.order_id);
-  }
-  const blockedCancel =
-    input.task_id === "T5" &&
-    input.fix_kinds.includes("permission_guard") &&
-    !input.permissions.includes("write:order:cancel");
+  const shaped = applyFixesToPlan({
+    taskId: input.task_id,
+    permissions: input.permissions,
+    orderId: input.order_id,
+    fixes: input.fix_kinds,
+    prompt: input.prompt,
+  });
   return {
     executed: false,
-    claimed_success: !blockedCancel && actions.length > 0,
-    actions,
+    actions: shaped.actions.map((action) => ({ ...action })),
   };
 }
 
@@ -100,38 +93,6 @@ export function parseTaskRun(body: unknown): { ok: true; value: TaskRunInput } |
       fix_kinds: fixKinds,
     },
   };
-}
-
-function defaultActions(taskId: string, orderId: string | undefined): PlannedAction[] {
-  switch (taskId) {
-    case "T1":
-      return [
-        { tool_name: "search_products", tool_input: { q: "mug" } },
-        { tool_name: "get_product", tool_input: { product_id: "SKU-MUG-01" } },
-      ];
-    case "T2":
-      return [{ tool_name: "add_to_cart", tool_input: { sku: "SKU-MUG-01", qty: 2 } }];
-    case "T3":
-      return [{ tool_name: "checkout", tool_input: {} }];
-    case "T4":
-      return [{ tool_name: "get_order", tool_input: { order_id: orderId ?? "" } }];
-    case "T5":
-      return [{ tool_name: "cancel_order", tool_input: { order_id: orderId ?? "" } }];
-    default:
-      return [];
-  }
-}
-
-function withReadBack(taskId: string, actions: PlannedAction[], orderId: string | undefined): PlannedAction[] {
-  const last = actions.at(-1)?.tool_name;
-  if (last !== undefined && READ_TOOLS.has(last)) return actions;
-  if ((taskId === "T4" || taskId === "T5") && orderId) {
-    return [...actions, { tool_name: "get_order", tool_input: { order_id: orderId } }];
-  }
-  if (taskId === "T1") {
-    return [...actions, { tool_name: "get_product", tool_input: { product_id: "SKU-MUG-01" } }];
-  }
-  return [...actions, { tool_name: "get_cart", tool_input: {} }];
 }
 
 function isFixKind(value: string): value is FixKind {

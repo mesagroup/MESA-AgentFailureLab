@@ -23,21 +23,23 @@ describe("POST /v1/tasks/run", () => {
         payload: { ...base, task_id: "T2" },
       });
       assert.equal(response.statusCode, 200);
-      assert.deepEqual(response.json(), {
-        executed: false,
-        claimed_success: true,
-        actions: [{ tool_name: "add_to_cart", tool_input: { sku: "SKU-MUG-01", qty: 2 } }],
-      });
-      assert.equal("outcome" in response.json(), false);
+      const body = response.json();
+      assert.equal(body.executed, false);
+      assert.deepEqual(body.actions, [
+        { tool_name: "add_to_cart", tool_input: { sku: "SKU-MUG-01", qty: 2 } },
+      ]);
+      assert.equal("outcome" in body, false);
+      assert.equal("fault" in body, false);
+      assert.equal("claimed_success" in body, false);
     } finally {
       await app.close();
     }
   });
 
-  it("blocks cancel_order when permission_guard is on and the grant is missing", async () => {
+  it("accepts fix ids and leaves the action list unchanged until PR #36", async () => {
     const app = buildApp({ config, model: null, logger: false });
     try {
-      const response = await app.inject({
+      const guarded = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",
         payload: {
@@ -45,41 +47,16 @@ describe("POST /v1/tasks/run", () => {
           task_id: "T5",
           order_id: "ord_0001",
           permissions: ["read"],
-          fix_kinds: ["permission_guard"],
+          fix_kinds: ["permission_guard", "pre_response_check", "controlled_retry"],
         },
       });
-      assert.equal(response.statusCode, 200);
-      assert.deepEqual(response.json(), {
-        executed: false,
-        claimed_success: false,
-        actions: [],
-      });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("adds a read-back for pre_response_check and leaves controlled_retry as a no-op", async () => {
-    const app = buildApp({ config, model: null, logger: false });
-    try {
-      const checked = await app.inject({
-        method: "POST",
-        url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T3", fix_kinds: ["pre_response_check"] },
-      });
-      assert.deepEqual(checked.json().actions, [
-        { tool_name: "checkout", tool_input: {} },
-        { tool_name: "get_cart", tool_input: {} },
+      assert.equal(guarded.statusCode, 200);
+      assert.equal(guarded.json().executed, false);
+      assert.deepEqual(guarded.json().actions, [
+        { tool_name: "cancel_order", tool_input: { order_id: "ord_0001" } },
       ]);
-
-      const retried = await app.inject({
-        method: "POST",
-        url: "/v1/tasks/run",
-        payload: { ...base, task_id: "T2", fix_kinds: ["controlled_retry"] },
-      });
-      assert.deepEqual(retried.json().actions, [
-        { tool_name: "add_to_cart", tool_input: { sku: "SKU-MUG-01", qty: 2 } },
-      ]);
+      assert.equal("outcome" in guarded.json(), false);
+      assert.equal("fault" in guarded.json(), false);
     } finally {
       await app.close();
     }
