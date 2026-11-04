@@ -1,8 +1,6 @@
 # @mesa/agentservice
 
-Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
-
-The reference agent (`src/reference-agent/`) and fix application (`src/fixes/`) are not in this change.
+Grok diagnosis for one `Trace`, and the fix applicator for `controlled_retry`, `pre_response_check`, and `permission_guard`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`. The reference agent itself is still open PR #21.
 
 ## Run from the monorepo root
 
@@ -90,16 +88,74 @@ Health reports `forbidden_write_paths` from `@mesa/shared`. This service must no
 
 `diagnosis` stays `null` on a trace until this service fills it. `diagnosis.category` is a hypothesis. Ground truth for classification is `fault.labels`, which this service returns on the trace for the harness and does not send to Grok.
 
-The backend harness applies a fix, replays the task (`Run.phase = after_fix`), and records `fix_*`. A proposal is valid only when that replay's verifier passes. This service does not declare success. See [ADR-001](../../adr/001-mock-verifier-grok.md).
+The backend harness records `fix_kinds` and replays the task (`Run.phase = after_fix`). A proposal is valid only when that replay's verifier passes. This service does not declare success. The harness does not yet copy `fix_kinds` onto `AgentRunRequest`; the applicator below is what the agent runs when that field arrives. See [ADR-001](../../adr/001-mock-verifier-grok.md).
 
 ## Where code lives
 
 - `src/diagnosis/diagnose.ts` — `diagnoseTrace`. Pre-pass, the prompt allow-list, evidence checks, and the graft onto the trace are private to this file.
 - `src/grok/config.ts` — `parseDiagnosisConfig`. The only place that reads `GROK_MODEL`, `XAI_API_KEY`, `XAI_BASE_URL`, and `GROK_TIMEOUT_MS`.
 - `src/grok/client.ts` — OpenAI SDK client pointed at `XAI_BASE_URL`, structured `json_schema` output, timeout, and one retry.
-- `src/reference-agent/` — reserved for the in-lab shopping agent
-- `src/fixes/` — reserved for mapping a proposed fix onto something the harness can apply
+- `src/fixes/` — the three `FixKind` policies, as a wrapper around a shop tool client
+- `src/replay/` — before/after report. Pass/fail is copied from the backend verifier
+- `src/reference-agent/` — reserved for the in-lab shopping agent (open PR #21)
 
 Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
+
+## Fix applicator
+
+`FixKind` is `controlled_retry`, `pre_response_check`, or `permission_guard` ([ADR-002](../../adr/002-fault-injection-and-fixes.md)). The policies are in `src/fixes/domain.ts`. `wrapShopClient` applies them to any agent loop that calls tools. `applyFixesToPlan` is the same policy for an agent that returns an action list and sets `executed: false`.
+
+| Fix | What it does |
+| --- | --- |
+| `controlled_retry` | On a timeout or a transient HTTP status (0, 408, 429, 500, 502, 503, 504), retry up to `maxRetries` (default 2) with exponential backoff. Reads are always retried. `add_to_cart`, `update_cart`, `checkout`, and `cancel_order` are retried only when the transport reports `dispatched: false`. A dispatched 5xx on those tools is not retried. |
+| `pre_response_check` | Before a success claim, re-read the shop through a read tool. The claim is true only when that read matches the task goal. A checkout body that says the order was placed is not enough: the cart is read again, and the order id from that body is only a hint for `get_order`. |
+| `permission_guard` | Refuse a tool whose required permission is not in the granted set. The client is not called. Tool names and permission tokens found in the prompt, in an attached note, or in a tool output are recorded as data. They do not become a grant. The jury note in `apps/backend/fixtures/jury` is that kind of text. |
+
+This service does not inject faults. It does not write `outcome.verifier` or `fault.*`.
+
+### Glue for the reference agent (PR #21)
+
+`planTaskRun` can keep `executed: false` and shape the list with the shared policy. `controlled_retry` does not add a second action: the harness still runs each action once.
+
+```ts
+import { applyFixesToPlan } from "../fixes/plan.js";
+
+const shaped = applyFixesToPlan({
+  taskId,
+  permissions,
+  orderId,
+  fixes: fix_kinds,
+  prompt,
+});
+return { executed: false, actions: shaped.actions };
+```
+
+Leave `claimed_success` unset on this path. The action list has not seen tool results, so it cannot know the re-read yet. An agent that calls the shop itself uses `confirmGoal` and sets the claim from that:
+
+```ts
+import { wrapShopClient } from "../fixes/applicator.js";
+
+const tools = wrapShopClient({ client, fixes: fix_kinds });
+const applied = await tools.call({ tool_name, tool_input, sessionId, permissions });
+const goal = await tools.confirmGoal({ goal, sessionId, permissions });
+const claimed_success = goal.claim;
+```
+
+`src/fixes/scripted-agent.ts` is a labelled stand-in that does this. It is not the reference agent. Its base plan matches `apps/backend/src/agent/scripted.ts` so the replay can compare them. Replace that stand-in with `planTaskRun` when PR #21 lands.
+
+## Replay
+
+`pnpm --filter @mesa/agentservice replay` writes `apps/agentservice/replay/latest.json` and `latest.md`.
+
+For each of T1–T5 it runs the merged harness (`runTasks`, in-process shop, preset injection):
+
+- baseline, no fix, scripted driver
+- baseline with all three fixes applied in the `callAgent` hook
+- injected, no fix
+- injected `after_fix` with the fix from a supplied list, from `diagnosis.proposed_fixes`, or from the ADR-002 category map when neither is supplied
+
+`passed` is `trace.outcome.verifier.passed`. Timing notes in the markdown say what `latency_ms`, token totals, and `duration_ms` are measuring. The decision number is `fix_verified`: the after arm passes and the injected arm does not, with no baseline regression.
+
+What this run cannot do yet is listed in the report under Blocked and Requests. The harness stores `fix_kinds` on the Run and does not put them on `AgentRunRequest`. `controlled_retry` cannot see a tool result from an action list. `permission_guard` does not change the preset T5 verifier result, because the shop already enforces the session grant and the jury attacker does not ask the agent. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.

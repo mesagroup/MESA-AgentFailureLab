@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
+    "replay": "tsx scripts/replay.ts",
     "start": "node --env-file-if-exists=.env dist/index.js"
   },
   "dependencies": {
