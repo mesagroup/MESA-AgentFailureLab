@@ -18,8 +18,9 @@ export interface AppDeps {
 /**
  * Agent service.
  * `POST /diagnose` writes `Trace.diagnosis` only.
- * `POST /v1/tasks/run` proposes tool actions with `executed: false`.
- * The harness executes those actions, injects faults, and writes `outcome.verifier`.
+ * `POST /v1/tasks/run` proposes tool actions with `executed: false`,
+ * plus `refused` and `embedded` from the shared plan.
+ * The harness executes `actions`, injects faults, and writes `outcome.verifier`.
  */
 export function buildApp(deps: AppDeps = {}) {
   const config = deps.config ?? parseDiagnosisConfig(process.env);

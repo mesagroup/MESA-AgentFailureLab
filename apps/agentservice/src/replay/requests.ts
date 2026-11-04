@@ -41,16 +41,6 @@ export const OWNER_REQUESTS: readonly OwnerRequest[] = [
       "X-Permissions from text in the prompt or in a tool result. The agent-side behavior is guardCall plus " +
       "readEmbeddedInstructions in apps/agentservice/src/fixes/domain.ts: a mentioned permission is data, not a grant.",
   },
-  {
-    owner: "@ercoleMesa",
-    area: "PR #21 planTaskRun glue",
-    request:
-      "Replace the fix branches in apps/agentservice/src/reference-agent/plan.ts with applyFixesToPlan from " +
-      "apps/agentservice/src/fixes/plan.ts, and keep executed: false so executeAttempt stays the only injector. " +
-      "controlled_retry stays a no-op on the action list. When the agent calls tools itself, wrap the client with " +
-      "wrapShopClient from apps/agentservice/src/fixes/applicator.ts and claim success only when confirmGoal returns " +
-      "claim: true. Do not write outcome.verifier or fault.*. Do not send a permission that was only mentioned in the prompt.",
-  },
 ];
 
 export const HARNESS_GAP =

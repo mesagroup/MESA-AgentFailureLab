@@ -16,7 +16,7 @@ import {
 
 /**
  * Action-list view of the same policy `wrapShopClient` enforces at call time.
- * PR #21's `planTaskRun` can return `actions` from `applyFixesToPlan` and keep
+ * `planTaskRun` returns `actions`, `refused`, and `embedded` from here and keeps
  * `executed: false`, so the harness injector stays the only tool boundary.
  * `controlled_retry` does not add a second call here. The harness runs each
  * action once, and a retry needs the tool result.

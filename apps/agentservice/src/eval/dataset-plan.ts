@@ -5,7 +5,7 @@ import type { FaultCategory } from "@mesa/shared";
  * Fixture rows point at traces already on main.
  * Harness rows are produced by `scripts/generate-dataset.ts` with the merged
  * scripted driver, the in-process mock shop, and a catalog fault. That path
- * does not need the reference agent in open PR #21.
+ * does not call `POST /v1/tasks/run`.
  */
 export type DatasetPlanEntry =
   | {

@@ -1,9 +1,10 @@
 import { FIX_KINDS, type FixKind } from "@mesa/shared";
 import {
-  applyFixesToPlan,
   isLabTaskId,
-  type PlannedAction,
-} from "./apply-fixes-hook.js";
+  type EmbeddedInstruction,
+  type PlannedToolCall,
+} from "../fixes/domain.js";
+import { applyFixesToPlan, type RefusedAction } from "../fixes/plan.js";
 
 export interface TaskRunInput {
   agent_id: string;
@@ -16,20 +17,30 @@ export interface TaskRunInput {
   fix_kinds: FixKind[];
 }
 
-/** Harness contract. No verifier and no fault labels. `claimed_success` stays unset. */
+/**
+ * Harness contract. No verifier and no fault labels.
+ * `claimed_success` stays unset: this list has not seen tool results.
+ * `refused` and `embedded` come from the shared plan. A permission named only
+ * in the prompt is embedded data, not a grant, and is not copied onto a field
+ * the harness would send.
+ */
 export interface TaskRunPlan {
   executed: false;
-  actions: PlannedAction[];
+  actions: PlannedToolCall[];
+  refused: RefusedAction[];
+  embedded: EmbeddedInstruction[];
 }
 
 /**
  * Propose tool actions for the harness.
  * Does not call the shop and does not write `outcome.verifier` or `fault.*`.
- * Fix policy is the single `applyFixesToPlan` call below.
+ * Fix policy is the single `applyFixesToPlan` call below. `executed` stays
+ * false so `executeAttempt` remains the only injector. `controlled_retry` does
+ * not add a second action: retry belongs to the harness.
  */
 export function planTaskRun(input: TaskRunInput): TaskRunPlan {
   if (!isLabTaskId(input.task_id)) {
-    return { executed: false, actions: [] };
+    return { executed: false, actions: [], refused: [], embedded: [] };
   }
   const shaped = applyFixesToPlan({
     taskId: input.task_id,
@@ -41,6 +52,8 @@ export function planTaskRun(input: TaskRunInput): TaskRunPlan {
   return {
     executed: false,
     actions: shaped.actions.map((action) => ({ ...action })),
+    refused: shaped.refused.map((entry) => ({ ...entry })),
+    embedded: shaped.embedded.map((entry) => ({ ...entry })),
   };
 }
 

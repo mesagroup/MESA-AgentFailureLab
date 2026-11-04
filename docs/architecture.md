@@ -51,7 +51,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 
-The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client. It does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for the glue open PR #21 can call, and for the replay that scores T1–T5 with the backend verifier.
+The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. It does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
 Runs, traces, and the shop catalog are in memory. The MVP has no database. Restarting the shop, or `POST /internal/reset`, restores the seed catalog.
 
