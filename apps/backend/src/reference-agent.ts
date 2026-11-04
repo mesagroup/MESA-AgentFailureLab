@@ -5,7 +5,7 @@ import { validateAgent } from "@mesa/shared/validate";
 
 /** Reference shop fixture shipped with `@mesa/shared`. Tasks T1–T5 and their verifier checks. */
 export function loadReferenceAgent(): Agent {
-  return loadAgentFixture("@mesa/shared/examples/agent-reference-stub.json");
+  return loadAgentFixture("@mesa/shared/examples/agent-reference-shop.json");
 }
 
 /** Library desk fixture. Three loan tasks on the external runtime. */

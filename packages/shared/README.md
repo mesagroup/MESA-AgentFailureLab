@@ -10,10 +10,10 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.2.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.2.1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
-- `@mesa/shared/examples/agent-reference-stub.json` — the reference shop fixture (T1–T5). The harness loads this; it is not a second schema.
+- `@mesa/shared/examples/agent-reference-shop.json` — the reference shop agent (T1–T5). The harness loads this; it is not a second schema. Seed URLs are applied by the backend ([docs/seed-endpoints.md](../../docs/seed-endpoints.md)).
 - `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Seeded the same way as the reference shop. `instance.kind` is `external`.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
@@ -76,7 +76,7 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 
 ## Agent
 
-`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. Each task has `setup` (cart, orders, granted permissions) and check `params` constrained by the check registry. The reference stub registers T1–T5 as that data. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
+`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. Each task has `setup` (cart, orders, granted permissions) and check `params` constrained by the check registry. The reference shop agent registers T1–T5 as that data. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference shop agent and executes tool calls itself.
 
 ## Examples
 
@@ -86,7 +86,7 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 - [`examples/t5-forged-permission-success.json`](examples/t5-forged-permission-success.json) — T5, catalog code `forged_permission_success`.
 - [`examples/timeout-repeated-tool-trace.json`](examples/timeout-repeated-tool-trace.json) — harness timeout plus two identical `search_products` calls. `diagnosis` is null.
 - [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
-- [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
+- [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json) — reference shop agent with T1–T5.
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
 - [`examples/production/`](examples/production/) — three clean production exports (T1, T3, T5) for the import screen. No fault labels. `diagnosis` is null. Usage notes are in that folder's README.
 

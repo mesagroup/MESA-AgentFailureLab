@@ -132,7 +132,7 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, `FRONTEND_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, `LIBRARY_AGENT_URL`, `MOCK_LIBRARY_URL`, `FRONTEND_URL`, the agent-service URL, or `DATABASE_URL`. `pnpm dev` and `pnpm start` load that file when it exists. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory. The seeded origins are in [docs/seed-endpoints.md](../../docs/seed-endpoints.md).
 
 Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
@@ -254,7 +254,7 @@ pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
 pnpm --filter @mesa/backend db:reset -- --yes
 ```
 
-`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. An invalid stored agent is still replaced by the file. `db:reset` deletes runs, traces, and agents other than `reference-shop` and `external-library`. A valid seed that is not older than its fixture stays, including an edited one. An invalid or older seed is rewritten from its fixture. `--yes` is required. There is no reset route.
+`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. An invalid stored agent is still replaced by the file. `db:reset` deletes runs, traces, and agents other than `reference-shop` and `external-library`. A valid seed newer than its fixture stays, including an edited one. An invalid or older seed is rewritten from its fixture. A row at the fixture timestamp is rewritten when its runtime or world URL differs from this process. `--yes` is required. There is no reset route.
 
 ## Dashboard snapshot
 

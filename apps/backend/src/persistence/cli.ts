@@ -33,7 +33,7 @@ Do not pass both. Import and reset require DATABASE_URL. They do not print the U
 import validates every document, upserts, and keeps the created_at already stored for that id.
 A missing id is inserted with the created_at from the file. Rows absent from the file stay.
 reset deletes runs, traces, and agents other than reference-shop and external-library.
-A valid seed that is not older than its fixture is kept. An invalid or older seed is rewritten from its fixture.
+A valid seed newer than its fixture is kept, including one edited with PUT. An invalid or older seed is rewritten. A row at the fixture timestamp is also rewritten when its runtime or world URL differs from this process.
 There is no HTTP reset route.`;
 
 interface ParsedArgs {
@@ -140,10 +140,10 @@ function formatReset(counts: ResetCounts, target: string): string {
 
 function formatSeedLine(agentId: string, result: ResetCounts["seed"][string]): string {
   if (result === "kept") {
-    return `Kept ${agentId}. A valid seed that is not older than the fixture is not rewritten.`;
+    return `Kept ${agentId}. A valid seed newer than the fixture is not rewritten.`;
   }
   if (result === "refreshed") {
-    return `Rewrote ${agentId} from the fixture because the stored row was invalid or older than the fixture.`;
+    return `Rewrote ${agentId} from the fixture because the stored row was invalid, older than the fixture, or still on the fixture timestamp with different runtime or world URLs.`;
   }
   return `Inserted ${agentId} because that id was missing.`;
 }
@@ -262,7 +262,7 @@ async function runImport(
     return imported;
   });
   io.stdout(
-    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop and external-library are present (inserted when missing; rewritten when the stored row is invalid or older than the fixture).`,
+    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop and external-library are present (inserted when missing; rewritten when the stored row is invalid, older than the fixture, or the same age with different runtime or world URLs).`,
   );
   return 0;
 }

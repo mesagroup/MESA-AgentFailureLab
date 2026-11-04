@@ -12,3 +12,4 @@ Product and contributor docs live here. Architecture Decision Records do not —
 - [Jury demo](demo-jury.md) — deep-dive of the security case (step 8 of the demo script)
 - [Eval](eval.md) — dataset, metrics, rules-only baseline, limits (Italian, for the jury)
 - [Deploy](deploy.md) — Docker images, Compose, Render project `mesa-agent-failure-lab` / `demo`, secrets
+- [Seed endpoints](seed-endpoints.md) — `reference-shop` and `external-library` runtime and mock URLs per environment

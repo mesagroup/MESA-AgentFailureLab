@@ -235,11 +235,13 @@ export interface Agent {
     config_notes: string;
   };
   /**
-   * Mock world for this agent. The shop seed omits it and the harness uses MOCK_SHOP_URL.
-   * `base_url` is the mock, not `instance.base_url`.
+   * Mock world for this agent. `base_url` is the mock, not `instance.base_url`.
+   * A shop world records the mock shop. The harness still calls `MOCK_SHOP_URL`
+   * for that kind, so a test can point the process at another shop.
+   * A library world is the library mock the harness calls.
    */
   world?: {
-    kind: "library";
+    kind: "shop" | "library";
     base_url: string;
   };
   tasks: AgentTask[];

@@ -23,7 +23,7 @@ function task(agent: Agent, taskId: string): AgentTask {
   return found;
 }
 
-const reference = loadAgent("agent-reference-stub.json");
+const reference = loadAgent("agent-reference-shop.json");
 const grant = ["read", "write:cart", "write:order", "write:order:cancel"];
 
 describe("planShopTask", () => {

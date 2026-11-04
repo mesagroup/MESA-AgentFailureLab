@@ -47,8 +47,8 @@ export interface ResetCounts {
   traces_deleted: number;
   /**
    * One result per demo seed.
-   * `kept`: the row validated and was not older than the fixture.
-   * `refreshed`: the stored row was invalid or older, and was rewritten.
+   * `kept`: the row validated and is newer than the fixture, or the same age with the same endpoints.
+   * `refreshed`: the stored row was invalid, older, or the same age with different endpoints, and was rewritten.
    * `inserted`: the id was missing.
    */
   seed: SeedReport;
@@ -298,8 +298,10 @@ export async function importPersistence(
 
 /**
  * Delete every run, every trace, and every agent except the demo seeds.
- * A valid seed that is not older than its fixture is kept.
- * An invalid or older seed is rewritten from its fixture. A missing seed is inserted.
+ * A valid seed newer than its fixture is kept.
+ * An invalid or older seed is rewritten from its fixture.
+ * A row at the fixture timestamp is rewritten when its runtime or world URL differs.
+ * A missing seed is inserted.
  * Not an HTTP route. Does not read a seed through `get`, so an invalid document
  * does not abort the reset.
  */

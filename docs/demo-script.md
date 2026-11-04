@@ -20,7 +20,7 @@ pnpm dev:agentservice   # :3002  GET /health
 pnpm dev:frontend       # :3000  (scaffold: oggi non chiama il backend)
 ```
 
-- Agente shopping: oggi c'è lo stub `packages/shared/examples/agent-reference-stub.json` (`agent_id: reference-shop`). Domani sarà precaricato nella UI Agent CRUD (#49/#50).
+- Agente shopping: la definizione è `packages/shared/examples/agent-reference-shop.json` (`agent_id: reference-shop`). Il backend la semina all'avvio e scrive gli URL dell'ambiente ([seed-endpoints.md](seed-endpoints.md)).
 - `XAI_API_KEY` in `apps/agentservice/.env` serve solo per la diagnosi live (passo 4). Senza la chiave `POST /diagnose` risponde 503.
 - Run e trace stanno in memoria: un riavvio del backend li cancella. I fixture in `apps/backend/fixtures/jury/` e `packages/shared/examples/` sono la copia che resta.
 - Comodo per tutto lo script: `jq` per leggere i JSON.
@@ -32,7 +32,7 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 ### Percorso principale (prodotto demo)
 
 **1. Registra o seleziona l'agente**
-- OGGI: aprire lo stub `agent-reference-stub.json` e controllare che `GET :3002/health` risponda.
+- OGGI: aprire `agent-reference-shop.json` e controllare che `GET :3002/health` risponda. In locale `instance.base_url` è `http://127.0.0.1:3002`.
 - DOMANI (#49 UI, #50 API): **Agent CRUD** → l'agente "Reference shop assistant" è già nella lista → apri il dettaglio.
 - Atteso: `agent_id = reference-shop`, `instance.kind = reference`, `instance.base_url` e `test_instance.base_url` su `:3002`, 5 task (T1–T5) con `success_test.type = verifier_checks`.
 - Fallimento tipico: agentservice spento. Con `driver: auto` il harness passa in silenzio al driver `scripted`: va bene per la demo, ma va detto a voce.
