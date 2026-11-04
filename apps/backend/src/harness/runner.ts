@@ -9,11 +9,11 @@ import { ContractError, type RunStore } from "../persistence/memory.js";
 import { taskById } from "../reference-agent.js";
 import { prePass, type PrePassFinding } from "../verifier/prepass.js";
 import { verifyOutcome } from "../verifier/verify.js";
-import { executeAttempt, traceBounds } from "./execute.js";
+import { executeAttempt, traceBounds, type ToolBoundaryHook } from "./execute.js";
 import { prepareWorld } from "./world.js";
 
 export type DriverMode = "scripted" | "http" | "auto";
-export type InjectionRequest = "preset" | null | Record<string, unknown>;
+export type InjectionRequest = "preset" | null | InjectionPlan | Record<string, unknown>;
 
 export interface RunTasksOptions {
   agent: Agent;
@@ -28,6 +28,18 @@ export interface RunTasksOptions {
   parentRunId?: string | null;
   grantCancel?: boolean;
   timeoutMs?: number;
+  /**
+   * Appended to the task prompt the agent sees and to the user step.
+   * Poisoned content only. Not a second speaker.
+   */
+  attachedNote?: string;
+  /**
+   * Set only when the security attacker (or another attacker) is driving this run.
+   * Requires an injection plan. Baseline stays unset.
+   */
+  attackerPayloadId?: string;
+  /** Agent-service tool hook. Absent on catalog presets, which keep their own effect. */
+  toolHook?: ToolBoundaryHook;
   /** Override the remote agent poster. Tests use this to avoid a live agent process. */
   callAgent?: (baseUrl: string, request: Parameters<typeof runRemoteAgent>[1]) => Promise<AgentRunResponse>;
   probe?: (baseUrl: string) => Promise<boolean>;
@@ -87,6 +99,19 @@ function resolveFixKinds(phase: RunPhase, fixKinds: readonly string[] | undefine
   return kinds;
 }
 
+function resolveAttackerPayloadId(value: string | undefined, plan: InjectionPlan | null): string | null {
+  if (value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) throw new Error("attacker payload id must be a non-empty string.");
+  if (!plan) throw new Error("An attacker payload requires an injection plan.");
+  return trimmed;
+}
+
+function withAttachedNote(prompt: string, note: string | undefined): string {
+  if (note === undefined || note.length === 0) return prompt;
+  return `${prompt}\n\n${note}`;
+}
+
 function agentBaseUrl(agent: Agent, phase: RunPhase): string {
   return phase === "baseline" ? agent.instance.base_url : agent.test_instance.base_url;
 }
@@ -122,6 +147,7 @@ async function runOne(
   const task = taskById(options.agent, taskId);
   const plan = resolvePlan(options.phase, taskId, options.injection);
   const fixKinds = resolveFixKinds(options.phase, options.fixKinds);
+  const attackerPayloadId = resolveAttackerPayloadId(options.attackerPayloadId, plan);
   const permissions = permissionsFor(taskId, options.grantCancel ?? true);
   const sessionId = sessionIdFor(taskId);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -144,18 +170,19 @@ async function runOne(
 
   try {
     const prepared = await prepareWorld(taskId, options.mock, sessionId);
+    const prompt = withAttachedNote(task.prompt, options.attachedNote);
     const remote = await loadActions(
       options,
       driver,
       running,
-      task.prompt,
+      prompt,
       taskId,
       sessionId,
       permissions,
       prepared.orderId,
     );
     const execution = await executeAttempt({
-      prompt: task.prompt,
+      prompt,
       taskId,
       actions: remote.actions,
       client: options.mock,
@@ -165,6 +192,7 @@ async function runOne(
       timeoutMs,
       startedMs,
       claimedSuccess: remote.claimedSuccess,
+      toolHook: options.toolHook,
       fixKinds: running.fix_kinds,
       sleep: options.sleep,
     });
@@ -230,7 +258,9 @@ async function runOne(
       fault: {
         injected: finishedPlan !== null,
         labels: finishedPlan ? execution.labels : [],
-        attacker: { used: false, payload_id: null },
+        attacker: attackerPayloadId
+          ? { used: true, payload_id: attackerPayloadId }
+          : { used: false, payload_id: null },
       },
       diagnosis: null,
     };

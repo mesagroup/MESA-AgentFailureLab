@@ -37,6 +37,23 @@ export interface Execution {
   claimedSuccess: boolean;
 }
 
+/**
+ * Decision from the agent-service tool hook.
+ * `commit` sends the call with the hook's permissions and keeps the shop body.
+ * The hook does not write `fault.*` or `outcome.verifier`. The injector does.
+ */
+export type ToolHookDecision =
+  | { readonly action: "passthrough" }
+  | { readonly action: "commit"; readonly permissions: readonly string[] };
+
+export interface ToolBoundaryHook {
+  decide(input: {
+    tool_name: string;
+    tool_input: Record<string, unknown>;
+    permissions: readonly string[];
+  }): ToolHookDecision;
+}
+
 function timestamp(startedMs: number, index: number): string {
   return new Date(startedMs + index + 1).toISOString();
 }
@@ -78,6 +95,8 @@ export async function executeAttempt(args: {
   timeoutMs: number;
   startedMs: number;
   claimedSuccess?: boolean;
+  /** When set, a `commit` decision runs that call and skips the catalog forge/drop for it. */
+  toolHook?: ToolBoundaryHook;
   /** Copied from `Run.fix_kinds`. Empty unless this attempt is `after_fix`. */
   fixKinds?: readonly FixKind[];
   /** Test hook. Production waits with `delay`. */
@@ -205,6 +224,57 @@ export async function executeAttempt(args: {
       });
       if (injectThis && effect === "mutate_input") considerLabel(callStep.step_id);
 
+      const decision = args.toolHook?.decide({
+        tool_name: action.tool_name,
+        tool_input: input,
+        permissions: args.permissions,
+      });
+      if (decision?.action === "commit") {
+        const wired = commitPermissions(decision.permissions);
+        const httpCall = describeToolCall(action.tool_name, input);
+        let transport: { status: number; body: unknown; dispatched: boolean };
+        try {
+          const response = await args.client.request({
+            method: httpCall.method,
+            path: httpCall.path,
+            sessionId: args.sessionId,
+            permissions: wired,
+            body: httpCall.body,
+          });
+          transport = {
+            status: response.status,
+            body: response.body,
+            dispatched: response.status !== 0,
+          };
+        } catch (error) {
+          if (!fixKinds.includes("controlled_retry")) throw error;
+          transport = {
+            status: 0,
+            body: {
+              error: "timeout",
+              message: error instanceof Error ? error.message : "Shop request failed before a response.",
+            },
+            dispatched: !(error instanceof TypeError),
+          };
+        }
+        const resultStep = push({
+          type: "tool_result",
+          role: "tool",
+          tool_name: action.tool_name,
+          tool_output: transport.body,
+        });
+        if (injectThis) considerLabel(resultStep.step_id);
+        lastOutput = transport.body;
+        if (!shouldRetry(action.tool_name, transport.status, transport.body, transport.dispatched, completed)) {
+          seenResults.push(transport.body);
+          committed = true;
+          if (injectThis) planSpent = true;
+          break;
+        }
+        await pause(completed);
+        continue;
+      }
+
       if (injectThis && (effect === "forge_output" || effect === "drop")) {
         const dropped = effect === "drop";
         const output = dropped ? droppedOutput() : forgedOutput(target ?? action.tool_name, input);
@@ -299,6 +369,13 @@ export async function executeAttempt(args: {
     reportedOrderStatus: reported,
     claimedSuccess: claimed,
   };
+}
+
+function commitPermissions(permissions: readonly string[]): string[] {
+  if (permissions.length === 0 || permissions.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    throw new Error("Tool hook commit requires non-empty permission strings.");
+  }
+  return permissions.map((entry) => entry.trim());
 }
 
 function claimedFrom(
