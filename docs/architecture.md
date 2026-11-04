@@ -53,9 +53,11 @@ The harness client is `apps/backend/src/mock/`. On a shop run it calls tool rout
 
 | Field | Writer |
 | --- | --- |
-| `outcome.verifier` | Backend verifier only. It reads world state (`GET /internal/state`) and the task's `success_test.checks`. Shop runs read `MOCK_SHOP_URL`. Library runs read the library mock on `world.base_url`. It does not call Grok. `outcome.success` copies `verifier.passed`. The task, including `setup` and check `params`, is data on the agent. See [agent-tasks.md](agent-tasks.md). |
+| `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok and it does not read `tasks[].evalset`. `outcome.success` copies `verifier.passed`. The task, including `setup` and check `params`, is data on the agent. See [agent-tasks.md](agent-tasks.md). |
 | `fault.labels` | Injector or attacker only. They also write `fault.injected` and `fault.attacker`. |
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
+| `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. Material a later Grok judgment may read for that task's Run or Trace. It is not a Trace field and it is not a writer of `outcome.verifier`. |
+| `Agent.otel` and `POST /agents/:agentId/otel/import` | User-registered source, plus a span batch mapped onto a Trace. The importer copies a supplied `outcome` and writes the empty production `fault`. It does not invent `fault.labels` or `outcome.verifier`, and it does not dial the endpoint. See [otel.md](otel.md). |
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after a later run, once the agent owner has changed the agent on their own deploy, and the verifier passes.
 

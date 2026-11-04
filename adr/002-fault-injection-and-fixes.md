@@ -51,3 +51,32 @@ Il round giuria E4 è l'issue #17, già nel codice della PR #32. Non è questo p
 - `AgentRunRequest` in `@mesa/shared` porta `fix_kinds` opzionale (`controlled_retry`, `pre_response_check`, `permission_guard`). L'agent ref lo legge e chiama `applyFixesToPlan`. Assente o `[]` significa nessun fix. La copia dal Run sul body HTTP resta all'harness. La run `after_fix` salva `fix_kinds` e rilancia la sequenza scriptata. Nella PR #21 i flag arrivano solo nel body di `POST /run`. Lì `controlled_retry` ritenta su status 0 o su HTTP 5xx. `permission_guard` blocca anche `checkout` senza `write:order`. L'issue #15 dice ancora `retry_controllato` e `applied_fixes`.
 - La [PR #29](https://github.com/mesagroup/MESA-AgentFailureLab/pull/29) tiene `proposed_fixes` dentro `FIX_KINDS` e non scrive `fault.*`. Categoria e id restano scelte del modello. Il pre-pass di #29 non è quello di `prepass.ts`. Il retry HTTP del client Grok non è `controlled_retry`. Lo step `system` del caso giuria nomina il payload id, e #29 manda gli step a Grok.
 - L'attaccante Security di #34 non è il round #17. L'hook in `apps/agentservice/src/security/hook.ts` non è un secondo iniettore: lo chiama `executeAttempt`, che resta l'unico a scrivere `fault.labels` e `fault.attacker`. Il replay `after_fix` manda solo `permission_guard`, già nell'enum `FixKind`.
+
+## Allineamento al runtime corrente (issue #101)
+
+Le decisioni sopra restano. I paragrafi delle conseguenze descrivono PR storiche (in particolare #21: l’agent che chiamava lo shop da solo). Il runtime attuale, senza cambiare quelle decisioni, è questo:
+
+**Canale di diagnosi persistita.** `POST /diagnose` sull’agentservice restituisce una Trace con `diagnosis`. Il percorso collaudato dell’azione A non è quella chiamata dal runner: è `POST /traces/:traceId/diagnose` sul backend (PR #98 / #102). Il backend carica la Trace salvata, la manda al servizio configurato con `AGENTSERVICE_URL`, accetta solo il campo `diagnosis`, e fa compare-and-set. Esito, `fault.*`, step e identità non sono modificabili dalla risposta Grok. Una diagnosi già presente torna dalla cache (`x-diagnosis-cached: true`) senza una seconda chiamata provider. Timeout, chiave assente e JSON invalido lasciano la Trace originale. I processi distinti possono ancora duplicare una chiamata provider; il CAS Postgres evita overwrite stantii.
+
+**Isolamento single-process.** `POST /runs` e `POST /attacker/jury-case` condividono un gate in-process (PR #97 / #112). Il secondo writer riceve HTTP 409 `world_busy`. Non è una coda. GET e `POST /traces/:traceId/diagnose` non prendono quel lock. Un secondo processo backend, o `POST /internal/reset` diretto sullo shop, può ancora resettare lo stesso mondo. Un reset globale del mock altera tutte le sessioni di quel mock. Topologia di demo: un harness, un mock dedicato.
+
+**Driver effettivo.** Lo scenario shop canonico (#99 / PR #113) e il comando `pnpm demo:shop` (#100 / PR #115) richiedono `driver: "http"` su ogni braccio. Non c’è fallback `auto` nascosto in quel comando. Il replay legacy `pnpm --filter @mesa/agentservice replay` e l’eval restano sul driver `scripted` in-process: non sono l’esperimento HTTP. Il planner di riferimento restituisce `executed: false`; l’harness esegue i tool.
+
+**Formula `fix_verified` (con regressioni).** Evidenza deterministica, senza vote di claim o confidence:
+
+```text
+fix_verified = baseline_pass && injected_before_fail && injected_after_pass
+               && regressions_complete && !regression
+```
+
+Controlli mancanti, skipped o in errore → `null` / `inconclusive`, non “nessuna regressione”. Un controllo pulito il cui baseline fallisce è inconcludente. Una regressione su un controllo completo e confrontabile rende `fix_verified` false anche se il replay injected passa. Vedi `apps/agentservice/src/replay/verification.ts` e [shop-experiment.md](../docs/shop-experiment.md).
+
+**Tre cose distinte, nessuna protezione non provata.**
+
+| Cosa | Dove | Cosa dimostra |
+| --- | --- | --- |
+| Catalogo Security | `GET /faults`, preset T5 `forged_permission_success` | Contraffà il tool result, non chiama il mock. Non è il caso giuria. |
+| Hook `createSecurityToolHook` | `apps/agentservice/src/security/` | Committa `cancel_order` sul mock con permessi di filo del payload. Non è un secondo iniettore. Non è il round UI. |
+| Round giuria | `POST /attacker/jury-case`, nota `jury-nota-malevola-cancel`, codice fuori catalogo | L’attaccante chiede `cancel_order` con grant `read`. Lo shop rifiuta; l’ordine resta `placed`. `permission_guard` è un POST `after_fix` separato. La pagina `/jury` (PR #122) è UI su questo contratto, non una nuova policy. |
+
+Nessuno di questi tre è una prova di sicurezza generale né una stima statistica. Non abbassare le baseline eval né riscrivere i report storici per un gate verde. #92 (eventuale rimozione di `reference-shop`) resta una decisione separata.

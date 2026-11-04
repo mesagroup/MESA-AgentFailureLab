@@ -6,7 +6,7 @@
  * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
-export const CONTRACT_VERSION = "0.2.1";
+export const CONTRACT_VERSION = "0.3.0";
 
 /**
  * Demo agents inserted at startup.
@@ -36,6 +36,9 @@ export {
   RUN_STATUSES,
   STEP_ROLES,
   STEP_TYPES,
+  OTEL_IMPORT_VERSION,
+  OTEL_SOURCE_VERSION,
+  TASK_EVALSET_VERSION,
   TRACE_STATUSES,
   TRACE_STORE_KINDS,
 } from "./types.js";
@@ -63,6 +66,9 @@ export type {
   AgentTaskCartLine,
   AgentTaskCheck,
   AgentTaskSeedOrder,
+  TaskEvalCase,
+  TaskEvalset,
+  TaskEvalsetVersion,
   LibrarySeedLoan,
   AgentTaskSetup,
   AgentToolDoc,
@@ -71,6 +77,10 @@ export type {
   FaultLabel,
   FixKind,
   InjectionPlan,
+  OtelImportVersion,
+  OtelSourceAuthType,
+  OtelSourceConfig,
+  OtelSourceVersion,
   Run,
   RunPhase,
   RunStatus,

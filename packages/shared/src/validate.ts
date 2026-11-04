@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
-import { validateAgentTasks, validateTaskChecks } from "./checks.js";
+import { validateAgentTasks, validateOtelSource, validateTaskChecks } from "./checks.js";
 import type { Agent, AgentTask, Run, Trace } from "./types.js";
 
 const schemaDir = join(dirname(fileURLToPath(import.meta.url)), "..", "schemas");
@@ -26,6 +26,7 @@ function loadSchema(name: string): SchemaDocument {
 export const traceSchema = loadSchema("trace.schema.json");
 export const agentSchema = loadSchema("agent.schema.json");
 export const runSchema = loadSchema("run.schema.json");
+export const otelImportSchema = loadSchema("otel-import.schema.json");
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -42,6 +43,7 @@ const AGENT_SCHEMA_ID =
 const validateTraceSchema: ValidateFunction = ajv.compile(traceSchema as AnySchema);
 const validateAgentSchema: ValidateFunction = ajv.compile(agentSchema as AnySchema);
 const validateRunSchema: ValidateFunction = ajv.compile(runSchema as AnySchema);
+const validateOtelImportSchema: ValidateFunction = ajv.compile(otelImportSchema as AnySchema);
 const validateTaskSchema: ValidateFunction = ajv.compile({ $ref: `${AGENT_SCHEMA_ID}#/$defs/task` });
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
@@ -66,7 +68,9 @@ export function validateAgent(data: unknown): ValidationResult<Agent> {
   const structural = check<Agent>(validateAgentSchema, data);
   if (!structural.ok) return structural;
   const taskErrors = validateAgentTasks(structural.value);
-  if (taskErrors.length > 0) return { ok: false, errors: taskErrors };
+  const otelErrors = validateOtelSource(structural.value);
+  const errors = [...taskErrors, ...otelErrors];
+  if (errors.length > 0) return { ok: false, errors };
   return structural;
 }
 
@@ -81,4 +85,9 @@ export function validateAgentTask(data: unknown): ValidationResult<AgentTask> {
 
 export function validateRun(data: unknown): ValidationResult<Run> {
   return check(validateRunSchema, data);
+}
+
+/** Structural check for an OTel import batch. The mapper still applies field rules and `validateTrace`. */
+export function validateOtelImport(data: unknown): ValidationResult<unknown> {
+  return check(validateOtelImportSchema, data);
 }

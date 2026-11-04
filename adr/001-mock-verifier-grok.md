@@ -27,6 +27,20 @@ Tre componenti con responsabilità esclusive.
 - **Non** scrive `outcome.verifier` né `fault.labels`.
 - Fix applicati dall’harness; validità = replay + verificatore, non fiducia nella diagnosi.
 
+### Evalset sul task (input al giudice, non esito)
+
+- `Agent.tasks[].evalset` è materiale fornito dall’utente, opzionale. Un giudizio Grok successivo può leggerlo insieme alla Trace o alla Run di quel task.
+- Non è input del verificatore deterministico. Non scrive `outcome.verifier`.
+- L’esito resta `success_test.checks` sullo stato del mondo nel mock.
+- Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. Non esiste un endpoint che genera l’evalset.
+
+### Import OpenTelemetry
+
+- `Agent.otel` registra endpoint e meta. L’import non chiama quell’endpoint.
+- Il mapper copia `outcome` solo se il batch lo porta già. Non ricava `outcome.verifier` dallo status dello span.
+- `fault.labels` non si inventano. La trace importata ha la marca di produzione: `injected: false`, `labels` vuote, attaccante non usato.
+- È un percorso diverso da #51, che incolla una Trace già valida. Dopo il remap vale lo stesso `validateTrace`.
+
 ## Ground truth
 - `fault.labels` e `attacker`: solo iniettore / attaccante in run di caos.
 - Eval classificazione: confronto `diagnosis.category` (+ step) vs `fault.labels`.
@@ -40,6 +54,17 @@ Tre componenti con responsabilità esclusive.
 - Frontend timeline = Trace; before/after = Run + verifier.
 - OpenAPI mock può `$ref` JSON Schema in `/packages/shared`; SoT schemi = JSON Schema, non OpenAPI.
 - Fuori MVP: auth, aggregazione multi-run, LLM-as-judge sull’esito.
+
+## Stato e proposta per il team (issue #101)
+
+Lo **stato resta proposto**. Il runtime su `main` già rispetta i confini sopra (verificatore su `outcome.verifier`, iniettore/attaccante su `fault.*`, Grok solo su `diagnosis`, persistenza della diagnosi via `POST /traces/:traceId/diagnose` nelle PR #98/#102). Questa issue **non** marca ADR-001 come accettato.
+
+Proposta da votare in team, senza effetto finché non c’è consenso:
+
+- passare lo stato a **accettato** se i tre confini e la ground truth di questa ADR restano la regola;
+- lasciare **proposto** se si vuole un freeze formale successivo, dopo la prova live autorizzata.
+
+Non è un’accettazione implicita. Non cambia ADR-002.
 
 ## Allineamento giuria (Track 03)
 - Accuratezza classificazione su GT annotate / iniettore.

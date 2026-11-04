@@ -23,3 +23,5 @@ How to read the result:
 - `outcome.verifier` is the pass/fail authority. `outcome.success` equals `outcome.verifier.passed`. All three traces have status `completed` and a passing verifier. `outcome.agent_claimed_success` records what the agent asserted.
 
 Leave these files out of the eval manifest. The eval set scores a ground-truth label in `fault.labels`, and these traces leave that list empty.
+
+These files are the #51 path: the JSON is already a lab Trace. OpenTelemetry spans are a different import. That mapper ([docs/otel.md](../../../../docs/otel.md)) builds a Trace, then uses the same `validateTrace` gate. It does not replace this paste/upload path, and it does not invent `fault.labels` or `outcome.verifier`.

@@ -12,6 +12,8 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `fault.labels`, `fault.injected`, `fault.attacker` | Injector, from the Run's `injection_plan`. The jury attacker and the T5 security attacker set `attacker.used` on their own runs |
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
 | `diagnosis` | Produced by Grok in agentservice; the explicit stored-trace endpoint validates and persists only this field |
+| `tasks[].evalset` | User data on the Agent document. `POST /agents` and `PUT /agents/:agent_id` store it with the task. Optional. The verifier does not read it. There is no generate-evalset route. |
+| `Agent.otel` | Optional source config on the same Agent document. `POST /agents/:agentId/otel/import` maps a span batch onto a Trace and a baseline Run. It copies a supplied `outcome.verifier` and writes an empty `fault.labels`. It does not dial `endpoint`. See [otel.md](../../docs/otel.md). |
 
 `outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. An `after_fix` run stores `fix_kinds` and copies that list onto the shared `AgentRunRequest` for `POST /v1/tasks/run`. Baseline and injected runs omit the field. The scripted action planner does not read it. `controlled_retry` is applied in `executeAttempt` on the same injector path. `pre_response_check` and `permission_guard` are for the agent service that receives the request.
 

@@ -38,6 +38,38 @@ A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what 
 | `setup.permissions` | Grant on the agent request. Shop: `read`, `write:cart`, `write:order`, `write:order:cancel`. Library: `read`, `write:loan`, `write:hold`. This is not the header used to seed the world. |
 | `setup.library` | Optional. Loans the harness creates on the library mock. Shop tasks omit it and leave `cart` and `orders` as the shop world. |
 | `success_test.checks` | At least one registered check. The verifier scores shop state. It does not score the agent's prose. |
+| `evalset` | Optional. User-supplied cases a later Grok judgment may read for this task's Run or Trace. Omit it, or send `{ "version": 1, "cases": [] }`. It does not write `outcome.verifier`. The verifier does not read it. Pass/fail stays on `success_test` and mock world state ([ADR-001](../adr/001-mock-verifier-grok.md)). |
+
+## Evalset
+
+`evalset` is judge input stored on the task. It is not the verifier. `POST /agents` and `PUT /agents/:agent_id` carry it inside `tasks[]`. There is no other route, and there is no generate-evalset endpoint. Generating cases is a later change.
+
+`version` is the shape of the object. Only `1` is valid (`TASK_EVALSET_VERSION`). A consumer that does not know the version must reject the document.
+
+```json
+"evalset": {
+  "version": 1,
+  "cases": [
+    {
+      "case_id": "claim-after-catalog",
+      "expectation": "The assistant claims it opened the ceramic mug only after a catalog search and a product read.",
+      "rubric": "Cite the claim step and the tool steps. Do not score cart or order state; that is outcome.verifier."
+    }
+  ]
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `version` | yes | `1`. The document shape. |
+| `cases` | yes | May be `[]`. Author order. |
+| `cases[].case_id` | yes | Unique within this task's evalset. |
+| `cases[].expectation` | yes | What to look for in the Trace or Run. Not a world-state check. |
+| `cases[].rubric` | no | How to score the expectation. Free text. |
+
+The reference shop seed puts that case on T1. T2–T5 omit `evalset`. The library desk tasks omit it too. A stored agent that omits the field still validates, including a row written before this field existed, when that row is otherwise valid and not older than its fixture.
+
+The Agents create and edit form edits `evalset` in the task editor. Each case has `case_id`, `expectation`, and an optional `rubric`. The form writes `version` `1` and does not offer another version. A new task omits `evalset`. Adding a case stores `{ "version": 1, "cases": [...] }`. Removing the last case deletes the field, so `PUT /agents/:agent_id` drops a stored evalset. An evalset loaded as `version` `1` with `cases: []` stays that way until a case is added. There is no generate-evalset control. A task loaded from `GET /agents/:agent_id` keeps its evalset because the editor clones the task. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
 
 Seeding the cart uses `write:cart`. Checking out uses `write:order`. Those calls are harness setup. They are not agent steps and they are not injected.
 

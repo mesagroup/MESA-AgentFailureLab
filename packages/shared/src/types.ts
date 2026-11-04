@@ -198,6 +198,72 @@ export interface AgentTaskSetup {
   };
 }
 
+/**
+ * Document shape of `TaskEvalset`.
+ * Only 1 is valid in this contract. A consumer that does not know the version
+ * must reject the document instead of guessing.
+ */
+export const TASK_EVALSET_VERSION = 1 as const;
+
+/**
+ * Document shape of `OtelSourceConfig` and of an OTel import batch.
+ * Only 1 is valid in this contract.
+ */
+export const OTEL_SOURCE_VERSION = 1 as const;
+
+export const OTEL_IMPORT_VERSION = 1 as const;
+
+export type OtelSourceVersion = typeof OTEL_SOURCE_VERSION;
+
+export type OtelImportVersion = typeof OTEL_IMPORT_VERSION;
+
+export type OtelSourceAuthType = "none" | "bearer";
+
+/**
+ * OpenTelemetry source registered on an agent.
+ * `endpoint` is documented for the operator. The importer does not call it.
+ * `auth.token_env` is an environment variable name. The token is not stored here.
+ */
+export interface OtelSourceConfig {
+  version: OtelSourceVersion;
+  endpoint: string;
+  auth: {
+    type: OtelSourceAuthType;
+    /** Required when `type` is `bearer`. Absent when `type` is `none`. */
+    token_env?: string;
+  };
+  /** When set, an import item must name this `service.name`. */
+  service_name?: string;
+}
+
+export type TaskEvalsetVersion = typeof TASK_EVALSET_VERSION;
+
+/**
+ * One user-written case a later Grok judgment may read for this task.
+ * `expectation` says what to look for in the Trace or Run.
+ * `rubric`, when present, says how to score that expectation.
+ * Neither field is a world-state check. Those stay on `success_test`.
+ */
+export interface TaskEvalCase {
+  /** Stable id within this task's evalset. Unique among that task's cases. */
+  case_id: string;
+  /** What the judge should look for. Not a mock-state assertion. */
+  expectation: string;
+  /** How to score the expectation. Free text. Optional. Does not write `outcome.verifier`. */
+  rubric?: string;
+}
+
+/**
+ * User-supplied material for a later Grok judgment of this task's Run or Trace.
+ * Optional on the task. Omit it, or send `version` 1 with `cases: []`, when
+ * there is nothing for the judge to read. The deterministic verifier does not
+ * read this object and does not write `outcome.verifier` from it.
+ */
+export interface TaskEvalset {
+  version: TaskEvalsetVersion;
+  cases: TaskEvalCase[];
+}
+
 export interface AgentTask {
   task_id: string;
   title: string;
@@ -207,6 +273,11 @@ export interface AgentTask {
     type: "verifier_checks";
     checks: AgentTaskCheck[];
   };
+  /**
+   * Judge input for this task. Absent when the author supplied none.
+   * Not a verifier check.
+   */
+  evalset?: TaskEvalset;
 }
 
 export interface Agent {
@@ -244,6 +315,11 @@ export interface Agent {
     kind: "shop" | "library";
     base_url: string;
   };
+  /**
+   * OpenTelemetry source for this agent. Absent when the author registered none.
+   * Not a Trace, and not a verifier.
+   */
+  otel?: OtelSourceConfig;
   tasks: AgentTask[];
 }
 

@@ -3,6 +3,7 @@ import type {
   AgentInstanceKind,
   AgentTask,
   FixKind,
+  OtelSourceConfig,
   Run,
   RunPhase,
   Trace,
@@ -65,6 +66,11 @@ export interface AgentDraft {
   test_instance_base_url: string;
   instance_kind: AgentInstanceKind;
   tasks?: AgentTask[];
+  /**
+   * Source to store. `null` drops a stored source on PUT.
+   * `undefined` leaves the stored source alone.
+   */
+  otel?: OtelSourceConfig | null;
 }
 
 export async function listAgents(): Promise<Agent[]> {
@@ -100,6 +106,8 @@ export async function updateAgent(id: string, draft: AgentDraft): Promise<Agent>
     },
     tasks: draft.tasks ?? existing.tasks,
   };
+  if (draft.otel) body.otel = draft.otel;
+  else if (draft.otel === null) delete body.otel;
   return backendFetch<Agent>(`/agents/${id}`, {
     method: "PUT",
     body: JSON.stringify(body),
@@ -111,7 +119,7 @@ export async function deleteAgent(id: string): Promise<void> {
 }
 
 function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" | "updated_at"> {
-  return {
+  const body: Omit<Agent, "agent_id" | "created_at" | "updated_at"> = {
     name: draft.name,
     description: draft.description || draft.name,
     instance: { kind: draft.instance_kind, base_url: draft.instance_base_url, runtime: "grok" },
@@ -120,6 +128,21 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
     docs: { prompt_summary: "", tools: [], constraints: [], config_notes: "" },
     tasks: draft.tasks ?? [],
   };
+  if (draft.otel) body.otel = draft.otel;
+  return body;
+}
+
+export interface OtelImportResult {
+  traces: Trace[];
+  runs: Run[];
+}
+
+/** Map a version-1 span batch into Traces. Does not send a bearer token. */
+export async function importOtelBatch(agentId: string, batch: unknown): Promise<OtelImportResult> {
+  return backendFetch<OtelImportResult>(`/agents/${encodeURIComponent(agentId)}/otel/import`, {
+    method: "POST",
+    body: JSON.stringify(batch),
+  });
 }
 
 // --- Runs ---
