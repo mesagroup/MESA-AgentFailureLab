@@ -1,6 +1,6 @@
 # @mesa/backend
 
-Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Agent, Run, and Trace records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. See [persistence](../../docs/persistence.md).
+Harness for the Agent Failure Lab. It runs the tasks registered on an agent, injects labeled faults, and is the only writer of `outcome.verifier`. The shopping demo agent is `reference-shop` (tasks T1–T5). Agent, Run, and Trace records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. See [persistence](../../docs/persistence.md).
 
 The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
@@ -45,13 +45,20 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `PUT` | `/agents/:agent_id` | Replace. Server sets `updated_at`. Omitted `created_at` keeps the stored value. 404 if absent, 400 if invalid |
 | `DELETE` | `/agents/:agent_id` | 204. 404 if absent. `reference-shop` returns 409 |
 | `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
-| `POST` | `/runs` | Batch. Body: `phase`, optional `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `grant_cancel`, `timeout_ms` |
+| `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. See [POST /runs](#post-runs) |
 | `GET` | `/attacker/jury-case` | Juror note and the security plan. Does not start a run |
 | `POST` | `/attacker/jury-case` | Unattacked T5 (grant is `read` only) and the attacker case. Optional `include_baseline` (default true) |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
+### POST /runs
+
+`agent_id` is required. It is the id from `GET /agents`. There is no default: a missing, blank, or non-string `agent_id` is 400 `{ "error": "invalid_request", "message": "agent_id is required and must be a non-empty string." }`. A body that is not a JSON object is 400 with `Body must be a JSON object.` An id that is not in the registry is 404 `{ "error": "not_found", "message": "No agent <id>" }`, and no run is stored.
+
+The server loads that agent and runs its `tasks`, in document order, when `task_ids` is omitted. `phase` defaults to `baseline`. A `task_ids` entry that is not on that agent is 400, including a demo task id that only another agent has. An edited `reference-shop` is the document in the store, not a fresh read of the fixture.
+
+Success is 200 `{ "results": [ { "run", "trace", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged.
 ### CORS
 
 Browser calls from the UI send `Content-Type: application/json`, so the browser preflights with `OPTIONS` before GET, POST, PUT, and DELETE. This app registers `@fastify/cors`. There is no `*` origin.

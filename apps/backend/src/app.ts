@@ -24,6 +24,8 @@ export interface BuildAppOptions {
 
 /**
  * Harness API. This process is not the mock shop.
+ * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
+ * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
  */
@@ -130,9 +132,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.post("/runs", async (request, reply) => {
     const parsed = parseRunRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    const registered = await agents.get(parsed.value.agentId);
+    if (!registered) {
+      return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
+    }
     try {
       const results = await runTasks({
-        agent,
+        agent: registered,
         store,
         mock,
         mockBaseUrl,
@@ -159,6 +165,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 }
 
 interface RunRequest {
+  agentId: string;
   phase: RunPhase;
   taskIds?: string[];
   driver?: DriverMode;
@@ -192,10 +199,10 @@ function parseJuryRequest(body: unknown):
 }
 
 function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok: false; message: string } {
-  if (body === undefined || body === null) {
-    return { ok: true, value: { phase: "baseline" } };
-  }
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
+  if (typeof body.agent_id !== "string" || body.agent_id.trim() === "") {
+    return { ok: false, message: "agent_id is required and must be a non-empty string." };
+  }
 
   const phase = body.phase === undefined ? "baseline" : body.phase;
   if (phase !== "baseline" && phase !== "injected" && phase !== "after_fix") {
@@ -257,6 +264,7 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
   return {
     ok: true,
     value: {
+      agentId: body.agent_id,
       phase,
       taskIds,
       driver,

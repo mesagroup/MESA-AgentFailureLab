@@ -523,6 +523,7 @@ describe("jury HTTP API", { concurrency: false }, () => {
         method: "POST",
         url: "/runs",
         payload: {
+          agent_id: "reference-shop",
           phase: "injected",
           task_ids: ["T5"],
           injection: juryPlan(),

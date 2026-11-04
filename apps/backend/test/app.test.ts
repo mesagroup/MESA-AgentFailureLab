@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { FAULT_CATEGORIES, GROK_FORBIDDEN_WRITE_PATHS } from "@mesa/shared";
+import { validateRun, validateTrace } from "@mesa/shared/validate";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { startMockShop } from "./helpers.js";
@@ -38,6 +39,7 @@ describe("harness HTTP API", { concurrency: false }, () => {
         method: "POST",
         url: "/runs",
         payload: {
+          agent_id: "reference-shop",
           phase: "baseline",
           task_ids: ["T1"],
           injection: {
@@ -63,7 +65,7 @@ describe("harness HTTP API", { concurrency: false }, () => {
       const baseline = await app.inject({
         method: "POST",
         url: "/runs",
-        payload: { phase: "baseline", task_ids: ["T2"] },
+        payload: { agent_id: "reference-shop", phase: "baseline", task_ids: ["T2"] },
       });
       assert.equal(baseline.statusCode, 200);
       const passed = baseline.json().results[0];
@@ -71,12 +73,17 @@ describe("harness HTTP API", { concurrency: false }, () => {
       assert.equal(passed.trace.diagnosis, null);
       assert.equal(passed.trace.outcome.verifier.passed, true);
       assert.equal(passed.trace.outcome.success, true);
+      assert.equal(passed.run.agent_id, "reference-shop");
+      assert.equal(passed.trace.agent_id, "reference-shop");
+      assert.equal(passed.trace.outcome.success, passed.trace.outcome.verifier.passed);
+      assert.equal(validateRun(passed.run).ok, true);
+      assert.equal(validateTrace(passed.trace).ok, true);
       assert.equal(passed.run.injection_plan, null);
 
       const injected = await app.inject({
         method: "POST",
         url: "/runs",
-        payload: { phase: "injected", task_ids: ["T3"] },
+        payload: { agent_id: "reference-shop", phase: "injected", task_ids: ["T3"] },
       });
       assert.equal(injected.statusCode, 200);
       const failed = injected.json().results[0];
@@ -86,6 +93,11 @@ describe("harness HTTP API", { concurrency: false }, () => {
       assert.equal(failed.trace.fault.labels[0].code, "forged_tool_result");
       assert.equal(failed.trace.fault.labels[0].category, "ToolUse");
       assert.equal(failed.trace.outcome.verifier.passed, false);
+      assert.equal(failed.run.agent_id, "reference-shop");
+      assert.equal(failed.trace.agent_id, "reference-shop");
+      assert.equal(failed.trace.outcome.success, failed.trace.outcome.verifier.passed);
+      assert.equal(validateRun(failed.run).ok, true);
+      assert.equal(validateTrace(failed.trace).ok, true);
       assert.equal(failed.trace.outcome.agent_claimed_success, true);
       assert.equal(failed.trace.diagnosis, null);
       assert.equal(Object.hasOwn(failed.trace, "injection_plan"), false);
