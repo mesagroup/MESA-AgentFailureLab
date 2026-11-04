@@ -67,8 +67,12 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 ## Examples
 
 - [`examples/injected-failed-trace.json`](examples/injected-failed-trace.json) — T3, forged checkout result, verifier failed, diagnosis present.
+- [`examples/timeout-repeated-tool-trace.json`](examples/timeout-repeated-tool-trace.json) — harness timeout plus two identical `search_products` calls. `diagnosis` is null.
+- [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
 - [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
+
+`apps/agentservice` loads these traces in its diagnosis tests. Later fixture work (issue #9) should add files in this same `examples/` directory so the schema tests and the agent service keep sharing them.
 
 ## Scripts
 

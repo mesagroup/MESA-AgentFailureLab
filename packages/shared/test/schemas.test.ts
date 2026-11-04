@@ -98,6 +98,19 @@ describe("examples", () => {
     assert.ok(value.steps.at(-1)!.timestamp <= value.ended_at);
   });
 
+  it("accepts the shared diagnosis fixtures with diagnosis still null", () => {
+    for (const name of ["timeout-repeated-tool-trace.json", "tool-error-trace.json"]) {
+      const result = validateTrace(readExample(name));
+      assertOk(result, name);
+      if (!result.ok) {
+        continue;
+      }
+      assert.equal(result.value.diagnosis, null);
+      assert.equal(result.value.fault.injected, false);
+      assert.equal(result.value.fault.labels.length, 0);
+    }
+  });
+
   it("accepts the same trace with diagnosis still null", () => {
     const pending = clone(trace) as Trace;
     pending.diagnosis = null;

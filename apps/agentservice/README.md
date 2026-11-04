@@ -1,8 +1,8 @@
 # @mesa/agentservice
 
-Grok reference agent, diagnosis, and fix proposals. This package will read a `Trace`, optionally pre-check mechanical problems (loops, timeouts, repeated tools), and write `diagnosis` (`category`, `cause`, `step_id`, `confidence`, `evidence`, `proposed_fixes`).
+Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
 
-This directory is a scaffold: Fastify boots, and `GET /health` answers. It does not call Grok. No API key is stored in the repo.
+The reference agent (`src/reference-agent/`) and fix application (`src/fixes/`) are not in this change.
 
 ## Run from the monorepo root
 
@@ -15,28 +15,85 @@ Equivalent root script: `pnpm dev:agentservice`.
 
 - Dev server: http://127.0.0.1:3002
 - Health: http://127.0.0.1:3002/health
+- Diagnose: `POST /diagnose` with a JSON `Trace`
 - Production build: `pnpm exec turbo run build --filter=@mesa/agentservice` then `pnpm --filter @mesa/agentservice start`
 
-Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally when a real client is added. `.env` is gitignored. `XAI_API_KEY=` in the example must stay empty.
+Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally. `.env` is gitignored. `XAI_API_KEY=` in the example stays empty.
+
+`GROK_MODEL` is the chat model sent on the diagnosis call (`grok-3` in the example). The call path receives that string from config. `XAI_BASE_URL` defaults to `https://api.x.ai/v1`. `GROK_TIMEOUT_MS` is the per-attempt timeout (default 30000). A timeout, a connection failure, or HTTP 408/429/500/502/503/504 is tried once more. Other statuses are not retried.
 
 `turbo run dev` builds `@mesa/shared` first.
 
+Tests do not need a key or the network:
+
+```bash
+pnpm --filter @mesa/agentservice test
+```
+
+## Diagnose a trace
+
+The body is a `Trace`. `run_id` is already a field on it. There is no second wrapper. The response is that trace with `diagnosis` set. `outcome` and `fault` are the same objects the caller sent.
+
+| Status | Body | When |
+| --- | --- | --- |
+| 200 | The trace | Diagnosis passed the shared schema |
+| 400 | `{ "error": "invalid_trace", "errors": string[] }` | Body failed `validateTrace` |
+| 503 | `{ "error": "grok_not_configured" }` | `XAI_API_KEY` is empty and no model was injected |
+| 502 | `{ "error": "diagnosis_failed" }` | The provider failed, or the model JSON was not a schema-valid diagnosis |
+
+Token use and cost are not fields on the trace. When the completion includes usage, the process logs `diagnosis usage` with `diagnosis_usage`. xAI's `usage.cost_in_usd_ticks` is divided by 10^10 to get USD. If the provider omits usage, nothing is logged.
+
+Field names are the shared schema: `category`, `cause`, `step_id`, `confidence`, `evidence`, `proposed_fixes`. Issue #13's `culprit_step_id` and `suggested_fix_ids` are not accepted as aliases.
+
+## What Grok does not see
+
+The prompt is an allow-list, not a copy of the trace with a few keys deleted.
+
+Omitted:
+
+- The whole `fault` object. `labels` carry category, step id, and the machine code (`forged_tool_result` on the T3 example). `injected` and `attacker.payload_id` are the same ground truth. Sending `injected: false` on clean runs and omitting it on chaos runs would itself mark which runs were planted, so the key is never sent.
+- `outcome.verifier` (`passed`, `checks`, `mock_state_snapshot`). Check text and the snapshot restate the injected effect. On the shared T3 trace the check says the fake order does not exist while the tool result says it was placed.
+- `outcome.success`, because the schema defines it as equal to `verifier.passed`.
+- Any `diagnosis` already stored on the trace.
+
+Kept: identity fields, `status`, `steps` (including tool inputs and outputs the agent saw), `totals`, `agent_claimed_success`, and the pre-pass findings.
+
+`status` still tells the model whether the attempt completed, failed, timed out, or errored. That is the harness class, not the check narrative.
+
+Pre-pass runs in process on the full trace. It may read `outcome.verifier.passed` as a boolean. Finding text is a fixed template plus a tool name and step ids. It does not quote check details, the snapshot, or label codes.
+
+## Pre-pass
+
+Findings are sent to the model and appended to `diagnosis.evidence`. Category, cause, and `proposed_fixes` come from the model.
+
+| Kind | When | Step cited |
+| --- | --- | --- |
+| `false_success_claim` | `agent_claimed_success` is true and `verifier.passed` is false | Last assistant message, else the last step |
+| `tool_error` | A `tool_result` output is an error (`error`, `ok: false`, `success: false`, or status `error` / `failed` / `failure`) | That tool result |
+| `repeated_tool_call` | The same `tool_name` and the same JSON input appear on at least two `tool_call` steps, adjacent or not | Those tool calls |
+| `timeout` | `status` is `timeout`, or a tool result output says timeout | Last step, or that tool result |
+
+Evidence strings from the model that do not contain a real `step_id` are dropped. If the model's `step_id` is not in the trace, it is replaced from the pre-pass in the order false success, tool error, repeated call, timeout. Either repair caps `confidence` at 0.4. If there is no real step to use, the call is rejected. A provider failure does not become a diagnosis invented from the pre-pass alone.
+
 ## Boundaries
 
-Health reports `forbidden_write_paths` from `@mesa/shared`. Grok must not write:
+Health reports `forbidden_write_paths` from `@mesa/shared`. This service must not write:
 
 - `outcome.verifier` (backend verifier only; it reads mock state, not the model)
 - `fault.injected`, `fault.labels`, `fault.attacker` (injector / attacker only)
 
-`diagnosis` stays `null` on a trace until this service fills it. `diagnosis.category` is a hypothesis. Ground truth for classification is `fault.labels`.
+`diagnosis` stays `null` on a trace until this service fills it. `diagnosis.category` is a hypothesis. Ground truth for classification is `fault.labels`, which this service returns on the trace for the harness and does not send to Grok.
 
-The backend harness applies a fix, replays the task (`Run.phase = after_fix`), and records `fix_*`. A proposal is valid only when that replay's verifier passes. This service may later turn a `proposed_fix` into a concrete patch the harness can apply. It does not declare success. See [ADR-001](../../adr/001-mock-verifier-grok.md).
+The backend harness applies a fix, replays the task (`Run.phase = after_fix`), and records `fix_*`. A proposal is valid only when that replay's verifier passes. This service does not declare success. See [ADR-001](../../adr/001-mock-verifier-grok.md).
 
-## Where later code goes
+## Where code lives
 
-- `src/grok/` — API client. Read the key from the environment at runtime.
-- `src/diagnosis/` — trace reading and the diagnosis writer
-- `src/reference-agent/` — the in-lab shopping agent (`instance.kind = reference`)
-- `src/fixes/` — map a proposed fix to something the harness can apply
+- `src/diagnosis/diagnose.ts` — `diagnoseTrace`. Pre-pass, the prompt allow-list, evidence checks, and the graft onto the trace are private to this file.
+- `src/grok/config.ts` — `parseDiagnosisConfig`. The only place that reads `GROK_MODEL`, `XAI_API_KEY`, `XAI_BASE_URL`, and `GROK_TIMEOUT_MS`.
+- `src/grok/client.ts` — OpenAI SDK client pointed at `XAI_BASE_URL`, structured `json_schema` output, timeout, and one retry.
+- `src/reference-agent/` — reserved for the in-lab shopping agent
+- `src/fixes/` — reserved for mapping a proposed fix onto something the harness can apply
+
+Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.

@@ -1,8 +1,10 @@
 import { buildApp } from "./app.js";
+import { parseDiagnosisConfig } from "./grok/config.js";
 
+const config = parseDiagnosisConfig(process.env);
 const port = readPort(process.env.PORT, 3002);
 const host = process.env.HOST ?? "127.0.0.1";
-const app = buildApp();
+const app = buildApp({ config });
 
 try {
   await app.listen({ port, host });
