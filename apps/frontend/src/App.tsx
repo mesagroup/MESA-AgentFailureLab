@@ -1,43 +1,48 @@
-import { CONTRACT_VERSION } from "@mesa/shared";
+import { Moon, Sun } from "lucide-react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
+import { useTheme } from "@/hooks/use-theme";
+import { AgentsPage } from "@/pages/AgentsPage";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { RunsPage } from "@/pages/RunsPage";
+import { TracePage } from "@/pages/TracePage";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
-const agentServiceUrl = import.meta.env.VITE_AGENTSERVICE_URL || "http://127.0.0.1:3002";
+function AppShell() {
+  const { dark, toggle } = useTheme();
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-14 items-center justify-between gap-2 px-3 sticky top-0 z-10 pointer-events-none">
+          <div className="pointer-events-auto">
+            <SidebarTrigger />
+          </div>
+          <div className="pointer-events-auto">
+            <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8 rounded-full">
+              {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </div>
+        </header>
+        <main>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/runs" element={<RunsPage />} />
+            <Route path="/traces/:runId" element={<TracePage />} />
+            <Route path="/traces" element={<TracePage />} />
+          </Routes>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
 
 export function App() {
   return (
-    <main>
-      <p className="eyebrow">Track 03 · CHAOS.AI</p>
-      <h1>MESA Agent Failure Lab</h1>
-      <p className="lede">
-        Scaffold for the web UI. Registration, the run list, and the trace timeline will live here.
-        This app does not own the mock world, the verifier, or Grok.
-      </p>
-
-      <p className="meta">
-        Shared contract <code>@mesa/shared</code> version <strong>{CONTRACT_VERSION}</strong>.
-        Task success is <code>outcome.verifier</code> from the backend. This UI will render traces
-        and before/after runs. It will not decide whether a task passed.
-      </p>
-
-      <section className="grid" aria-label="App ownership">
-        <article>
-          <h2>Frontend</h2>
-          <p>This app, port 3000. Agent registration, runs, and the timeline.</p>
-        </article>
-        <article>
-          <h2>Backend</h2>
-          <p>
-            Mock e-commerce, verifier, and harness. <a href={backendUrl}>{backendUrl}</a>
-          </p>
-        </article>
-        <article>
-          <h2>Agent service</h2>
-          <p>
-            Grok reference agent and diagnosis.{" "}
-            <a href={agentServiceUrl}>{agentServiceUrl}</a>
-          </p>
-        </article>
-      </section>
-    </main>
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
   );
 }
