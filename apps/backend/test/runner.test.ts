@@ -322,8 +322,10 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       assert.equal(mediated?.run.status, "passed");
       assert.equal(mediated?.trace?.diagnosis, null);
       assert.equal(mediated?.trace?.outcome.verifier.passed, true);
-      const body = requests[0] as { task_id: string; mock_base_url: string; session_id: string };
+      const body = requests[0] as AgentRunRequest;
       assert.equal(body.task_id, "T1");
+      assert.equal(body.task.task_id, "T1");
+      assert.deepEqual(body.task.setup.permissions, ["read"]);
       assert.equal(body.mock_base_url, baseUrl);
       assert.equal(body.session_id, mediated?.session_id);
       assert.equal(Object.hasOwn(body, "fix_kinds"), false);
@@ -452,5 +454,35 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       3,
     );
     assert.equal(dropped.trace.outcome.verifier.passed, false);
+  });
+
+  it("runs a user-defined task from its setup and checks", async () => {
+    const custom: Agent = {
+      ...reference,
+      agent_id: "custom-shop",
+      name: "Custom shop",
+      tasks: [
+        {
+          task_id: "add-cap",
+          title: "Add one cap",
+          prompt: "Add 1 unit of SKU-CAP-03 to the cart.",
+          setup: { cart: [], orders: [], permissions: ["read", "write:cart"] },
+          success_test: {
+            type: "verifier_checks",
+            checks: [
+              {
+                name: "cart_contains",
+                description: "The cart contains one cap.",
+                params: { sku: "SKU-CAP-03", qty: 1 },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const [result] = await runTasks(harness(baseUrl, new MemoryStore(), { agent: custom }));
+    assert.equal(result?.permissions.join(","), "read,write:cart");
+    assert.equal(result?.trace?.outcome.verifier.passed, true);
+    assert.equal(result?.trace?.task_id, "add-cap");
   });
 });

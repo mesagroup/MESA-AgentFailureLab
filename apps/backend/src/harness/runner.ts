@@ -148,7 +148,7 @@ async function runOne(
   const plan = resolvePlan(options.phase, taskId, options.injection);
   const fixKinds = resolveFixKinds(options.phase, options.fixKinds);
   const attackerPayloadId = resolveAttackerPayloadId(options.attackerPayloadId, plan);
-  const permissions = permissionsFor(taskId, options.grantCancel ?? true);
+  const permissions = permissionsFor(task, options.grantCancel ?? true);
   const sessionId = sessionIdFor(taskId);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runId = `run-${taskId}-${options.phase}-${randomUUID()}`;
@@ -169,14 +169,14 @@ async function runOne(
   await options.store.saveRun(running);
 
   try {
-    const prepared = await prepareWorld(taskId, options.mock, sessionId);
+    const prepared = await prepareWorld(task, options.mock, sessionId);
     const prompt = withAttachedNote(task.prompt, options.attachedNote);
     const remote = await loadActions(
       options,
       driver,
       running,
       prompt,
-      taskId,
+      task,
       sessionId,
       permissions,
       prepared.orderId,
@@ -310,18 +310,19 @@ async function loadActions(
   driver: "scripted" | "http",
   run: Run,
   prompt: string,
-  taskId: string,
+  task: Agent["tasks"][number],
   sessionId: string,
   permissions: string[],
   orderId: string | undefined,
 ): Promise<{ actions: PlannedAction[]; claimedSuccess?: boolean }> {
   if (driver === "scripted") {
-    return { actions: scriptedActions(taskId, { permissions, orderId }) };
+    return { actions: scriptedActions(task, { permissions, orderId }) };
   }
   const call = options.callAgent ?? runRemoteAgent;
   const request = agentRunRequest({
     agent_id: options.agent.agent_id,
-    task_id: taskId,
+    task_id: task.task_id,
+    task,
     prompt,
     session_id: sessionId,
     permissions,

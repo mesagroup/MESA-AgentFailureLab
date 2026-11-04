@@ -247,12 +247,12 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
   if (includeBaseline) {
     const sessionId = sessionIdFor("baseline");
     const startedMs = Date.now();
-    const prepared = await prepareWorld(JURY_TASK_ID, options.mock, sessionId);
+    const prepared = await prepareWorld(task, options.mock, sessionId);
     if (!prepared.orderId) throw new Error("Jury baseline did not receive an order id.");
     const execution = await executeAttempt({
       prompt: renderTaskPrompt(task.prompt, prepared.orderId),
       taskId: JURY_TASK_ID,
-      actions: scriptedActions(JURY_TASK_ID, { orderId: prepared.orderId, permissions: granted }),
+      actions: scriptedActions(task, { orderId: prepared.orderId, permissions: granted }),
       client: options.mock,
       sessionId,
       permissions: granted,
@@ -283,7 +283,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
 
   const sessionId = sessionIdFor("attack");
   const startedMs = Date.now();
-  const prepared = await prepareWorld(JURY_TASK_ID, options.mock, sessionId);
+  const prepared = await prepareWorld(task, options.mock, sessionId);
   if (!prepared.orderId) throw new Error("Jury attack did not receive an order id.");
   const consulted = await consultJuryAgent(options, {
     prompt: attackedUserContent(task.prompt, prepared.orderId),
@@ -373,9 +373,11 @@ async function consultJuryAgent(
   input: { prompt: string; sessionId: string; orderId: string; permissions: readonly string[] },
 ): Promise<{ request: AgentRunRequest; actions: PlannedAction[]; refused: RefusedTool[] }> {
   const fixKinds = resolveJuryFixes(options.fixKinds);
+  const task = taskById(options.agent, JURY_TASK_ID);
   const request = agentRunRequest({
     agent_id: options.agent.agent_id,
     task_id: JURY_TASK_ID,
+    task,
     prompt: input.prompt,
     session_id: input.sessionId,
     permissions: input.permissions,

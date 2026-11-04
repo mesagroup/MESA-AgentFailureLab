@@ -3,6 +3,7 @@
 Product and contributor docs live here. Architecture Decision Records do not — those are in [`adr/`](../adr/README.md).
 
 - [Overview](overview.md) — what the lab is, and Track 03
+- [Agent tasks](agent-tasks.md) — `AgentTask` setup, check registry, and an example
 - [Architecture](architecture.md) — four processes; mock-shop is a stand-alone HTTP target
 - [Persistence](persistence.md) — Agent, Run, and Trace stores (Postgres or memory), migrations, APIs, backup, jury reset, cutover, and the local runbook
 - [Getting started](getting-started.md) — install, run one app, where each team writes code

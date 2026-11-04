@@ -97,6 +97,7 @@ describe("security payload catalog and hook", () => {
     const plan = planTaskRun({
       agent_id: reference.agent_id,
       task_id: "T5",
+      task,
       prompt: `${task.prompt}\n\n${SECURITY_ORDER_NOTE}`,
       session_id: "sT5",
       permissions: ["read"],
@@ -118,6 +119,7 @@ describe("security payload catalog and hook", () => {
     const plan = planTaskRun({
       agent_id: reference.agent_id,
       task_id: "T5",
+      task,
       prompt: `${task.prompt}\n\n${SECURITY_ORDER_NOTE}`,
       session_id: "sT5",
       permissions: ["read"],

@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { deleteAgent, listAgents, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
-import type { Agent, AgentInstanceKind } from "@mesa/shared";
+import type { Agent, AgentInstanceKind, AgentTask } from "@mesa/shared";
+import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 
 interface FormState {
   name: string;
@@ -18,11 +19,13 @@ interface FormState {
   instance_base_url: string;
   test_instance_base_url: string;
   instance_kind: AgentInstanceKind;
+  tasks: AgentTask[];
 }
 
 interface FormErrors {
   name?: string;
   instance_base_url?: string;
+  tasks?: string;
   save?: string;
 }
 
@@ -32,6 +35,7 @@ const EMPTY_FORM: FormState = {
   instance_base_url: "",
   test_instance_base_url: "",
   instance_kind: "external",
+  tasks: blankTasks(),
 };
 
 function agentToForm(agent: Agent): FormState {
@@ -41,6 +45,7 @@ function agentToForm(agent: Agent): FormState {
     instance_base_url: agent.instance.base_url,
     test_instance_base_url: agent.test_instance.base_url,
     instance_kind: agent.instance.kind,
+    tasks: structuredClone(agent.tasks),
   };
 }
 
@@ -68,7 +73,7 @@ export function AgentsPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, tasks: blankTasks() });
     setErrors({});
     setSheetOpen(true);
   }
@@ -97,6 +102,8 @@ export function AgentsPage() {
     const errs: FormErrors = {};
     if (!form.name.trim()) errs.name = "Name is required";
     if (!form.instance_base_url.trim()) errs.instance_base_url = "Instance URL is required";
+    const taskError = validateTasks(form.tasks);
+    if (taskError) errs.tasks = taskError;
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -109,7 +116,7 @@ export function AgentsPage() {
       instance_base_url: form.instance_base_url.trim(),
       test_instance_base_url: form.test_instance_base_url.trim(),
       instance_kind: form.instance_kind,
-      tasks: editing?.tasks,
+      tasks: form.tasks,
     };
     try {
       if (editing) {
@@ -341,31 +348,14 @@ export function AgentsPage() {
                 </div>
               </div>
 
-              {/* Tasks */}
-              {editing && editing.tasks.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Tasks ({editing.tasks.length})
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {editing.tasks.map((task) => (
-                      <div key={task.task_id} className="rounded-xl bg-muted/40 px-3 py-2.5">
-                        <div className="flex items-start justify-between gap-1.5 mb-1">
-                          <span className="text-xs font-medium leading-snug">{task.title}</span>
-                          <span className="text-xs font-mono text-muted-foreground shrink-0">{task.task_id}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {task.success_test.checks.length} check{task.success_test.checks.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!editing && (
-                <p className="text-xs text-muted-foreground">Tasks can be configured after saving.</p>
-              )}
+              <AgentTasksEditor
+                tasks={form.tasks}
+                onChange={(tasks) => {
+                  setForm((current) => ({ ...current, tasks }));
+                  setErrors((current) => ({ ...current, tasks: undefined }));
+                }}
+              />
+              {errors.tasks && <p className="text-xs text-destructive">{errors.tasks}</p>}
             </div>
           </div>
 

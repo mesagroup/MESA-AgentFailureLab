@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
-import type { Agent, Run, Trace } from "./types.js";
+import { validateAgentTasks, validateTaskChecks } from "./checks.js";
+import type { Agent, AgentTask, Run, Trace } from "./types.js";
 
 const schemaDir = join(dirname(fileURLToPath(import.meta.url)), "..", "schemas");
 
@@ -35,9 +36,13 @@ export type ValidationResult<T> =
 const ajv = new Ajv2020Module.default({ allErrors: true, strict: true });
 addFormatsModule.default(ajv);
 
+const AGENT_SCHEMA_ID =
+  "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json";
+
 const validateTraceSchema: ValidateFunction = ajv.compile(traceSchema as AnySchema);
 const validateAgentSchema: ValidateFunction = ajv.compile(agentSchema as AnySchema);
 const validateRunSchema: ValidateFunction = ajv.compile(runSchema as AnySchema);
+const validateTaskSchema: ValidateFunction = ajv.compile({ $ref: `${AGENT_SCHEMA_ID}#/$defs/task` });
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
   return (errors ?? []).map((error) => {
@@ -58,7 +63,20 @@ export function validateTrace(data: unknown): ValidationResult<Trace> {
 }
 
 export function validateAgent(data: unknown): ValidationResult<Agent> {
-  return check(validateAgentSchema, data);
+  const structural = check<Agent>(validateAgentSchema, data);
+  if (!structural.ok) return structural;
+  const taskErrors = validateAgentTasks(structural.value);
+  if (taskErrors.length > 0) return { ok: false, errors: taskErrors };
+  return structural;
+}
+
+/** One task, including its setup and the registered check params. */
+export function validateAgentTask(data: unknown): ValidationResult<AgentTask> {
+  const structural = check<AgentTask>(validateTaskSchema, data);
+  if (!structural.ok) return structural;
+  const taskErrors = validateTaskChecks(structural.value);
+  if (taskErrors.length > 0) return { ok: false, errors: taskErrors };
+  return structural;
 }
 
 export function validateRun(data: unknown): ValidationResult<Run> {

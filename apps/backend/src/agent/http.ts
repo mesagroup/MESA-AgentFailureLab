@@ -1,4 +1,4 @@
-import type { AgentRunRequest, FixKind } from "@mesa/shared";
+import type { AgentRunRequest, AgentTask, FixKind } from "@mesa/shared";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "./scripted.js";
 
@@ -12,6 +12,7 @@ export type { AgentRunRequest };
 export function agentRunRequest(input: {
   agent_id: string;
   task_id: string;
+  task: AgentTask;
   prompt: string;
   session_id: string;
   permissions: readonly string[];
@@ -22,6 +23,7 @@ export function agentRunRequest(input: {
   const request: AgentRunRequest = {
     agent_id: input.agent_id,
     task_id: input.task_id,
+    task: structuredClone(input.task),
     prompt: input.prompt,
     session_id: input.session_id,
     permissions: [...input.permissions],

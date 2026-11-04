@@ -7,8 +7,25 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (typeof body === "object" && body !== null) {
+      const record = body as { message?: unknown; errors?: unknown };
+      if (Array.isArray(record.errors) && record.errors.every((entry) => typeof entry === "string")) {
+        return record.errors.join("; ");
+      }
+      if (typeof record.message === "string" && record.message.length > 0) return record.message;
+    }
+  } catch {
+    // The error body was not JSON.
+  }
+  return `${res.status} ${res.statusText}`;
 }
 
 // --- Agents ---
@@ -65,16 +82,6 @@ export async function deleteAgent(id: string): Promise<void> {
   await backendFetch<void>(`/agents/${id}`, { method: "DELETE" });
 }
 
-const PLACEHOLDER_TASK = {
-  task_id: "T1",
-  title: "Default task",
-  prompt: "Describe the task this agent should perform.",
-  success_test: {
-    type: "verifier_checks" as const,
-    checks: [{ name: "task_complete", description: "The agent completed the task." }],
-  },
-};
-
 function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" | "updated_at"> {
   return {
     name: draft.name,
@@ -83,7 +90,7 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
     test_instance: { base_url: draft.test_instance_base_url || draft.instance_base_url, runtime: "grok" },
     traces: { store: "path", path_or_url: "pending" },
     docs: { prompt_summary: "", tools: [], constraints: [], config_notes: "" },
-    tasks: draft.tasks?.length ? draft.tasks : [PLACEHOLDER_TASK],
+    tasks: draft.tasks ?? [],
   };
 }
 
