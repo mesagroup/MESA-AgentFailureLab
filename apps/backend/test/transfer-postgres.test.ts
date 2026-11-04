@@ -6,7 +6,7 @@ import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
 import pg from "pg";
 import { PostgresAgentStore, isRenderPostgresUrl, postgresPoolConfig, quoteIdent } from "../src/agents/postgres.js";
-import { REFERENCE_AGENT_ID } from "../src/agents/store.js";
+import { GIFT_DESK_AGENT_ID, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { PostgresRunStore } from "../src/persistence/postgres.js";
 import {
   exportStores,
@@ -224,13 +224,14 @@ describe(
       await store.runs.upsertImportedTrace(baselineTrace(), "2024-01-01T00:00:01.000Z");
 
       const counts = await resetKeepingSeed(store.agents, store.runs);
-      assert.equal(counts.seed, "kept");
+      assert.equal(counts.seed[REFERENCE_AGENT_ID], "kept");
+      assert.equal(counts.seed[GIFT_DESK_AGENT_ID], "kept");
       assert.equal(counts.agents_deleted, 1);
       assert.equal(counts.runs_deleted, 1);
       assert.equal(counts.traces_deleted, 1);
       assert.deepEqual(
         (await store.agents.list()).map((agent) => agent.agent_id),
-        [REFERENCE_AGENT_ID],
+        [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
       );
       const kept = await store.agents.get(REFERENCE_AGENT_ID);
       assert.equal(kept?.name, "Edited seed");
@@ -240,10 +241,12 @@ describe(
 
       await store.agents.deleteAllRowsForTests();
       const inserted = await resetKeepingSeed(store.agents, store.runs);
-      assert.equal(inserted.seed, "inserted");
+      assert.equal(inserted.seed[REFERENCE_AGENT_ID], "inserted");
+      assert.equal(inserted.seed[GIFT_DESK_AGENT_ID], "inserted");
       assert.equal(inserted.agents_deleted, 0);
       assert.equal((await store.agents.get(REFERENCE_AGENT_ID))?.name, "Reference shop assistant");
-      assert.equal((await store.agents.list()).length, 1);
+      assert.equal((await store.agents.get(GIFT_DESK_AGENT_ID))?.name, "Gift desk assistant");
+      assert.equal((await store.agents.list()).length, 2);
     });
   },
 );

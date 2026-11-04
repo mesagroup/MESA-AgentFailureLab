@@ -95,7 +95,7 @@ describe("harness session snapshot", () => {
       assert.deepEqual(body.trace_links, []);
       assert.deepEqual(body.counts, {
         scope: HARNESS_SESSION_SCOPE,
-        agents: 1,
+        agents: 2,
         runs: 0,
         queued: 0,
         running: 0,
@@ -106,10 +106,14 @@ describe("harness session snapshot", () => {
 
       const agents = await app.inject({ method: "GET", url: "/agents" });
       assert.equal(agents.statusCode, 200);
-      const agent = agents.json().agents[0];
-      assert.equal(agent.agent_id, "reference-shop");
-      assert.equal(agent.instance.kind, "reference");
-      assert.equal(agent.tasks.length, 5);
+      const rows = agents.json().agents as Array<{ agent_id: string; instance: { kind: string }; tasks: unknown[] }>;
+      assert.deepEqual(
+        rows.map((agent) => [agent.agent_id, agent.instance.kind, agent.tasks.length]),
+        [
+          ["reference-shop", "reference", 5],
+          ["gift-desk", "reference", 3],
+        ],
+      );
     } finally {
       await app.close();
     }
@@ -193,7 +197,7 @@ describe("harness session snapshot", () => {
 
       assert.deepEqual(body.counts, {
         scope: "harness_session",
-        agents: 2,
+        agents: 3,
         runs: 5,
         queued: 1,
         running: 1,
@@ -225,6 +229,7 @@ describe("harness session snapshot", () => {
         rows.map((agent) => [agent.agent_id, agent.instance.kind, agent.tasks.length]),
         [
           ["reference-shop", "reference", 5],
+          ["gift-desk", "reference", 3],
           ["agent-ext-001", "external", 5],
         ],
       );

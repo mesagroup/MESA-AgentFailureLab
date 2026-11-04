@@ -9,9 +9,9 @@ import {
   normalizeMigrationSql,
   postgresPoolConfig,
 } from "../src/agents/postgres.js";
-import { MemoryAgentStore, REFERENCE_AGENT_ID } from "../src/agents/store.js";
+import { GIFT_DESK_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
-import { loadReferenceAgent } from "../src/reference-agent.js";
+import { loadGiftDeskAgent, loadReferenceAgent } from "../src/reference-agent.js";
 
 function withoutServerFields(agent: Agent): Record<string, unknown> {
   const copy = structuredClone(agent) as unknown as Record<string, unknown>;
@@ -51,6 +51,8 @@ describe("agent store selection", () => {
       assert.equal(store.kind, "memory");
       const seed = await store.get(REFERENCE_AGENT_ID);
       assert.equal(seed?.name, "Reference shop assistant");
+      assert.equal((await store.get(GIFT_DESK_AGENT_ID))?.name, "Gift desk assistant");
+      assert.equal((await store.get(GIFT_DESK_AGENT_ID))?.tasks.length, 3);
     } finally {
       await store.close();
     }
@@ -110,9 +112,12 @@ describe("agent HTTP API", () => {
       const list = await app.inject({ method: "GET", url: "/agents" });
       assert.equal(list.statusCode, 200);
       const seeded = list.json().agents as Agent[];
-      assert.equal(seeded.length, 1);
-      assert.equal(seeded[0]?.agent_id, REFERENCE_AGENT_ID);
+      assert.deepEqual(
+        seeded.map((agent) => agent.agent_id),
+        [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+      );
       assert.equal(validateAgent(seeded[0]).ok, true);
+      assert.equal(validateAgent(seeded[1]).ok, true);
 
       const one = await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` });
       assert.equal(one.statusCode, 200);
@@ -191,6 +196,8 @@ describe("agent HTTP API", () => {
       assert.equal(protectedDelete.statusCode, 409);
       const stillThere = await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` });
       assert.equal(stillThere.statusCode, 200);
+      const protectedGift = await app.inject({ method: "DELETE", url: `/agents/${GIFT_DESK_AGENT_ID}` });
+      assert.equal(protectedGift.statusCode, 409);
 
       const removed = await app.inject({ method: "DELETE", url: `/agents/${body.agent_id}` });
       assert.equal(removed.statusCode, 204);
@@ -248,13 +255,28 @@ describe("agent HTTP API", () => {
     const edited = await first.replace(REFERENCE_AGENT_ID, {
       ...loadReferenceAgent(),
       name: "Edited seed",
+      description: "Renamed from the form.",
     });
     assert.equal(edited.name, "Edited seed");
-    await first.seedIfMissing();
+    const gift = loadGiftDeskAgent();
+    gift.tasks[0]!.title = "Edited comparison";
+    const editedGift = await first.replace(GIFT_DESK_AGENT_ID, {
+      ...gift,
+      name: "Edited gift desk",
+      description: "Renamed gift desk.",
+    });
+    assert.equal(editedGift.tasks[0]?.title, "Edited comparison");
+    const report = await first.seedIfMissing();
+    assert.equal(report[REFERENCE_AGENT_ID], "kept");
+    assert.equal(report[GIFT_DESK_AGENT_ID], "kept");
     assert.equal((await first.get(REFERENCE_AGENT_ID))?.name, "Edited seed");
+    assert.equal((await first.get(REFERENCE_AGENT_ID))?.description, "Renamed from the form.");
+    assert.equal((await first.get(GIFT_DESK_AGENT_ID))?.name, "Edited gift desk");
+    assert.equal((await first.get(GIFT_DESK_AGENT_ID))?.tasks[0]?.title, "Edited comparison");
 
     const second = new MemoryAgentStore();
     assert.equal((await second.get(REFERENCE_AGENT_ID))?.name, "Reference shop assistant");
+    assert.equal((await second.get(GIFT_DESK_AGENT_ID))?.name, "Gift desk assistant");
     assert.equal(await second.get(created.agent_id), undefined);
     await first.close();
     await second.close();
@@ -265,7 +287,46 @@ describe("agent HTTP API", () => {
     await store.create(externalAgent("later", "2021-01-01T00:00:00.000Z"));
     await store.create(externalAgent("earlier", "2019-01-01T00:00:00.000Z"));
     const ids = (await store.list()).map((agent) => agent.agent_id);
-    assert.deepEqual(ids, ["earlier", "later", REFERENCE_AGENT_ID]);
+    assert.deepEqual(ids, ["earlier", "later", REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID]);
     await store.close();
+  });
+
+  it("accepts PUT of name, description, and tasks for both demo seeds", async () => {
+    const agents = new MemoryAgentStore();
+    const app = buildApp({ logger: false, agents });
+    try {
+      const shop = (await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` })).json() as Agent;
+      shop.name = "Counter name";
+      shop.description = "Counter description";
+      shop.tasks[1]!.title = "Edited add";
+      const shopPut = await app.inject({ method: "PUT", url: `/agents/${REFERENCE_AGENT_ID}`, payload: shop });
+      assert.equal(shopPut.statusCode, 200);
+      assert.equal(shopPut.json().name, "Counter name");
+      assert.equal(shopPut.json().tasks[1].title, "Edited add");
+
+      const gift = (await app.inject({ method: "GET", url: `/agents/${GIFT_DESK_AGENT_ID}` })).json() as Agent;
+      gift.name = "Desk name";
+      gift.description = "Desk description";
+      gift.tasks = gift.tasks.slice(0, 2);
+      gift.tasks[0]!.title = "Edited compare";
+      const giftPut = await app.inject({ method: "PUT", url: `/agents/${GIFT_DESK_AGENT_ID}`, payload: gift });
+      assert.equal(giftPut.statusCode, 200);
+      assert.equal(giftPut.json().tasks.length, 2);
+
+      const report = await agents.seedIfMissing();
+      assert.equal(report[REFERENCE_AGENT_ID], "kept");
+      assert.equal(report[GIFT_DESK_AGENT_ID], "kept");
+      const shopAgain = await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` });
+      assert.equal(shopAgain.json().name, "Counter name");
+      assert.equal(shopAgain.json().description, "Counter description");
+      assert.equal(shopAgain.json().tasks[1].title, "Edited add");
+      const giftAgain = await app.inject({ method: "GET", url: `/agents/${GIFT_DESK_AGENT_ID}` });
+      assert.equal(giftAgain.json().name, "Desk name");
+      assert.equal(giftAgain.json().tasks.length, 2);
+      assert.equal(giftAgain.json().tasks[0].title, "Edited compare");
+    } finally {
+      await app.close();
+      await agents.close();
+    }
   });
 });

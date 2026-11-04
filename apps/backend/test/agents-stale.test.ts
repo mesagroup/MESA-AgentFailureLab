@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { MemoryAgentStore, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
+import { GIFT_DESK_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { exportStores, importPersistence, resetKeepingSeed } from "../src/persistence/transfer.js";
@@ -73,7 +73,9 @@ describe("stale reference-shop", () => {
       if (!checked.ok) assert.match(checked.errors.join("; "), /required property 'setup'/);
 
       const agents = new MemoryAgentStore([stale, other]);
-      assert.equal(await agents.seedIfMissing(), "kept");
+      const seeded = await agents.seedIfMissing();
+      assert.equal(seeded[REFERENCE_AGENT_ID], "kept");
+      assert.equal(seeded[GIFT_DESK_AGENT_ID], "kept");
       assert.ok(warnings.some((line) => line.includes("Rewrote stored agent reference-shop")));
       assert.ok(warnings.some((line) => line.includes("stored document failed schema")));
 
@@ -99,12 +101,12 @@ describe("stale reference-shop", () => {
         assert.equal(list.statusCode, 200);
         assert.deepEqual(
           (list.json().agents as Agent[]).map((agent) => agent.agent_id),
-          [REFERENCE_AGENT_ID],
+          [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
         );
 
         const runs = await app.inject({ method: "GET", url: "/runs" });
         assert.equal(runs.statusCode, 200);
-        assert.equal(runs.json().counts.agents, 1);
+        assert.equal(runs.json().counts.agents, 2);
         assert.deepEqual(runs.json().runs, []);
 
         const broken = await app.inject({ method: "GET", url: "/agents/legacy-shop" });
@@ -124,7 +126,7 @@ describe("stale reference-shop", () => {
         assert.equal(after.statusCode, 200);
         assert.deepEqual(
           (after.json().agents as Agent[]).map((agent) => agent.agent_id),
-          ["legacy-shop", REFERENCE_AGENT_ID],
+          ["legacy-shop", REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
         );
       } finally {
         await app.close();
@@ -143,11 +145,15 @@ describe("stale reference-shop", () => {
       assert.match(error.message, /Stored agent failed schema/);
       return true;
     });
-    assert.equal(await agents.seedIfMissing(), "refreshed");
+    const refreshed = await agents.seedIfMissing();
+    assert.equal(refreshed[REFERENCE_AGENT_ID], "refreshed");
+    assert.equal(refreshed[GIFT_DESK_AGENT_ID], "kept");
     const seed = await agents.get(REFERENCE_AGENT_ID);
     assert.equal(seed?.tasks.length, 5);
     assert.ok(seed?.tasks.every((task) => task.setup));
-    assert.equal(await agents.seedIfMissing(), "kept");
+    const again = await agents.seedIfMissing();
+    assert.equal(again[REFERENCE_AGENT_ID], "kept");
+    assert.equal(again[GIFT_DESK_AGENT_ID], "kept");
     await agents.close();
   });
 
@@ -190,7 +196,7 @@ describe("stale reference-shop", () => {
       ...exported,
       agents: [...exported.agents, externalAgent("legacy-import")],
     });
-    assert.equal(counts.agents.updated, 2);
+    assert.equal(counts.agents.updated, 3);
     const imported = await agents.get("legacy-import");
     assert.equal(imported?.created_at, legacy.created_at);
     assert.equal(imported?.name, "External legacy-import");
@@ -205,7 +211,8 @@ describe("stale reference-shop", () => {
     agents.putRawForTests(legacyAgent("gone"));
     const runs = new MemoryStore();
     const counts = await resetKeepingSeed(agents, runs);
-    assert.equal(counts.seed, "refreshed");
+    assert.equal(counts.seed[REFERENCE_AGENT_ID], "refreshed");
+    assert.equal(counts.seed[GIFT_DESK_AGENT_ID], "kept");
     assert.equal(counts.agents_deleted, 1);
     const seed = await agents.get(REFERENCE_AGENT_ID);
     assert.equal(seed?.name, "Reference shop assistant");

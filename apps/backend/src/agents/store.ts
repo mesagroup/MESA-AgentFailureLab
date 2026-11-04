@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { Agent } from "@mesa/shared";
+import { isSeededAgentId, SEEDED_AGENT_IDS, type Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { loadReferenceAgent } from "../reference-agent.js";
+import { loadGiftDeskAgent, loadReferenceAgent, loadSeedAgents } from "../reference-agent.js";
 import { isRecord } from "../util.js";
 
-/** Demo seed. DELETE of this id is rejected. */
-export const REFERENCE_AGENT_ID = "reference-shop";
+/** Shopping demo seed. DELETE of this id is rejected. */
+export const REFERENCE_AGENT_ID = SEEDED_AGENT_IDS[0];
+
+/** Gift desk demo seed. DELETE of this id is rejected. */
+export const GIFT_DESK_AGENT_ID = SEEDED_AGENT_IDS[1];
+
+export { isSeededAgentId, SEEDED_AGENT_IDS };
 
 export type AgentStoreKind = "memory" | "postgres";
 
@@ -34,14 +39,17 @@ export class AgentConflictError extends Error {
 }
 
 export class ProtectedAgentError extends Error {
-  constructor() {
-    super(`Agent ${REFERENCE_AGENT_ID} is the demo seed and cannot be deleted.`);
+  constructor(agentId: string) {
+    super(`Agent ${agentId} is a demo seed and cannot be deleted.`);
     this.name = "ProtectedAgentError";
   }
 }
 
-/** What `seedIfMissing` did to `reference-shop`. */
+/** What `seedIfMissing` did to one demo seed. */
 export type SeedResult = "inserted" | "kept" | "refreshed";
+
+/** One result per seeded agent id. */
+export type SeedReport = Readonly<Record<string, SeedResult>>;
 
 /**
  * A row is present, but its document does not satisfy the Agent schema.
@@ -71,12 +79,12 @@ export interface AgentStore {
   replace(agentId: string, body: unknown): Promise<Agent>;
   delete(agentId: string): Promise<void>;
   /**
-   * Insert the reference-shop fixture when that id is absent.
-   * Rewrite it when the stored document fails `validateAgent`, or when its
-   * `updated_at` is earlier than the fixture. A valid row at the same age or
+   * Insert each demo fixture when that id is absent.
+   * Rewrite a row when its document fails `validateAgent`, or when its
+   * `updated_at` is earlier than that fixture. A valid row at the same age or
    * newer stays, including one renamed with PUT.
    */
-  seedIfMissing(): Promise<SeedResult>;
+  seedIfMissing(): Promise<SeedReport>;
   /**
    * Insert or replace one agent from a backup file.
    * The document must already include `agent_id`, `created_at`, and `updated_at`.
@@ -86,8 +94,8 @@ export interface AgentStore {
    */
   upsertImported(agent: Agent): Promise<"inserted" | "updated">;
   /**
-   * Delete every agent except `reference-shop`. The seed row is never removed.
-   * Not an HTTP route. `DELETE /agents/reference-shop` stays 409.
+   * Delete every agent except the demo seeds. Those rows are never removed.
+   * Not an HTTP route. `DELETE` of a seed id stays 409.
    */
   deleteAgentsExceptSeed(): Promise<number>;
   close(): Promise<void>;
@@ -138,11 +146,28 @@ export function importedAgent(body: unknown): Agent {
 }
 
 export function referenceSeed(): Agent {
-  const agent = structuredClone(loadReferenceAgent());
-  if (agent.agent_id !== REFERENCE_AGENT_ID) {
-    throw new Error(`Reference fixture agent_id is ${agent.agent_id}, expected ${REFERENCE_AGENT_ID}.`);
+  return seedFixture(loadReferenceAgent(), REFERENCE_AGENT_ID);
+}
+
+export function giftDeskSeed(): Agent {
+  return seedFixture(loadGiftDeskAgent(), GIFT_DESK_AGENT_ID);
+}
+
+export function seedFixtures(): Agent[] {
+  return loadSeedAgents().map((agent) => {
+    if (!isSeededAgentId(agent.agent_id)) {
+      throw new Error(`Seed fixture agent_id is ${agent.agent_id}, which is not a demo seed.`);
+    }
+    return structuredClone(agent);
+  });
+}
+
+function seedFixture(agent: Agent, expectedId: string): Agent {
+  const copy = structuredClone(agent);
+  if (copy.agent_id !== expectedId) {
+    throw new Error(`Seed fixture agent_id is ${copy.agent_id}, expected ${expectedId}.`);
   }
-  return agent;
+  return copy;
 }
 
 export function rawAgentId(document: unknown): string {
@@ -164,7 +189,7 @@ export function storedTimestamp(value: unknown, key: "created_at" | "updated_at"
  * `undefined` when the stored seed validates and is not older than the fixture.
  * Otherwise the reason the fixture should replace the row.
  */
-export function referenceSeedRewriteReason(stored: unknown, fixture: Agent): string | undefined {
+export function seedRewriteReason(stored: unknown, fixture: Agent): string | undefined {
   const result = validateAgent(structuredClone(stored));
   if (!result.ok) {
     return `stored document failed schema: ${result.errors.join("; ")}`;
@@ -199,8 +224,8 @@ export function readableStoredAgents(documents: readonly unknown[]): Agent[] {
   return agents;
 }
 
-export function warnReferenceSeedRewritten(reason: string): void {
-  console.warn(`Rewrote stored agent ${REFERENCE_AGENT_ID} from the fixture: ${reason}`);
+export function warnSeedRewritten(agentId: string, reason: string): void {
+  console.warn(`Rewrote stored agent ${agentId} from the fixture: ${reason}`);
 }
 
 function rawAgentIdOrUnknown(value: unknown): string {
@@ -229,8 +254,8 @@ function byCreatedAt(left: Agent, right: Agent): number {
 /**
  * Process-local agent store.
  * `initialDocuments` are rows already present at startup. Tests plant a stale
- * seed this way. The constructor then inserts or rewrites `reference-shop`.
- * A later empty construction drops every row except that seed.
+ * seed this way. The constructor then inserts or rewrites each demo seed.
+ * A later empty construction drops every row except those seeds.
  */
 export class MemoryAgentStore implements AgentStore {
   readonly kind = "memory" as const;
@@ -240,7 +265,7 @@ export class MemoryAgentStore implements AgentStore {
     if (initialDocuments) {
       for (const document of initialDocuments) this.rememberRaw(document);
     }
-    this.applyReferenceSeed();
+    this.applySeeds();
   }
 
   async list(): Promise<Agent[]> {
@@ -268,12 +293,12 @@ export class MemoryAgentStore implements AgentStore {
   }
 
   async delete(agentId: string): Promise<void> {
-    if (agentId === REFERENCE_AGENT_ID) throw new ProtectedAgentError();
+    if (isSeededAgentId(agentId)) throw new ProtectedAgentError(agentId);
     if (!this.agents.delete(agentId)) throw new AgentNotFoundError(agentId);
   }
 
-  async seedIfMissing(): Promise<SeedResult> {
-    return this.applyReferenceSeed();
+  async seedIfMissing(): Promise<SeedReport> {
+    return this.applySeeds();
   }
 
   async upsertImported(agent: Agent): Promise<"inserted" | "updated"> {
@@ -291,7 +316,7 @@ export class MemoryAgentStore implements AgentStore {
   async deleteAgentsExceptSeed(): Promise<number> {
     let removed = 0;
     for (const agentId of [...this.agents.keys()]) {
-      if (agentId === REFERENCE_AGENT_ID) continue;
+      if (isSeededAgentId(agentId)) continue;
       this.agents.delete(agentId);
       removed += 1;
     }
@@ -309,17 +334,24 @@ export class MemoryAgentStore implements AgentStore {
     this.agents.set(rawAgentId(document), structuredClone(document));
   }
 
-  private applyReferenceSeed(): SeedResult {
-    const fixture = referenceSeed();
-    const stored = this.agents.get(REFERENCE_AGENT_ID);
+  private applySeeds(): SeedReport {
+    const report: Record<string, SeedResult> = {};
+    for (const fixture of seedFixtures()) {
+      report[fixture.agent_id] = this.applyOneSeed(fixture);
+    }
+    return report;
+  }
+
+  private applyOneSeed(fixture: Agent): SeedResult {
+    const stored = this.agents.get(fixture.agent_id);
     if (stored === undefined) {
-      this.agents.set(REFERENCE_AGENT_ID, fixture);
+      this.agents.set(fixture.agent_id, fixture);
       return "inserted";
     }
-    const reason = referenceSeedRewriteReason(stored, fixture);
+    const reason = seedRewriteReason(stored, fixture);
     if (reason === undefined) return "kept";
-    warnReferenceSeedRewritten(reason);
-    this.agents.set(REFERENCE_AGENT_ID, fixture);
+    warnSeedRewritten(fixture.agent_id, reason);
+    this.agents.set(fixture.agent_id, fixture);
     return "refreshed";
   }
 }

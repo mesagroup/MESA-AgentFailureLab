@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json",
   "title": "Agent",
-  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks. The reference shop agent is seeded with five tasks (T1–T5); other agents may register a different non-empty task list.",
+  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks. The reference shop agent is seeded with five tasks (T1–T5). The gift desk agent is seeded with three tasks. Other agents may register a different non-empty task list.",
   "type": "object",
   "additionalProperties": false,
   "required": [

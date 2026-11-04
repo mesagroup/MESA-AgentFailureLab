@@ -1,6 +1,6 @@
 import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateAgent, validateRun, validateTrace } from "@mesa/shared/validate";
-import { REFERENCE_AGENT_ID, type AgentStore, type SeedResult } from "../agents/store.js";
+import { SEEDED_AGENT_IDS, type AgentStore, type SeedReport } from "../agents/store.js";
 import { isRecord } from "../util.js";
 import {
   assertUtcTimestamp,
@@ -46,11 +46,12 @@ export interface ResetCounts {
   runs_deleted: number;
   traces_deleted: number;
   /**
+   * One result per demo seed.
    * `kept`: the row validated and was not older than the fixture.
    * `refreshed`: the stored row was invalid or older, and was rewritten.
    * `inserted`: the id was missing.
    */
-  seed: SeedResult;
+  seed: SeedReport;
 }
 
 export class PersistenceTransferError extends Error {
@@ -296,19 +297,21 @@ export async function importPersistence(
 }
 
 /**
- * Delete every run, every trace, and every agent except `reference-shop`.
- * A valid seed that is not older than the fixture is kept.
- * An invalid or older seed is rewritten from the fixture. A missing seed is inserted.
- * Not an HTTP route. Does not read the seed through `get`, so an invalid document
+ * Delete every run, every trace, and every agent except the demo seeds.
+ * A valid seed that is not older than its fixture is kept.
+ * An invalid or older seed is rewritten from its fixture. A missing seed is inserted.
+ * Not an HTTP route. Does not read a seed through `get`, so an invalid document
  * does not abort the reset.
  */
 export async function resetKeepingSeed(agents: AgentStore, runs: RunStore): Promise<ResetCounts> {
   const deleted = await runs.deleteAllRunsAndTraces();
   const agentsDeleted = await agents.deleteAgentsExceptSeed();
   const seed = await agents.seedIfMissing();
-  const seedAfter = await agents.get(REFERENCE_AGENT_ID);
-  if (!seedAfter || seedAfter.agent_id !== REFERENCE_AGENT_ID) {
-    fail("Reset failed to keep reference-shop.");
+  for (const agentId of SEEDED_AGENT_IDS) {
+    const seedAfter = await agents.get(agentId);
+    if (!seedAfter || seedAfter.agent_id !== agentId) {
+      fail(`Reset failed to keep ${agentId}.`);
+    }
   }
   return {
     agents_deleted: agentsDeleted,
