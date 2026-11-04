@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "endpoint": "https://otel.example.com/v1/traces",
+  "auth": {
+    "type": "bearer",
+    "token_env": "OTEL_SOURCE_TOKEN"
+  },
+  "service_name": "reference-shop"
+}

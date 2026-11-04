@@ -205,6 +205,37 @@ export interface AgentTaskSetup {
  */
 export const TASK_EVALSET_VERSION = 1 as const;
 
+/**
+ * Document shape of `OtelSourceConfig` and of an OTel import batch.
+ * Only 1 is valid in this contract.
+ */
+export const OTEL_SOURCE_VERSION = 1 as const;
+
+export const OTEL_IMPORT_VERSION = 1 as const;
+
+export type OtelSourceVersion = typeof OTEL_SOURCE_VERSION;
+
+export type OtelImportVersion = typeof OTEL_IMPORT_VERSION;
+
+export type OtelSourceAuthType = "none" | "bearer";
+
+/**
+ * OpenTelemetry source registered on an agent.
+ * `endpoint` is documented for the operator. The importer does not call it.
+ * `auth.token_env` is an environment variable name. The token is not stored here.
+ */
+export interface OtelSourceConfig {
+  version: OtelSourceVersion;
+  endpoint: string;
+  auth: {
+    type: OtelSourceAuthType;
+    /** Required when `type` is `bearer`. Absent when `type` is `none`. */
+    token_env?: string;
+  };
+  /** When set, an import item must name this `service.name`. */
+  service_name?: string;
+}
+
 export type TaskEvalsetVersion = typeof TASK_EVALSET_VERSION;
 
 /**
@@ -282,6 +313,11 @@ export interface Agent {
     kind: "library";
     base_url: string;
   };
+  /**
+   * OpenTelemetry source for this agent. Absent when the author registered none.
+   * Not a Trace, and not a verifier.
+   */
+  otel?: OtelSourceConfig;
   tasks: AgentTask[];
 }
 

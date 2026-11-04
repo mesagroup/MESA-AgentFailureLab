@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "task_id": "T1",
+      "run_id": "run-otel-t1-search",
+      "service_name": "reference-shop",
+      "spans": [
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-user",
+          "name": "user",
+          "startTimeUnixNano": "1793715128014000000",
+          "endTimeUnixNano": "1793715128028000000",
+          "attributes": {
+            "mesa.step.type": "message",
+            "mesa.step.role": "user",
+            "mesa.step.content": "Search the catalog for a ceramic mug and open the matching product page.",
+            "mesa.step.tokens_in": 10,
+            "mesa.step.tokens_out": 0,
+            "mesa.step.cost_usd": 0.00001
+          }
+        },
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-search",
+          "name": "search_products",
+          "startTimeUnixNano": "1793715128626000000",
+          "endTimeUnixNano": "1793715129238000000",
+          "status": { "code": "OK" },
+          "attributes": {
+            "mesa.step.type": "tool_call",
+            "mesa.step.role": "assistant",
+            "mesa.tool.input": { "q": "mug" },
+            "mesa.step.tokens_in": 20,
+            "mesa.step.tokens_out": 4,
+            "mesa.step.cost_usd": 0.00002
+          }
+        },
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-search-result",
+          "name": "search_products",
+          "startTimeUnixNano": "1793715128663000000",
+          "endTimeUnixNano": "1793715128700000000",
+          "status": { "code": "ERROR" },
+          "attributes": {
+            "mesa.step.type": "tool_result",
+            "mesa.step.role": "tool",
+            "mesa.tool.output": { "products": [{ "product_id": "SKU-MUG-01" }] }
+          }
+        },
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-product",
+          "name": "get_product",
+          "startTimeUnixNano": "1793715129207000000",
+          "endTimeUnixNano": "1793715129751000000",
+          "attributes": {
+            "mesa.step.type": "tool_call",
+            "mesa.step.role": "assistant",
+            "gen_ai.tool.call.arguments": "{\"product_id\":\"SKU-MUG-01\"}",
+            "mesa.step.tokens_in": 20,
+            "mesa.step.tokens_out": 4,
+            "mesa.step.cost_usd": 0.00002
+          }
+        },
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-product-result",
+          "name": "get_product",
+          "startTimeUnixNano": "1793715129236000000",
+          "endTimeUnixNano": "1793715129265000000",
+          "attributes": {
+            "mesa.step.type": "tool_result",
+            "mesa.step.role": "tool",
+            "mesa.tool.name": "get_product",
+            "mesa.tool.output": { "product_id": "SKU-MUG-01", "name": "Ceramic Mug" }
+          }
+        },
+        {
+          "traceId": "otel-t1-search",
+          "spanId": "span-assistant",
+          "name": "assistant",
+          "startTimeUnixNano": "1793715129939000000",
+          "endTimeUnixNano": "1793715130642000000",
+          "attributes": {
+            "mesa.step.type": "message",
+            "mesa.step.role": "assistant",
+            "mesa.step.content": "Opened Ceramic Mug (SKU-MUG-01).",
+            "gen_ai.usage.input_tokens": 30,
+            "gen_ai.usage.output_tokens": 8,
+            "mesa.step.cost_usd": 0.00003
+          }
+        }
+      ],
+      "outcome": {
+        "success": true,
+        "verifier": {
+          "passed": true,
+          "checks": [
+            {
+              "name": "catalog_read",
+              "passed": true,
+              "detail": "Supplied with the import. Not computed from spans."
+            }
+          ],
+          "mock_state_snapshot": {
+            "carts": [],
+            "orders": [],
+            "inventory": [],
+            "observations": []
+          }
+        },
+        "agent_claimed_success": true
+      }
+    }
+  ]
+}

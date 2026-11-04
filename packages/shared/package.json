@@ -15,9 +15,15 @@
       "import": "./dist/validate.js",
       "default": "./dist/validate.js"
     },
+    "./otel": {
+      "types": "./dist/otel-import.d.ts",
+      "import": "./dist/otel-import.js",
+      "default": "./dist/otel-import.js"
+    },
     "./schemas/trace.schema.json": "./schemas/trace.schema.json",
     "./schemas/agent.schema.json": "./schemas/agent.schema.json",
     "./schemas/run.schema.json": "./schemas/run.schema.json",
+    "./schemas/otel-import.schema.json": "./schemas/otel-import.schema.json",
     "./examples/agent-reference-stub.json": "./examples/agent-reference-stub.json",
     "./examples/agent-library-desk.json": "./examples/agent-library-desk.json"
   },

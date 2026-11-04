@@ -10,7 +10,8 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, and `TaskEvalCase`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
+- `@mesa/shared/otel` — `mapOtelImport`. This entry loads Ajv. It maps an OTel import batch onto Traces and validates each one with `validateTrace`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-stub.json` — the reference shop fixture (T1–T5). The harness loads this; it is not a second schema.
@@ -108,6 +109,10 @@ T1 of [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json)
 | `cases[].rubric` | no | How to score the expectation. Free text. |
 
 `POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. There is no separate evalset API.
+
+### OTel source
+
+`otel` on the agent is optional. It names an OpenTelemetry endpoint, an auth mode (`none` or `bearer` plus `token_env`), and an optional `service_name`. The token is not stored. The shop and library seeds omit the object. The import batch and the field mapping are in [docs/otel.md](../../docs/otel.md). The mapper does not invent `fault.labels` or `outcome.verifier`. Production paste/upload of an already valid Trace stays [#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51).
 
 ## Examples
 

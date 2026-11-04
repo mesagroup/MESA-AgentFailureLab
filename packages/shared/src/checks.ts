@@ -162,6 +162,22 @@ export function validateTaskChecks(task: AgentTask, taskIndex = 0): string[] {
   return errors;
 }
 
+/**
+ * Bearer auth names an env var. `none` must not carry one.
+ * The JSON Schema cannot express that conditional under Ajv's strict required check.
+ */
+export function validateOtelSource(agent: Pick<Agent, "otel">): string[] {
+  const auth = agent.otel?.auth;
+  if (!auth) return [];
+  if (auth.type === "bearer" && (auth.token_env === undefined || auth.token_env.trim() === "")) {
+    return ["/otel/auth/token_env is required when auth.type is bearer."];
+  }
+  if (auth.type === "none" && auth.token_env !== undefined) {
+    return ["/otel/auth/token_env must be omitted when auth.type is none."];
+  }
+  return [];
+}
+
 /** Duplicate `case_id` values inside one task's evalset. The schema already checked the shape. */
 function validateEvalset(task: AgentTask, taskIndex: number): string[] {
   const cases = task.evalset?.cases;

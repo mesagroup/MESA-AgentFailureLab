@@ -14,6 +14,7 @@ import { sessionView } from "./harness/session.js";
 import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/routes.js";
+import { registerOtelImportRoutes } from "./otel/routes.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -84,6 +85,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   registerAgentRoutes(app, agents);
+  registerOtelImportRoutes(app, agents, store);
   registerDiagnosisRoutes(app, store, options.diagnosis);
 
   app.get("/faults", async () => ({

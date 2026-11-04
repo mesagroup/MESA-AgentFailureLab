@@ -297,7 +297,7 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 }
 ```
 
-The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` is optional user data on that document. The reference seed sets it on T1 and omits it on T2–T5. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits the field. The column is still `agents.document` jsonb. There is no evalset table and no generate-evalset route. The verifier does not read the field and does not write `outcome.verifier` from it.
+The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` and `otel` are optional user data on that document. The reference seed sets evalset on T1, omits it on T2–T5, and omits `otel`. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits either field. The column is still `agents.document` jsonb. There is no evalset table and no generate-evalset route. The verifier does not read evalset and does not write `outcome.verifier` from it. `POST /agents/:agentId/otel/import` writes Trace rows and a baseline Run through the same run/trace store. It copies a supplied outcome and does not invent `fault.labels`. See [otel.md](otel.md).
 
 ### `GET /agents/:agent_id`
 
