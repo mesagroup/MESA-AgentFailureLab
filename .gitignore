@@ -12,6 +12,7 @@ dist/
 !.env.example
 
 # logs
+/demo-results/
 *.log
 npm-debug.log*
 pnpm-debug.log*

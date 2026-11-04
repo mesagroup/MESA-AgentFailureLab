@@ -102,7 +102,9 @@ describe("harness replay", () => {
     assert.match(markdown, /Fix verified/);
     assert.match(markdown, /latency_ms equals step_count/);
     const committed = readFileSync(new URL("../replay/latest.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-    assert.equal(committed.startsWith(markdown), true);
+    // Preserve the historical report; only its decision wording predates #100.
+    const historicalWording = "fix_verified is true only when injected_after passes the backend verifier and injected_before does not, and regression is false.";
+    assert.equal(committed.replace(historicalWording, report.decision).startsWith(markdown), true);
     assert.match(committed, /T1: verifier pass/);
     assert.match(committed, /T5: verifier pass/);
     } finally {

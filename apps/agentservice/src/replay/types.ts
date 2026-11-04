@@ -55,7 +55,7 @@ export interface TaskReplayRow {
   readonly baseline_all_fixes: AttemptScore;
   readonly injected_before: AttemptScore;
   readonly injected_after: ScoredArm;
-  /** True only when the after arm passes and the injected arm does not. */
+  /** True only for a passing baseline, before fail, after pass and complete non-regressing controls. */
   readonly fix_verified: boolean | null;
   /** True when the no-fault run passed and the same task with all three fixes failed. */
   readonly regression: boolean;
@@ -70,7 +70,7 @@ export interface OwnerRequest {
 export interface ReplayReport {
   readonly schema_version: 1;
   readonly label: "Harness verifier scores for T1–T5. The agent service does not write outcome.verifier or fault.*.";
-  readonly decision: "fix_verified is true only when injected_after passes the backend verifier and injected_before does not, and regression is false.";
+  readonly decision: "fix_verified requires a passing clean baseline, a failing injected_before, a passing injected_after and a completed non-regressing clean control. Skipped evidence is inconclusive.";
   readonly runs_per_arm: 1;
   readonly spread: "not applicable: verifier.passed is a deterministic function of the shop seed and the preset.";
   readonly timing: {
