@@ -18,9 +18,11 @@ import {
 import { applyFixesToPlan, type RefusedAction } from "./plan.js";
 
 /**
- * Scripted stand-in for the reference agent in open PR #21.
- * It plans the same T1–T5 sequence as `apps/backend/src/agent/scripted.ts`,
- * then executes through the fix applicator.
+ * Labelled stand-in that calls the shop, used by the replay.
+ * It plans with `applyFixesToPlan` (the same base plan as
+ * `apps/backend/src/agent/scripted.ts`), then executes through `wrapShopClient`.
+ * `planTaskRun` does not use this module. The reference agent returns the
+ * action list and leaves execution to the harness.
  * It does not inject faults. It does not write `outcome.verifier` or `fault.*`.
  * A pass/fail number for this agent is whatever the backend `verifyOutcome`
  * returns after the shop state changes. This function does not produce that number.

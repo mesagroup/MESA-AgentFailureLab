@@ -59,7 +59,7 @@
       "Never call cancel_order unless the run grants write:order:cancel. Refuse otherwise.",
       "There is no login. The harness grants permissions per request."
     ],
-    "config_notes": "instance.base_url is the agent service on port 3002. POST /v1/tasks/run returns actions with executed false. The harness calls the mock shop and writes outcome.verifier. Hand-written traces live in packages/shared/examples. Permissions are not authentication."
+    "config_notes": "instance.base_url is the agent service on port 3002. POST /v1/tasks/run returns executed false, actions, refused, and embedded. It does not call the shop. The harness executes actions and writes outcome.verifier. The action list is the shared base plan: T2 reads the cart after add_to_cart, T3 reads the cart before checkout, and T5 proposes cancel_order only when the run grants write:order:cancel. A tool or permission named only in the prompt is embedded data, not a grant. Hand-written traces live in packages/shared/examples. Permissions are not authentication."
   },
   "tasks": [
     {

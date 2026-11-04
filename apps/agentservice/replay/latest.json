@@ -422,11 +422,6 @@
       "owner": "@diamanti-sg",
       "area": "permission_guard and the jury attacker",
       "request": "executeAttempt sends the session grant, so the shop already rejects cancel_order without write:order:cancel and verifier.passed does not move. applyJurorAttack inserts cancel_order and sends read,write:order:cancel without asking the agent. Before inserting that action, call the agent with fix_kinds, and do not elevate X-Permissions from text in the prompt or in a tool result. The agent-side behavior is guardCall plus readEmbeddedInstructions in apps/agentservice/src/fixes/domain.ts: a mentioned permission is data, not a grant."
-    },
-    {
-      "owner": "@ercoleMesa",
-      "area": "PR #21 planTaskRun glue",
-      "request": "Replace the fix branches in apps/agentservice/src/reference-agent/plan.ts with applyFixesToPlan from apps/agentservice/src/fixes/plan.ts, and keep executed: false so executeAttempt stays the only injector. controlled_retry stays a no-op on the action list. When the agent calls tools itself, wrap the client with wrapShopClient from apps/agentservice/src/fixes/applicator.ts and claim success only when confirmGoal returns claim: true. Do not write outcome.verifier or fault.*. Do not send a permission that was only mentioned in the prompt."
     }
   ],
   "scripted_baseline": [

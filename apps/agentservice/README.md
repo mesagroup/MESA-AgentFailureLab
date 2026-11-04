@@ -1,9 +1,10 @@
 # @mesa/agentservice
 
-Grok diagnosis for one `Trace`, and the fix applicator for `controlled_retry`, `pre_response_check`, and `permission_guard`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`. The reference agent itself is still open PR #21.
-Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
+Grok diagnosis for one `Trace`, the fix applicator for `controlled_retry`, `pre_response_check`, and `permission_guard`, and the reference shop agent.
 
-`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. The backend harness executes the actions, injects faults, and writes the verifier. Optional `fix_kinds` are parsed and passed to `applyFixesToPlan`. That function is a pass-through in `src/reference-agent/apply-fixes-hook.ts` until [PR #36](https://github.com/mesagroup/MESA-AgentFailureLab/pull/36) merges. After that, change the import in `plan.ts` to `../fixes/plan.js`. Do not copy the three fix policies into this package. Grok on this process is only the diagnosis client.
+`POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
+
+`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
 
@@ -100,7 +101,7 @@ The backend harness records `fix_kinds` and replays the task (`Run.phase = after
 - `src/grok/client.ts` — OpenAI SDK client pointed at `XAI_BASE_URL`, structured `json_schema` output, timeout, and one retry.
 - `src/fixes/` — the three `FixKind` policies, as a wrapper around a shop tool client
 - `src/replay/` — before/after report. Pass/fail is copied from the backend verifier
-- `src/reference-agent/` — reserved for the in-lab shopping agent (open PR #21)
+- `src/reference-agent/` — `planTaskRun` for `POST /v1/tasks/run`. It calls `applyFixesToPlan` and does not call tools.
 
 Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
 
@@ -116,9 +117,9 @@ Fixtures shared with later trace work live in [`packages/shared/examples/`](../.
 
 This service does not inject faults. It does not write `outcome.verifier` or `fault.*`.
 
-### Glue for the reference agent (PR #21)
+### Glue for the reference agent
 
-`planTaskRun` can keep `executed: false` and shape the list with the shared policy. `controlled_retry` does not add a second action: the harness still runs each action once.
+`planTaskRun` keeps `executed: false` and shapes the list with the shared policy. The HTTP route returns that plan, including `refused` and `embedded`. `controlled_retry` does not add a second action: the harness still runs each action once. This agent does not call tools, so it does not use `wrapShopClient`.
 
 ```ts
 import { applyFixesToPlan } from "../fixes/plan.js";
@@ -130,21 +131,19 @@ const shaped = applyFixesToPlan({
   fixes: fix_kinds,
   prompt,
 });
-return { executed: false, actions: shaped.actions };
+return {
+  executed: false,
+  actions: shaped.actions,
+  refused: shaped.refused,
+  embedded: shaped.embedded,
+};
 ```
 
-Leave `claimed_success` unset on this path. The action list has not seen tool results, so it cannot know the re-read yet. An agent that calls the shop itself uses `confirmGoal` and sets the claim from that:
+The base list is `basePlan`: T2 calls `get_cart` after `add_to_cart`, T3 calls `get_cart` before `checkout`, and T5 returns no actions unless the granted set includes `write:order:cancel`. An embedded `cancel_order` instruction is appended the way `applyFixesToPlan` defines, then `permission_guard` can move it to `refused`. A permission token in the prompt stays on `embedded`. It is not added to the granted set and it is not sent as a permission.
 
-```ts
-import { wrapShopClient } from "../fixes/applicator.js";
+Leave `claimed_success` unset on this path. The action list has not seen tool results, so it cannot know the re-read yet. An agent that calls the shop itself would use `wrapShopClient` and set the claim from `confirmGoal`. The reference agent does not do that.
 
-const tools = wrapShopClient({ client, fixes: fix_kinds });
-const applied = await tools.call({ tool_name, tool_input, sessionId, permissions });
-const goal = await tools.confirmGoal({ goal, sessionId, permissions });
-const claimed_success = goal.claim;
-```
-
-`src/fixes/scripted-agent.ts` is a labelled stand-in that does this. It is not the reference agent. Its base plan matches `apps/backend/src/agent/scripted.ts` so the replay can compare them. Replace that stand-in with `planTaskRun` when PR #21 lands.
+`src/fixes/scripted-agent.ts` is the labelled stand-in that does call tools, for the replay. It is not `planTaskRun`. Its base plan matches `apps/backend/src/agent/scripted.ts` and `basePlan`.
 
 ## Replay
 

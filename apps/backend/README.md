@@ -46,7 +46,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/runs`, `/runs/:runId` | Stored runs |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
-`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` and expects `{ "executed": false, "actions": [...] }`. The harness then performs those actions, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
+`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` and expects `{ "executed": false, "actions": [...] }`. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
 Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code. The T5 preset is `forged_permission_success` (a forged tool result). The jury attacker is a different Security path and is not in that catalog. See [the jury demo](../../docs/demo-jury.md).
 

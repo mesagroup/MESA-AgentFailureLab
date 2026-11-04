@@ -2,10 +2,8 @@
  * Build the harness half of the eval set.
  *
  * Uses the merged backend: in-process mock shop, `driver: "scripted"`, and a
- * catalog fault (`runTasks`). It does not call the reference agent from open
- * PR #21. That agent is still the source of traces where the model itself
- * picks the wrong tool; those files are not on main, and this script does not
- * copy them.
+ * catalog fault (`runTasks`). It does not call `POST /v1/tasks/run`.
+ * Traces where a model picks the wrong tool are not produced here.
  *
  * Loopback only. Re-running changes trace ids and timestamps because the
  * harness draws them with `randomUUID` and `Date.now`. The manifest records
