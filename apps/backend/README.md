@@ -93,7 +93,7 @@ pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
 pnpm --filter @mesa/backend db:reset -- --yes
 ```
 
-`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. `db:reset` deletes runs, traces, and agents other than `reference-shop`. The seed row stays, including an edited one. `--yes` is required. There is no reset route.
+`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. An invalid stored agent is still replaced by the file. `db:reset` deletes runs, traces, and agents other than `reference-shop`. A valid seed that is not older than the fixture stays, including an edited one. An invalid or older seed is rewritten from the fixture. `--yes` is required. There is no reset route.
 
 ## Dashboard snapshot
 
@@ -101,7 +101,7 @@ No auth. The lab dashboard reads two lists. `GET /agents` is the agent registry.
 
 ### `GET /agents`
 
-`{ "agents": [ Agent, ... ] }`, ordered by `created_at` then `agent_id`. Each element is an Agent document.
+`{ "agents": [ Agent, ... ] }`, ordered by `created_at` then `agent_id`. Each element is an Agent document. A stored document that fails the Agent schema is left out of this list and a warning is logged. The other agents are still returned. `GET /runs` uses the same list for `counts.agents`, so one bad row does not fail that response either.
 
 | Dashboard field | Path |
 | --- | --- |
