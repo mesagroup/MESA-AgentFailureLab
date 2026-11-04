@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, FixKind, InjectionPlan, Run, RunPhase, Trace, TraceStatus } from "@mesa/shared";
-import { FIX_KINDS } from "@mesa/shared";
+import { isFixKind } from "@mesa/shared";
 import { agentRunRequest, probeAgent, runRemoteAgent, type AgentRunResponse } from "../agent/http.js";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { normalizePlan, presetPlan } from "../injector/catalog.js";
@@ -64,10 +64,6 @@ export interface TaskRunResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-function isFixKind(value: string): value is FixKind {
-  return (FIX_KINDS as readonly string[]).includes(value);
-}
 
 function resolvePlan(
   phase: RunPhase,

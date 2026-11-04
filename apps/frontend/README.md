@@ -6,6 +6,10 @@ The dashboard (`/`) reads the harness session from `GET /agents` and `GET /runs`
 
 The timeline renders `Trace`. Before/after comparisons will use harness `Run` records plus `outcome.verifier`. This app does not decide task success.
 
+### Issue #53 wiring (UI not in this change)
+
+Choose proposed fixes from `GET /traces/:traceId` → `diagnosis.proposed_fixes` (`FixKind[]`: `controlled_retry`, `pre_response_check`, `permission_guard`). Optional highlight: `adrFixForCategory(diagnosis.category)` from `@mesa/shared`. Then `POST /runs` with `{ agent_id, phase: "after_fix", parent_run_id: trace.run_id's Run, fix_kinds: selected }`. Omit `injection` to replay the parent’s `injection_plan`. Response `results[0]` has `trace.outcome.verifier`, `parent.trace.outcome.verifier`, `totals` on both traces, and `links` (`run`, `trace`, `parent_run`, `parent_trace`). `GET /runs` exposes the same pairing as `trace_links[].parent_run_id` / `child_run_ids`. Out of scope here: #103 diagnosis panel, #119, #121.
+
 The jury page (`/jury`) is the structured malicious-note demo. It reads `GET /attacker/jury-case`. When `frontend` is present it supplies the default task, the trace route, and the replay fix; otherwise the page uses `structured`, then the case fields. The POST body sends `permissions` from the control. A name that appears only in the note is not added. The page shows `outcome.verifier`, `baseline_comparison`, and `fault.attacker`. Ispeziona traccia maps `links.attacked_trace` onto `/traces/:traceId`. A frozen baseline leaves `links.baseline_trace` null and is not opened. Replay sends `fix_kinds: ["permission_guard"]` with `parent_run_id` of the injected run. HTTP 409 `world_busy` asks for a retry and is not a verifier failure. `diagnosis` on this POST stays null.
 
 ## Run from the monorepo root

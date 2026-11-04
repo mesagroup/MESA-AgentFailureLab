@@ -1,4 +1,6 @@
-import { FIX_KINDS, type FaultCategory, type FixKind } from "@mesa/shared";
+import { ADR_FIX_BY_CATEGORY, FIX_KINDS, type FaultCategory, type FixKind } from "@mesa/shared";
+
+export { ADR_FIX_BY_CATEGORY };
 
 export type { FaultCategory, FixKind };
 
@@ -80,17 +82,6 @@ export type CallDecision =
   | { readonly allow: false; readonly reason: "missing_permission"; readonly required: ShopPermission };
 
 export type RetryDecision = "retry" | "stop";
-
-/**
- * ADR-002: Execution → controlled_retry, Verification → pre_response_check,
- * Security → permission_guard. The other categories have no MVP fix.
- * This map is not a Grok diagnosis.
- */
-export const ADR_FIX_BY_CATEGORY: Partial<Record<FaultCategory, FixKind>> = {
-  Execution: "controlled_retry",
-  Verification: "pre_response_check",
-  Security: "permission_guard",
-};
 
 export interface ApplicatorConfig {
   readonly maxRetries: number;

@@ -25,6 +25,26 @@ export const FIX_KINDS = [
 
 export type FixKind = (typeof FIX_KINDS)[number];
 
+export function isFixKind(value: unknown): value is FixKind {
+  return typeof value === "string" && (FIX_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * ADR-002 MVP applicator for a diagnosis or fault category.
+ * Plan, ToolUse, Context, and Reasoning have no MVP fix.
+ * `diagnosis.proposed_fixes` and `Run.fix_kinds` use these same ids — there is
+ * no second enum (not `fault_kinds`).
+ */
+export const ADR_FIX_BY_CATEGORY: Partial<Record<FaultCategory, FixKind>> = {
+  Execution: "controlled_retry",
+  Verification: "pre_response_check",
+  Security: "permission_guard",
+};
+
+export function adrFixForCategory(category: FaultCategory): FixKind | undefined {
+  return ADR_FIX_BY_CATEGORY[category];
+}
+
 export const TRACE_STATUSES = ["completed", "failed", "timeout", "error"] as const;
 
 export type TraceStatus = (typeof TRACE_STATUSES)[number];

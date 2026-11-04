@@ -164,7 +164,24 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 
 The server loads that agent and runs its `tasks`, in document order, when `task_ids` is omitted. `phase` defaults to `baseline`. A `task_ids` entry that is not on that agent is 400, including a demo task id that only another agent has. An edited `reference-shop` or `external-library` is the document in the store, not a fresh read of the fixture.
 
-Success is 200 `{ "results": [ { "run", "trace", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged.
+Success is 200 `{ "results": [ { "run", "trace", "parent", "links", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged. Each result includes `links` (`/runs/:id` and `/traces/:id` for the child, and the parent when this is a replay). `parent` is `{ run, trace }` for an `after_fix` with `parent_run_id`, or `null`.
+
+### after_fix replay from a diagnosed trace (issue #53)
+
+There is no second run API. The UI chooses `diagnosis.proposed_fixes` from `GET /traces/:traceId` (same `FixKind` ids as `Run.fix_kinds`: `controlled_retry`, `pre_response_check`, `permission_guard` — not `fault_kinds`). ADR-002’s category map is `ADR_FIX_BY_CATEGORY` in `@mesa/shared` (`Execution` → `controlled_retry`, `Verification` → `pre_response_check`, `Security` → `permission_guard`; other categories have no MVP fix). Then:
+
+```json
+{
+  "agent_id": "reference-shop",
+  "phase": "after_fix",
+  "parent_run_id": "run-T1-injected-…",
+  "fix_kinds": ["pre_response_check"]
+}
+```
+
+`parent_run_id` is required to be a stored Run on this agent. Omitted `task_ids` become that parent’s task. Omitted `injection` copies the parent’s `injection_plan` (so the fault is replayed). Send `injection: null` for a clean treated control. A parent on `baseline`, or a `task_ids` list that is not exactly the parent’s task, is HTTP 400. `parent_run_id` on a non-`after_fix` phase is 400.
+
+Before/after: `results[0].parent.trace.outcome.verifier` (and `totals`) versus `results[0].trace.outcome.verifier`. `GET /runs` repeats the pairing as `trace_links[i].parent_run_id` and `trace_links[i].child_run_ids`. `GET /runs/:runId` stays the Run document alone.
 
 A second `POST /runs` or `POST /attacker/jury-case`, while this process is between reset and result save, is HTTP 409:
 
@@ -306,6 +323,7 @@ The demo seeds are `reference-shop` (`instance.kind` `reference`, five tasks) an
 | Verifier outcome | `trace_links[i].traces[].outcome.verifier` (`passed`, `checks`, `mock_state_snapshot`). `outcome.success` is the verifier's copy of `passed` |
 | Per-run latency | `trace_links[i].traces[].totals.latency_ms`. Wall clock, once the run has left the queue, is `runs[i].duration_ms` |
 | When | `trace_links[i].traces[].started_at` and `ended_at` |
+| Parent / child replay | `trace_links[i].parent_run_id` (same as `runs[i].parent_run_id`) and `trace_links[i].child_run_ids` (later `after_fix` runs in this snapshot). Timing and cost for the side-by-side are `traces[].totals` |
 
 `traces` follows `trace_ids` and includes only traces still in the store. A listed id with no trace is omitted, and no verifier object is synthesized for it. A trace that no run links is not included.
 

@@ -9,6 +9,7 @@ import { registerAgentRoutes } from "./agents/routes.js";
 import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
+import { resolveAfterFixParent, withRunLinks } from "./harness/replay.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
 import { WORLD_BUSY_ERROR, WorldBusyError } from "./harness/world-gate.js";
 import { sessionView } from "./harness/session.js";
@@ -35,6 +36,8 @@ export interface BuildAppOptions {
 /**
  * Harness API. This process is not the mock shop.
  * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
+ * `phase: after_fix` with `parent_run_id` copies the parent task and injection
+ * plan when those fields are omitted, and each result includes `parent` plus `links`.
  * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
@@ -156,6 +159,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!registered) {
       return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
     }
+    const replay = await resolveAfterFixParent({
+      store,
+      agentId: parsed.value.agentId,
+      phase: parsed.value.phase,
+      taskIds: parsed.value.taskIds,
+      injection: parsed.value.injection,
+      parentRunId: parsed.value.parentRunId,
+    });
+    if (!replay.ok) return reply.code(400).send({ error: "invalid_request", message: replay.message });
     try {
       const runMockUrl = mockBaseUrlForAgent(registered, mockBaseUrl);
       const runMock = runMockUrl === mockBaseUrl ? mock : createHttpMockClient(runMockUrl);
@@ -166,16 +178,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         mock: runMock,
         mockBaseUrl: runMockUrl,
         phase: parsed.value.phase,
-        taskIds: parsed.value.taskIds,
+        taskIds: replay.value?.taskIds ?? parsed.value.taskIds,
         driver,
-        injection: parsed.value.injection,
+        injection: replay.value ? replay.value.injection : parsed.value.injection,
         fixKinds: parsed.value.fixKinds,
-        parentRunId: parsed.value.parentRunId,
+        parentRunId: replay.value?.parentRunId ?? parsed.value.parentRunId,
         grantCancel: parsed.value.grantCancel,
         timeoutMs: parsed.value.timeoutMs,
         afterWorldSetup: options.afterWorldSetup,
       });
-      return { results };
+      return { results: await withRunLinks(store, results) };
     } catch (error) {
       return replyForHarnessFailure(error, reply);
     }
@@ -315,7 +327,7 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
     if (body.parent_run_id !== null && (typeof body.parent_run_id !== "string" || body.parent_run_id.trim() === "")) {
       return { ok: false, message: "parent_run_id must be a string or null." };
     }
-    parentRunId = body.parent_run_id;
+    parentRunId = typeof body.parent_run_id === "string" ? body.parent_run_id.trim() : body.parent_run_id;
   }
 
   if (body.grant_cancel !== undefined && typeof body.grant_cancel !== "boolean") {

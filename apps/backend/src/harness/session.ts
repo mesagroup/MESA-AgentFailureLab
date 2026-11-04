@@ -23,6 +23,10 @@ export interface RunTraceLink {
   first_trace_id: string | null;
   /** Stored traces, in `trace_ids` order. An id with no stored trace is omitted. */
   traces: LinkedTrace[];
+  /** Same as `runs[i].parent_run_id`. Null when this run is not an after_fix replay. */
+  parent_run_id: string | null;
+  /** Later after_fix runs in this snapshot whose `parent_run_id` is this run. Newest first. */
+  child_run_ids: string[];
 }
 
 /** Tallies of records the harness stores currently hold. */
@@ -60,6 +64,7 @@ export function sessionView(input: {
 
 function traceLinks(runs: readonly Run[], traces: readonly Trace[]): RunTraceLink[] {
   const byId = new Map(traces.map((trace) => [trace.trace_id, trace]));
+  const children = childRunIds(runs);
   return runs.map((run) => ({
     run_id: run.run_id,
     first_trace_id: run.trace_ids[0] ?? null,
@@ -67,7 +72,21 @@ function traceLinks(runs: readonly Run[], traces: readonly Trace[]): RunTraceLin
       const trace = byId.get(traceId);
       return trace ? [linkedTrace(trace)] : [];
     }),
+    parent_run_id: run.parent_run_id ?? null,
+    child_run_ids: children.get(run.run_id) ?? [],
   }));
+}
+
+function childRunIds(runsNewestFirst: readonly Run[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const run of runsNewestFirst) {
+    const parent = run.parent_run_id;
+    if (parent === undefined || parent === null || parent.length === 0) continue;
+    const list = map.get(parent) ?? [];
+    list.push(run.run_id);
+    map.set(parent, list);
+  }
+  return map;
 }
 
 function linkedTrace(trace: Trace): LinkedTrace {
