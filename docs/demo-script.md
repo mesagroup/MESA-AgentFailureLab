@@ -112,19 +112,19 @@ Campi non misurati: **n/a**. Nessun numero inventato. **Live Grok non eseguito**
 
 | Campo | Valore |
 | --- | --- |
-| Data (UTC) | 2026-11-04T22:36:24.349Z (`ended_at` 2026-11-04T22:36:24.526Z) |
-| Commit client (campo del report) | `3b641beedad8fa6522d9d706c179939b10261023` (`origin/main` al momento del lancio) |
-| Dirty | `true` (file del collaudo #101 non ancora committati in quel processo) |
+| Data (UTC) | 2026-11-04T22:37:50.167Z (`ended_at` 2026-11-04T22:37:50.353Z) |
+| Commit client (campo del report) | `146568a493debac01d1c4f51bb9e1a00d68b4279` |
+| Dirty | `false` |
 | Mode | `offline` |
-| Comando | `pnpm demo:shop -- --mode offline --output /tmp/a5-demo-results` (equivalente al comando validato; `--output` solo per non scrivere in-tree) |
+| Comando | `pnpm demo:shop -- --mode offline` (questa esecuzione ha usato `--output /tmp/a5-demo-results-clean` solo per non scrivere in-tree) |
 | Exit code | `0` |
 | `fix_verified` / verdict | `true` / `verified` (13 bracci; contrasto pass → fail → pass; controlli completi, nessuna regressione) |
 | `selection.source` / applied | `offline_model` / `["pre_response_check"]` |
-| `report_id` | `shop-fee574bd-d2b9-4862-a354-75552aa545bb` |
-| Report | `/tmp/a5-demo-results/shop-fee574bd-d2b9-4862-a354-75552aa545bb.json` e `.md` (non committati; `demo-results/` è gitignored) |
-| Baseline | run `run-read-product-baseline-eaf1089e-176e-4054-94cf-827a04af3216` · trace `trace-read-product-baseline-ebbd8774-1424-4540-86dc-fd41bb37b587` |
-| Injected | run `run-read-product-injected-8b83c5a2-ba45-421e-a1bc-3d2353d00a1d` · trace `trace-read-product-injected-8923ccb8-f35a-41b6-8221-6c739a543502` |
-| After_fix | run `run-read-product-after_fix-52e15adb-167e-4f8a-8f6f-4371ccda60f7` · trace `trace-read-product-after_fix-c70acba2-1a51-42c4-9431-77cc3655a95b` |
+| `report_id` | `shop-a2b9a371-4b30-429c-916a-4f362badf83e` |
+| Report | JSON/MD gitignored; non committati come “nuova esecuzione” |
+| Baseline | run `run-read-product-baseline-3cbc9875-4003-4169-ac0a-80d04b9cdc18` · trace `trace-read-product-baseline-b4ae4a24-eb72-403f-af84-f2b5b96cc5f6` |
+| Injected | run `run-read-product-injected-18ea8222-1039-4b8e-8168-b6815e9bf52a` · trace `trace-read-product-injected-9d0d95fc-f832-4501-bde3-48b89c9395c0` |
+| After_fix | run `run-read-product-after_fix-3f2e1a6a-c510-45b6-ae1e-9e989e0f96c5` · trace `trace-read-product-after_fix-f2a38047-2e83-4aaf-b304-a47b17192ef4` |
 | Provider model / tokens / cost | n/a |
 | Backend/planner commit | n/a |
 | Live Grok | non eseguito |
