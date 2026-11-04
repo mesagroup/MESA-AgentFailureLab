@@ -6,6 +6,8 @@ The dashboard (`/`) reads the harness session from `GET /agents` and `GET /runs`
 
 The timeline renders `Trace`. Before/after comparisons will use harness `Run` records plus `outcome.verifier`. This app does not decide task success.
 
+The jury page (`/jury`) is the structured malicious-note demo. It reads `GET /attacker/jury-case`. When `frontend` is present it supplies the default task, the trace route, and the replay fix; otherwise the page uses `structured`, then the case fields. The POST body sends `permissions` from the control. A name that appears only in the note is not added. The page shows `outcome.verifier`, `baseline_comparison`, and `fault.attacker`. Ispeziona traccia maps `links.attacked_trace` onto `/traces/:traceId`. A frozen baseline leaves `links.baseline_trace` null and is not opened. Replay sends `fix_kinds: ["permission_guard"]` with `parent_run_id` of the injected run. HTTP 409 `world_busy` asks for a retry and is not a verifier failure. `diagnosis` on this POST stays null.
+
 ## Run from the monorepo root
 
 ```bash
