@@ -9,17 +9,17 @@ export function agentStoreKind(env: NodeJS.ProcessEnv): AgentStore["kind"] {
 
 export interface OpenAgentStoreOptions {
   /**
-   * When false, Postgres migrates and does not insert or rewrite `reference-shop`.
-   * The memory store still seeds in its constructor. Default true.
-   * Export uses false so a read does not write the seed.
+ * When false, Postgres migrates and does not insert or rewrite the demo seeds.
+ * The memory store still seeds in its constructor. Default true.
+ * Export uses false so a read does not write the seeds.
    */
   seed?: boolean;
 }
 
 /**
  * Open the agent store and, for Postgres, apply SQL migrations.
- * Then insert `reference-shop` when it is absent, or rewrite it when the stored
- * document fails validation or is older than the fixture.
+ * Then insert each demo seed when its id is absent, or rewrite it when the stored
+ * document fails validation or is older than that fixture.
  * The memory store does the same in its constructor.
  */
 export async function openAgentStore(

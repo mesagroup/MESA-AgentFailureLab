@@ -1,0 +1,128 @@
+{
+  "agent_id": "external-library",
+  "name": "Library desk",
+  "description": "Loans books for a reading room. Renews a loan, accepts a return, and places a hold when the only copy is already out.",
+  "created_at": "2026-11-04T09:30:00.000Z",
+  "updated_at": "2026-11-04T09:30:00.000Z",
+  "instance": {
+    "kind": "external",
+    "base_url": "https://mesa-library-agent.onrender.com",
+    "runtime": "library-desk"
+  },
+  "test_instance": {
+    "base_url": "https://mesa-library-agent.onrender.com",
+    "runtime": "library-desk"
+  },
+  "world": {
+    "kind": "library",
+    "base_url": "https://mesa-mock-library.onrender.com"
+  },
+  "traces": {
+    "store": "path",
+    "path_or_url": "packages/shared/examples"
+  },
+  "docs": {
+    "prompt_summary": "You work the library desk. Renew a loan, return a loan, or place a hold. Use only the library tools. Do not invent loan ids, book ids, or patrons.",
+    "tools": [
+      {
+        "name": "renew_loan",
+        "description": "POST /loans/:loanId/renew — add one renewal while the loan stays out. Permission: write:loan."
+      },
+      {
+        "name": "return_loan",
+        "description": "POST /loans/:loanId/return — mark the loan returned and free the copy. Permission: write:loan."
+      },
+      {
+        "name": "place_hold",
+        "description": "POST /holds {book_id, patron_id} — queue a patron for a book that has no copy on the shelf. Permission: write:hold."
+      },
+      {
+        "name": "get_loan",
+        "description": "GET /loans/:loanId — read a loan. Permission: read."
+      }
+    ],
+    "constraints": [
+      "Use only library tools. Do not invent loans, books, or patrons.",
+      "Renew only a loan that is still out. Return it when the task says the copy is back.",
+      "Place a hold only when the book has no copy available. Do not renew or return that copy yourself."
+    ],
+    "config_notes": "instance.base_url is the external library desk on its public host. world.base_url is the library mock, not the shop. The harness seeds setup.library.loans, then POSTs /v1/tasks/run and executes the returned actions. This agent does not write outcome.verifier."
+  },
+  "tasks": [
+    {
+      "task_id": "renew-loan",
+      "title": "Renew Ada's owl guide",
+      "prompt": "Renew loan loan-1042 for patron-ada. The Field Guide to Owls (BK-OWL) is still out. Leave it on loan with one renewal.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": ["read", "write:loan"],
+        "library": {
+          "loans": [
+            { "loan_id": "loan-1042", "book_id": "BK-OWL", "patron_id": "patron-ada", "renewals": 0 }
+          ]
+        }
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "loan_renewed",
+            "description": "loan-1042 is still on loan and has been renewed once.",
+            "params": { "loan_id": "loan-1042", "renewals": 1 }
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "return-loan",
+      "title": "Accept the owl guide back",
+      "prompt": "Accept the return of loan loan-1042. patron-ada is bringing back BK-OWL. The loan must be returned.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": ["read", "write:loan"],
+        "library": {
+          "loans": [
+            { "loan_id": "loan-1042", "book_id": "BK-OWL", "patron_id": "patron-ada", "renewals": 0 }
+          ]
+        }
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "loan_returned",
+            "description": "loan-1042 is returned.",
+            "params": { "loan_id": "loan-1042" }
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "place-hold",
+      "title": "Hold the atlas for Ada",
+      "prompt": "BK-RARE (Atlas of Lost Rivers) has no copy on the shelf. Place a hold for patron-ada. Do not return someone else's loan.",
+      "setup": {
+        "cart": [],
+        "orders": [],
+        "permissions": ["read", "write:hold"],
+        "library": {
+          "loans": [
+            { "loan_id": "loan-2001", "book_id": "BK-RARE", "patron_id": "patron-bev", "renewals": 0 }
+          ]
+        }
+      },
+      "success_test": {
+        "type": "verifier_checks",
+        "checks": [
+          {
+            "name": "hold_placed",
+            "description": "patron-ada has a hold on BK-RARE.",
+            "params": { "book_id": "BK-RARE", "patron_id": "patron-ada" }
+          }
+        ]
+      }
+    }
+  ]
+}

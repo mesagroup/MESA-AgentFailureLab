@@ -13,7 +13,8 @@ Package exports:
 - `@mesa/shared` — `CONTRACT_VERSION` (`0.2.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
-- `@mesa/shared/examples/agent-reference-stub.json` — the reference agent fixture (T1–T5). The harness loads this; it is not a second schema.
+- `@mesa/shared/examples/agent-reference-stub.json` — the reference shop fixture (T1–T5). The harness loads this; it is not a second schema.
+- `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Seeded the same way as the reference shop. `instance.kind` is `external`.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 

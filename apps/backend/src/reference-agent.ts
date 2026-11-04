@@ -3,13 +3,27 @@ import { fileURLToPath } from "node:url";
 import type { Agent, AgentTask } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 
-/** Reference agent fixture shipped with `@mesa/shared`. Tasks T1–T5 and their verifier checks. */
+/** Reference shop fixture shipped with `@mesa/shared`. Tasks T1–T5 and their verifier checks. */
 export function loadReferenceAgent(): Agent {
-  const url = import.meta.resolve("@mesa/shared/examples/agent-reference-stub.json");
+  return loadAgentFixture("@mesa/shared/examples/agent-reference-stub.json");
+}
+
+/** Library desk fixture. Three loan tasks on the external runtime. */
+export function loadLibraryAgent(): Agent {
+  return loadAgentFixture("@mesa/shared/examples/agent-library-desk.json");
+}
+
+/** Demo agents, in seed order. Each one is inserted or rewritten on its own. */
+export function loadSeedAgents(): Agent[] {
+  return [loadReferenceAgent(), loadLibraryAgent()];
+}
+
+function loadAgentFixture(specifier: string): Agent {
+  const url = import.meta.resolve(specifier);
   const parsed: unknown = JSON.parse(readFileSync(fileURLToPath(url), "utf8"));
   const result = validateAgent(parsed);
   if (!result.ok) {
-    throw new Error(`Reference agent fixture is invalid: ${result.errors.join("; ")}`);
+    throw new Error(`${specifier} is invalid: ${result.errors.join("; ")}`);
   }
   return result.value;
 }

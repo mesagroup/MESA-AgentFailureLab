@@ -4,12 +4,12 @@ import { assertWorldGateHeld } from "./world-gate.js";
 
 /**
  * Harness-side world setup. These calls are not agent steps and are not injected.
- * The task's `setup` is the only input: cart lines, then one checkout per seeded order.
- * The last checkout's `order_id` is returned for the agent request.
+ * Shop tasks seed cart lines, then one checkout per seeded order.
+ * Library tasks seed `setup.library.loans` and do not touch the shop cart.
+ * The last shop checkout's `order_id` is returned for the agent request.
  *
- * `reset` clears catalog, carts, orders, and observations for every session.
- * Callers hold the world gate before this function and keep it through the snapshot,
- * the verifier, and the result save.
+ * `reset` clears the mock. Callers hold the world gate before this function and
+ * keep it through the snapshot, the verifier, and the result save.
  */
 export async function prepareWorld(
   task: AgentTask,
@@ -17,6 +17,20 @@ export async function prepareWorld(
   sessionId: string,
 ): Promise<{ orderId?: string }> {
   assertWorldGateHeld();
+  if (task.setup.library) {
+    await client.reset();
+    const seeded = await client.request({
+      method: "POST",
+      path: "/internal/seed",
+      sessionId,
+      permissions: ["read", "write:loan", "write:hold"],
+      body: { loans: task.setup.library.loans },
+    });
+    if (seeded.status >= 400) {
+      throw new Error(`Seeding the library failed with ${seeded.status}.`);
+    }
+    return {};
+  }
   await client.reset();
   for (const line of task.setup.cart) {
     const added = await client.request({

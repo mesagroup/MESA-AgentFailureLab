@@ -27,6 +27,7 @@ import {
 } from "@/lib/api";
 import { friendlyApiMessage } from "@/lib/errors";
 import { FIX_DESCRIPTION, FIX_LABEL, KIND_LABEL, PHASE_DESCRIPTION, PHASE_LABEL, faultCodeLabel, fixKindsInOrder, formatTaskLabel } from "@/lib/labels";
+import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
 import { blankTasks, taskFieldErrors, tasksHaveErrors, type TaskFieldError } from "@/lib/tasks";
 import type { RunInjection } from "@/lib/run-request";
 import { cn } from "@/lib/utils";
@@ -268,7 +269,6 @@ export function AgentsPage() {
       {state.phase === "ready" && filtered.length > 0 && (
         <div className="overflow-hidden rounded-2xl bg-card shadow-island">
           {filtered.map((agent) => {
-            const isReference = agent.instance.kind === "reference";
             const active = agent.agent_id === agentId;
             return (
               <div
@@ -293,21 +293,21 @@ export function AgentsPage() {
                   <Button size="sm" variant="outline" className="rounded-full" aria-label={`Test ${agent.name}`} onClick={() => setRunAgent(agent)}>
                     Test
                   </Button>
-                  {!isReference && (
-                    <>
-                      <Button size="sm" variant="ghost" className="rounded-full" aria-label={`Edit ${agent.name}`} onClick={() => openEdit(agent)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="rounded-full text-destructive hover:text-destructive"
-                        aria-label={`Delete ${agent.name}`}
-                        onClick={() => { setDeleteError(null); setDeleteTarget(agent); }}
-                      >
-                        Delete
-                      </Button>
-                    </>
+                  {canEditAgent(agent.agent_id) && (
+                    <Button size="sm" variant="ghost" className="rounded-full" aria-label={`Edit ${agent.name}`} onClick={() => openEdit(agent)}>
+                      Edit
+                    </Button>
+                  )}
+                  {canDeleteAgent(agent.agent_id) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full text-destructive hover:text-destructive"
+                      aria-label={`Delete ${agent.name}`}
+                      onClick={() => { setDeleteError(null); setDeleteTarget(agent); }}
+                    >
+                      Delete
+                    </Button>
                   )}
                 </div>
               </div>
@@ -428,7 +428,6 @@ function AgentForm({
             <label className="text-sm font-medium" id="agent-kind-label">Kind</label>
             <Select
               value={form.instance_kind}
-              disabled={editing?.instance.kind === "reference"}
               onValueChange={(value) => {
                 if (value === "external" || value === "reference") onField("instance_kind", value);
               }}

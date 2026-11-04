@@ -7,7 +7,8 @@
 # Optional: copy .env.example to .env at the repo root to override the
 # frontend build args (VITE_BACKEND_URL, VITE_AGENTSERVICE_URL).
 # The shop is mesa-mock-shop. Compose sets the harness MOCK_SHOP_URL to
-# http://mesa-mock-shop:8787. The agent service does not read a shop URL.
+# http://mesa-mock-shop:8787. The library desk is mesa-library-agent and
+# mesa-mock-library. The agent service does not read a shop URL.
 # mesa-postgres persists agent, run, and trace records. The backend receives DATABASE_URL.
 # User and password mesa/mesa are local defaults, not production secrets.
 
@@ -84,6 +85,32 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8787"
+    networks:
+      - mesa
+
+  mesa-library-agent:
+    build:
+      context: .
+      dockerfile: apps/library-agent/Dockerfile
+    image: mesa-library-agent
+    ports:
+      - "3003:3003"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3003"
+    networks:
+      - mesa
+
+  mesa-mock-library:
+    build:
+      context: .
+      dockerfile: services/mock-library/Dockerfile
+    image: mesa-mock-library
+    ports:
+      - "8788:8788"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8788"
     networks:
       - mesa
 
