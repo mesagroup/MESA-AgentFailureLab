@@ -33,16 +33,16 @@ On `main` today:
 - Grok diagnosis (`POST /diagnose`) and the three MVP fix policies in the agent service. A replay in that service scores the demo tasks with the backend verifier (`apps/agentservice/replay/latest.md`). A live `after_fix` run records `fix_kinds` and does not yet send them on the agent run request ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)).
 - `pnpm eval`: labeled traces scored against a rules baseline, with an optional Grok column. The numbers in the README are that command's output. CI runs `pnpm eval:gate`, which compares that rules column with `apps/agentservice/eval/baseline.json` and does not need `XAI_API_KEY`.
 
-The web UI is a scaffold. It does not call the backend.
+The web UI dashboard, agent registration, the runs list, and the trace timeline call the harness. A run row opens `/traces/:traceId` when a trace is stored, and `/runs/:runId` otherwise.
 
 ## Planned
 
 | Surface | Status |
 | --- | --- |
-| **Dashboard** — registered agents, recent runs, verifier outcome, in-session counts | UI still uses mocks ([#77](https://github.com/mesagroup/MESA-AgentFailureLab/issues/77)). The harness snapshot is `GET /agents` and `GET /runs` ([#76](https://github.com/mesagroup/MESA-AgentFailureLab/issues/76)). `counts.scope` is `harness_session` (records in the store this process has open; Postgres keeps runs and traces across a restart). Multi-day series, uptime percentages, and agent ranking stay out, per ADR-001. |
-| Agent CRUD in the UI, with the shopping demo preloaded | Planned ([#49](https://github.com/mesagroup/MESA-AgentFailureLab/issues/49)). The API is `GET/POST/PUT/DELETE /agents` ([#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)), and `reference-shop` is seeded. The registration screen is still open. |
-| **Testa agente** — start a test, list runs, toggle faults | Planned ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` starts a batch for the required `agent_id`. The UI that picks the agent is still open. |
-| **Ispeziona traccia** — timeline, culprit step, diagnosis when present | Planned ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)). `GET /traces` already returns stored traces. Hand-written traces are in `packages/shared/examples`. |
+| **Dashboard** — registered agents, recent runs, verifier outcome, in-session counts | Home reads `GET /agents` and `GET /runs` ([#77](https://github.com/mesagroup/MESA-AgentFailureLab/issues/77), snapshot [#76](https://github.com/mesagroup/MESA-AgentFailureLab/issues/76)). `counts.scope` is `harness_session` (records in the store this process has open; Postgres keeps runs and traces across a restart). Multi-day series, uptime percentages, and agent ranking stay out, per ADR-001. |
+| Agent CRUD in the UI, with the shopping demo preloaded | The agents page calls `GET/POST/PUT/DELETE /agents` ([#49](https://github.com/mesagroup/MESA-AgentFailureLab/issues/49), API [#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)). `reference-shop` is seeded. A run launches from that page. |
+| **Testa agente** — start a test, list runs, toggle faults | The runs page lists stored runs ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` starts a batch for the required `agent_id` from the agent page. A row opens `/traces/:traceId` or `/runs/:runId`. |
+| **Ispeziona traccia** — timeline, culprit step, diagnosis when present | The trace page renders `GET /traces/:traceId` ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)): steps, culprit, diagnosis, and verifier. Hand-written traces are in `packages/shared/examples`. |
 | Open the fix as a GitHub issue | Planned ([#52](https://github.com/mesagroup/MESA-AgentFailureLab/issues/52)). Agent has no destination repository field yet. |
 | **Fix → replay → before/after** — choose a proposed fix, replay `after_fix`, compare `outcome.verifier` | Planned ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). `POST /runs` with `phase: after_fix` and `fix_kinds` exists; the fix is recorded, not yet sent to the agent ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). |
 | Demo script and video storyboard | Planned ([#56](https://github.com/mesagroup/MESA-AgentFailureLab/issues/56)) → `docs/demo-script.md`. |
@@ -71,7 +71,7 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 
 | Path | Team | Owns |
 | --- | --- | --- |
-| `apps/frontend` | Frontend | Scaffold today. Planned screens: Agent CRUD, Testa agente, Ispeziona traccia. The timeline will render `Trace`. Before/after will use `Run` plus `outcome.verifier`. |
+| `apps/frontend` | Frontend | Dashboard, agent CRUD, runs list, and trace timeline. The timeline renders `Trace`. Before/after will use `Run` plus `outcome.verifier`. |
 | `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and Agent/Run/Trace persistence (Postgres or memory). The shop process is separate. |
 | `services/mock-shop` | Backend | Demo example: stand-alone HTTP shop for T1–T5. The harness and the agent service call it by URL. |
 | `apps/agentservice` | AI Engineer | Grok diagnosis, the MVP fix applicator, and the reference shopping agent. Writes `Trace.diagnosis` only. The verifier still owns `outcome.verifier`. |

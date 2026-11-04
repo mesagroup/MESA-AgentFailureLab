@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
@@ -44,6 +44,7 @@ function groupSummary(runs: Run[]) {
 }
 
 export function RunsPage() {
+  const { runId } = useParams<{ runId?: string }>();
   const navigate = useNavigate();
   const [runs, setRuns] = useState<Run[]>([]);
   const [agentMap, setAgentMap] = useState<Record<string, Agent>>({});
@@ -64,6 +65,18 @@ export function RunsPage() {
   }
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    if (!runId) return;
+    const run = runs.find((item) => item.run_id === runId);
+    if (!run) return;
+    setExpanded((prev) => {
+      if (prev.has(run.agent_id)) return prev;
+      const next = new Set(prev);
+      next.add(run.agent_id);
+      return next;
+    });
+  }, [runId, runs]);
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === "queued" || r.status === "running");
@@ -94,7 +107,12 @@ export function RunsPage() {
   }
 
   function handleRunClick(run: Run) {
-    navigate(`/traces/${run.trace_ids[0] ?? run.run_id}`);
+    const traceId = run.trace_ids[0];
+    if (traceId) {
+      navigate(`/traces/${encodeURIComponent(traceId)}`);
+      return;
+    }
+    navigate(`/runs/${encodeURIComponent(run.run_id)}`);
   }
 
   return (
@@ -161,7 +179,10 @@ export function RunsPage() {
                       <div
                         key={run.run_id}
                         onClick={() => handleRunClick(run)}
-                        className="flex items-center gap-4 pl-9 pr-5 py-3 border-b border-border/15 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                        className={cn(
+                          "flex items-center gap-4 pl-9 pr-5 py-3 border-b border-border/15 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer",
+                          run.run_id === runId && "bg-muted/40",
+                        )}
                       >
                         <StatusDot status={run.status} />
                         <span className="font-mono text-xs text-muted-foreground/50 w-28 shrink-0 truncate">

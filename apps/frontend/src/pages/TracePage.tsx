@@ -199,21 +199,32 @@ function TraceSkeleton() {
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export function TracePage() {
-  const { runId } = useParams<{ runId: string }>();
+  const { traceId } = useParams<{ traceId: string }>();
   const navigate = useNavigate();
   const [trace, setTrace] = useState<Trace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!runId) { setLoading(false); return; }
+    if (!traceId) { setLoading(false); return; }
     setLoading(true);
     setError(null);
-    getTrace(runId)
+    getTrace(traceId)
       .then(setTrace)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load trace"))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [traceId]);
+
+  if (!traceId) {
+    return (
+      <div className="px-5 pb-8 max-w-6xl mx-auto pt-2">
+        <h1 className="text-xl font-semibold">Traces</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Ispeziona traccia — open a run to inspect its stored trace.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) return <TraceSkeleton />;
 
