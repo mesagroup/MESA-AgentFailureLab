@@ -1,10 +1,12 @@
 # MESA Agent Failure Lab — Render Blueprint.
-# Applying this file creates project mesa-agent-failure-lab / environment demo,
-# the four web services inside it, and one Postgres instance for agent records.
-# Do not also declare those services at the root, or they land loose on the workspace.
-# The database block is new (issues #50 / #64). Review the plan before syncing.
+# Applying this file creates or updates project mesa-agent-failure-lab /
+# environment demo, the four web services inside it, and Postgres mesa-postgres
+# for agents, runs, and traces.
+# Do not also declare those resources at the root, or they land loose on the workspace.
 # Preview environments and per-service PR previews stay off.
 # This file does not contain secret values. XAI_API_KEY is sync: false.
+# DATABASE_URL is fromDatabase.connectionString (the internal URL). The password
+# is not in this file. Yuri applies the Blueprint. See docs/deploy.md.
 
 previews:
   generation: off
@@ -20,11 +22,18 @@ projects:
                 value: production
               - key: HOST
                 value: 0.0.0.0
-        # Agent store only. Runs and traces are not in this database yet.
-        # plan: free is 0.1 CPU / 256 MB. Confirm it is allowed on this workspace
-        # before applying. If free is rejected, use 0.1c-256mb.
-        # DATABASE_URL below is the private-network connection string. It is not
-        # written into this file. postgresMajorVersion is pinned to match Compose.
+        # Agents, runs, and traces. Same region as the web services.
+        # plan: free is 0.1 CPU / 256 MB (Blueprint spec). Storage is the free
+        # plan's fixed 1 GB, so diskSizeGB is omitted. No backups. One free
+        # Postgres per workspace. Expires 30 days after create, then 14 days
+        # to upgrade. See docs/persistence.md.
+        # If this workspace rejects free, or the database must outlive that
+        # window, set plan to 0.1c-256mb before syncing.
+        # name, region, postgresMajorVersion, databaseName, and user are
+        # immutable after create. Postgres 16 matches Compose and is in
+        # Render's supported set (13 through 18).
+        # ipAllowList is omitted so the external URL stays open for db:import
+        # from a laptop. An empty list would block that URL.
         databases:
           - name: mesa-postgres
             plan: free
@@ -107,8 +116,9 @@ projects:
               # MOCK_SHOP_URL into mock_base_url on POST /v1/tasks/run.
               - key: MOCK_SHOP_URL
                 value: https://mesa-mock-shop.onrender.com
-              # Private-network URL for mesa-postgres in this environment.
-              # Confirm the free web service can reach that hostname.
+              # Internal URL (Blueprint property connectionString).
+              # Not the external URL. TLS is not required on this private host.
+              # A free web service can open a database in the same region.
               - key: DATABASE_URL
                 fromDatabase:
                   name: mesa-postgres

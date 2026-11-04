@@ -3,7 +3,12 @@ import { describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import { openAgentStore, agentStoreKind } from "../src/agents/open.js";
-import { listMigrationFiles, normalizeMigrationSql, postgresPoolConfig } from "../src/agents/postgres.js";
+import {
+  isRenderPostgresUrl,
+  listMigrationFiles,
+  normalizeMigrationSql,
+  postgresPoolConfig,
+} from "../src/agents/postgres.js";
 import { MemoryAgentStore, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
@@ -60,19 +65,37 @@ describe("agent store selection", () => {
     assert.equal(normalizeMigrationSql("select 1;\n"), "select 1;\n");
   });
 
-  it("turns Render sslmode=require into unverified TLS and leaves local URLs alone", () => {
-    const local = postgresPoolConfig("postgres://mesa:mesa@mesa-postgres:5432/mesa");
-    assert.equal(local.connectionString, "postgres://mesa:mesa@mesa-postgres:5432/mesa");
-    assert.equal(local.ssl, undefined);
+  it("leaves Compose and the Render internal URL without TLS, and uses unverified TLS on the external URL", () => {
+    const compose = postgresPoolConfig("postgres://mesa:mesa@mesa-postgres:5432/mesa");
+    assert.equal(compose.connectionString, "postgres://mesa:mesa@mesa-postgres:5432/mesa");
+    assert.equal(compose.ssl, undefined);
 
-    const render = postgresPoolConfig(
+    const internal = postgresPoolConfig("postgresql://mesa:secret@dpg-abc-a:5432/mesa");
+    assert.equal(internal.connectionString, "postgresql://mesa:secret@dpg-abc-a:5432/mesa");
+    assert.equal(internal.ssl, undefined);
+    assert.equal(isRenderPostgresUrl("postgresql://mesa:secret@dpg-abc-a:5432/mesa"), false);
+
+    const external = postgresPoolConfig(
       "postgresql://mesa:secret@dpg-abc.frankfurt-postgres.render.com:5432/mesa?sslmode=require",
     );
     assert.equal(
-      render.connectionString,
+      external.connectionString,
       "postgresql://mesa:secret@dpg-abc.frankfurt-postgres.render.com:5432/mesa",
     );
-    assert.deepEqual(render.ssl, { rejectUnauthorized: false });
+    assert.deepEqual(external.ssl, { rejectUnauthorized: false });
+
+    const externalWithoutQuery = postgresPoolConfig(
+      "postgresql://mesa:secret@dpg-abc.frankfurt-postgres.render.com:5432/mesa",
+    );
+    assert.equal(
+      externalWithoutQuery.connectionString,
+      "postgresql://mesa:secret@dpg-abc.frankfurt-postgres.render.com:5432/mesa",
+    );
+    assert.deepEqual(externalWithoutQuery.ssl, { rejectUnauthorized: false });
+
+    const internalTls = postgresPoolConfig("postgresql://mesa:secret@dpg-abc-a:5432/mesa?sslmode=require");
+    assert.equal(internalTls.connectionString, "postgresql://mesa:secret@dpg-abc-a:5432/mesa");
+    assert.deepEqual(internalTls.ssl, { rejectUnauthorized: false });
   });
 });
 

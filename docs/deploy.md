@@ -1,6 +1,6 @@
 # Deploy
 
-Four public web processes, one Postgres instance for agents, runs, and traces, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`. The same `DATABASE_URL` selects both stores. Backup, jury reset, cutover, and rollback are in [persistence.md](persistence.md). `render.yaml` is not changed by that work. Applying the database is still [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72).
+Four public web processes, one Postgres instance for agents, runs, and traces, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`. The same `DATABASE_URL` selects both stores. Backup, jury reset, cutover, and rollback are in [persistence.md](persistence.md). `render.yaml` declares Postgres `mesa-postgres` and sets `DATABASE_URL` on `mesa-backend` from the internal connection string. Yuri (diamanti-sg) applies that Blueprint in the Render workspace. The steps are [below](#apply-the-database-yuri).
 
 | Service | Image | Port | Health |
 | --- | --- | --- | --- |
@@ -38,7 +38,7 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 | `PORT` | all four | no | 3000 / 3001 / 3002 / 8787 | same values in the Blueprint |
 | `HOST` | backend, agent service, and mock shop | no | `127.0.0.1` for `pnpm dev`; `0.0.0.0` in containers | `0.0.0.0` via env group `mesa-shared` |
 | `NODE_ENV` | runtime | no | unset for `pnpm dev` | `production` via `mesa-shared` |
-| `DATABASE_URL` | backend, runtime | yes (the URL contains the password) | unset for in-memory `pnpm dev`. Compose: `postgres://mesa:mesa@mesa-postgres:5432/mesa` | `fromDatabase` `connectionString` on `mesa-postgres`. Not written in git |
+| `DATABASE_URL` | backend, runtime | yes (the URL contains the password) | unset for in-memory `pnpm dev`. Compose: `postgres://mesa:mesa@mesa-postgres:5432/mesa` | `fromDatabase` `connectionString` on `mesa-postgres` (internal URL). Not written in git |
 
 `VITE_*` values are inlined when the frontend image is built. Changing them on a running container does nothing until the image is rebuilt. A browser cannot resolve Docker DNS names (`mesa-backend`) or Render's private hostname, so those URLs are the public ones.
 
@@ -92,17 +92,63 @@ Compose forces `HOST=0.0.0.0` and those DNS URLs for server-side calls, even if 
 - Previews: off (no preview environments, no per-service pull-request previews)
 - Shared non-secrets: env group `mesa-shared` (`NODE_ENV`, `HOST`)
 
-The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace in the Dashboard before you apply the Blueprint. This repository does not create the resources.
+The Render workspace is `tea-dblh716417fc738hr7vg`. Yuri (diamanti-sg) owns it and applies this Blueprint. This repository does not create the resources. A merge syncs the Blueprint only when auto-sync is on. The steps below are his.
 
-### Apply
+### Apply the database (Yuri)
 
-1. Merge the Blueprint to `main` (Render reads the file from the connected repo).
-2. Open the [Render Dashboard](https://dashboard.render.com), select the workspace above, then **New** → **Blueprint**.
-3. Connect `mesagroup/MESA-AgentFailureLab` if it is not connected yet. Point the Blueprint at `render.yaml` on `main`.
-4. Review the plan. You should see project `mesa-agent-failure-lab`, environment `demo`, the four free Docker web services in Frankfurt, and Postgres `mesa-postgres`. You should not see a disk, a custom domain, or a preview environment. Stop if the database plan is not the one you intend. `plan: free` is 0.1 CPU / 256 MB. If this workspace rejects free Postgres, change that plan to `0.1c-256mb` before applying. `DATABASE_URL` on `mesa-backend` comes from `fromDatabase.connectionString` (private network). It is not a value in git.
-5. When Render prompts for `XAI_API_KEY`, paste the key or leave it blank until Grok is wired. `sync: false` means this prompt happens on first create. Later Blueprint syncs do not overwrite the value. To rotate it, edit the service env var in the Dashboard. Do not put the key in git, in GitHub Actions, or in the Blueprint.
-6. Apply. Render builds the four images and deploys them. The first request after idle can be slow because the free plan spins down.
-7. Open `mesa-mock-shop` and read the public URL Render assigned. If it is not `https://mesa-mock-shop.onrender.com`, set `MOCK_SHOP_URL` in `render.yaml` to that URL and sync again. Leave the Dashboard and the file on the same host. The harness should use that public `https://` URL.
+The four web services are already in project `mesa-agent-failure-lab` / environment `demo`. This file adds Postgres `mesa-postgres` in that same environment and sets `DATABASE_URL` on `mesa-backend` only. `FRONTEND_URL`, `AGENTSERVICE_URL`, `MOCK_SHOP_URL`, `PORT`, and env group `mesa-shared` stay. The other three services are not given `DATABASE_URL`.
+
+Export the live in-memory backend before any redeploy. A push to `main` restarts `mesa-backend` (`autoDeployTrigger: commit`) even when the Blueprint does not sync. That restart drops every agent except the seed, and every run and trace. Do this from a laptop while `GET /health` still reports `memory`. Keep the file. Do not commit it. The full command notes are in [persistence.md](persistence.md#render-memory-process-to-mesa-postgres).
+
+```powershell
+pnpm --filter @mesa/backend db:export -- --base-url https://mesa-backend-itm4.onrender.com --out mesa-backup.json
+Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
+```
+
+`agent_store` and `run_store` should both be `memory` on that check. If the service was already restarted, the file only has what is still in the process.
+
+Merging this file to `main` syncs the Blueprint only when auto-sync is on for that Blueprint. Auto-sync off means the merge updates git and does not create the database and does not set `DATABASE_URL`. Yuri then opens the Blueprint and runs Manual Sync. Either sync creates `mesa-postgres`, sets `DATABASE_URL` from the internal `connectionString`, and redeploys `mesa-backend`. That redeploy is the restart that leaves memory behind. Import only after health shows `postgres`.
+
+Dashboard, in workspace `tea-dblh716417fc738hr7vg`:
+
+1. Open the [Render Dashboard](https://dashboard.render.com) and select that workspace.
+2. Open the existing Blueprint for `mesagroup/MESA-AgentFailureLab` (`render.yaml` on `main`). Do not create a second Blueprint. A second one can try to adopt the same service names.
+3. If the Blueprint is not connected yet, use **New** → **Blueprint**, connect the repo, and point it at `render.yaml` on `main`. That path is the first create, not the path for the database on an already connected Blueprint.
+4. Read the plan before you confirm it. You should see Postgres `mesa-postgres` (`plan: free`, region Frankfurt, Postgres 16) inside environment `demo`, and `DATABASE_URL` on `mesa-backend` from `fromDatabase` property `connectionString`. You should not see a disk, a custom domain, a preview environment, or new env vars on the other three services. `plan: free` is 0.1 CPU / 256 MB. Stop if the plan is something else, or if the workspace already has a different free Postgres (one free database per workspace). If this workspace rejects `free`, change `plan` to `0.1c-256mb` in `render.yaml` and sync again. That plan id is the same CPU and RAM without the 30-day expiry. The older name for that size is `basic-256mb`.
+5. `XAI_API_KEY` is `sync: false`. A sync of an existing Blueprint does not prompt for it and does not overwrite it. On a first create, paste the key or leave it blank. Do not put the key in git.
+6. If auto-sync is off, run Manual Sync after the merge is on `main`. If auto-sync is on, the merge already started the sync. Confirm the plan, then apply.
+7. Apply. Render creates the database and redeploys `mesa-backend`. The first request after idle can take about a minute because the free web service spins down. The internal URL is what the service uses. A free web service can send private-network requests to a database in the same region.
+8. Open `mesa-mock-shop` only if its public URL is still unset. If it is not `https://mesa-mock-shop.onrender.com`, set `MOCK_SHOP_URL` in `render.yaml` to the assigned `https://` URL and sync again. Leave the Dashboard and the file on the same host.
+
+### Verify
+
+After the sync, both stores must be `postgres`. If either is `memory`, `DATABASE_URL` is not on the service. Do not import yet.
+
+```powershell
+Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
+```
+
+```bash
+curl -fsS https://mesa-backend-itm4.onrender.com/health
+```
+
+The health JSON includes `agent_store` and `run_store`. Both values are `postgres` when the internal URL is set and the process booted. `status` stays `ok`. The first call after idle can be slow.
+
+Then import `mesa-backup.json` with the **external** connection string from the `mesa-postgres` page in the Dashboard. The internal `connectionString` is not reachable from a laptop. Free web services have no shell, so import stays on the laptop. Commands, the TLS note, and the order (export, then redeploy, then import) are in [persistence.md](persistence.md#render-memory-process-to-mesa-postgres).
+
+### 30-day expiry
+
+The free database expires 30 days after Render creates it. It then has 14 days to be upgraded. After that grace period Render deletes the database and its data. The free plan has no backups, storage is 1 GB, and a workspace can have one free Postgres. The clock starts at creation, not at the merge. Set a reminder for that date and run `db:export` before it. Render also emails as the date gets close. The JSON file is the copy that survives the delete. The limits are in [persistence.md](persistence.md#render-free-postgres-limits) ([Deploy for Free](https://render.com/docs/free)). Smontuor's note on the issue was to create this database close to the demo, because the seed inserts itself, and to move off `free` if the lab has to last longer than 30 days.
+
+### Rollback
+
+Remove `DATABASE_URL` from `mesa-backend` in the Dashboard and redeploy that service. The next boot is in memory. `GET /health` shows `memory` for both stores. The Postgres rows stay until the database is deleted or the free plan expires. Export before you drop the database.
+
+```powershell
+Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
+```
+
+The next Blueprint sync puts `DATABASE_URL` back, because `render.yaml` still declares `fromDatabase`. To stay on memory across syncs, remove that env var from `render.yaml` and sync again. Local rollback is `Remove-Item Env:DATABASE_URL` and is written in [persistence.md](persistence.md#rollback).
 
 ### Public hosts
 
@@ -119,21 +165,7 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 
 A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` from this file onto the services. It also refreshes `DATABASE_URL` from `mesa-postgres`. The password stays on the Render database, not in git. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
 
-### Free Postgres, backups, and cutover
-
-Free Render Postgres expires 30 days after creation. You then have 14 days to upgrade it to a paid plan. After that grace period Render deletes the database and its data. The free plan has no backups, and storage is 1 GB. There is one free Postgres per workspace. The limits and the export that covers the missing backups are in [persistence.md](persistence.md#render-free-postgres-limits) ([Deploy for Free](https://render.com/docs/free)).
-
-`db:export` and `db:import` run on a laptop, not in the free web service (no shell). Before `DATABASE_URL` is set, export the running backend with `--base-url` and the public `mesa-backend` URL. After [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72) is applied, `GET /health` should show `agent_store` and `run_store` as `postgres`. Import with the external connection string from the Dashboard. That string is a secret. The private `connectionString` is what the backend uses inside Render. It is not reachable from a laptop. This file does not change `render.yaml`. Yuri (diamanti-sg) still applies the Blueprint.
-
-```bash
-curl -fsS https://mesa-backend-itm4.onrender.com/health
-```
-
-```powershell
-Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
-```
-
-After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` are read at runtime; a restart picks them up. The backend uses `FRONTEND_URL` as its browser CORS allowlist. See [Browser CORS](#browser-cors). Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
+After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, `MOCK_SHOP_URL`, and `DATABASE_URL` are read at runtime; a restart picks them up. The backend uses `FRONTEND_URL` as its browser CORS allowlist. See [Browser CORS](#browser-cors). Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
 
 Confirm:
 
