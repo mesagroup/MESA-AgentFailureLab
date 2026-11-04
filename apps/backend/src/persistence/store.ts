@@ -1,4 +1,4 @@
-import type { Run, Trace } from "@mesa/shared";
+import type { Diagnosis, Run, Trace } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
 
 export type RunStoreKind = "memory" | "postgres";
@@ -36,6 +36,8 @@ export interface RunStore {
    */
   listRunRecords(): Promise<Array<StoredDocument<Run>>>;
   saveTrace(trace: Trace): Promise<Trace>;
+  /** Atomically replace diagnosis only if the entire stored trace still matches expected. */
+  saveDiagnosis(expected: Trace, diagnosis: Diagnosis): Promise<Trace | undefined>;
   getTrace(traceId: string): Promise<Trace | undefined>;
   /** First-save order, then `trace_id`. An update does not move a row. */
   listTraces(): Promise<Trace[]>;

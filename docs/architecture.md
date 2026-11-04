@@ -53,6 +53,17 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 
+The explicit backend operation `POST /traces/:traceId/diagnose` loads a stored
+trace, posts it to `AGENTSERVICE_URL/diagnose`, validates that the response changes
+only `diagnosis`, and conditionally saves that field. A concurrent trace update
+causes 409 instead of overwriting it. Existing diagnoses are returned without a
+new provider call. The per-trace in-process gate is independent of the mock/world
+lock: no shop operation or run is executed by this endpoint. PostgreSQL uses an
+atomic jsonb comparison to prevent stale saves across processes, but separate
+processes can still incur duplicate provider calls. See the backend README for
+the HTTP contract and timeout. This documents runtime wiring, not a change to
+ADR-001's recorded status or ADR-002's ownership decisions.
+
 The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
 Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds `reference-shop` on boot, and runs and traces start empty. The shop catalog is still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`.

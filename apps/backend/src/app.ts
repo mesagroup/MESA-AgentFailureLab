@@ -12,6 +12,7 @@ import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runn
 import { sessionView } from "./harness/session.js";
 import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
+import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/routes.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -20,6 +21,7 @@ export interface BuildAppOptions {
   agent?: Agent;
   mockBaseUrl?: string;
   mock?: MockShopClient;
+  diagnosis?: DiagnosisOptions;
 }
 
 /**
@@ -27,7 +29,8 @@ export interface BuildAppOptions {
  * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
  * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
- * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
+ * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
+ * POST /traces/:traceId/diagnose route calls agentservice and persists diagnosis only.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
@@ -69,6 +72,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   registerAgentRoutes(app, agents);
+  registerDiagnosisRoutes(app, store, options.diagnosis);
 
   app.get("/faults", async () => ({
     faults: FAULT_CATALOG.map((entry) => ({

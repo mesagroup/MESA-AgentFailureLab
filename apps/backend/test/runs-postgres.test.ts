@@ -9,6 +9,7 @@ import { postgresPoolConfig, quoteIdent } from "../src/agents/postgres.js";
 import { buildApp } from "../src/app.js";
 import { PostgresRunStore } from "../src/persistence/postgres.js";
 import { ContractError } from "../src/persistence/store.js";
+import { diagnosis, diagnosisRun, diagnosisTrace } from "./diagnosis-fixtures.js";
 
 /**
  * Postgres checks run only when TEST_DATABASE_URL points at a disposable database.
@@ -216,6 +217,44 @@ describe(
       assert.equal(missing.json().error, "not_found");
     } finally {
       await app.close();
+    }
+  });
+  it("persists diagnosis across pools and atomically rejects stale updates", async () => {
+    const runs = store;
+    assert.ok(runs);
+    const run = diagnosisRun();
+    const trace = diagnosisTrace();
+    await runs.saveRun(run);
+    await runs.saveTrace(trace);
+    const beforeRecords = await runs.listTraceRecords();
+    const createdAt = beforeRecords.find(row => row.document.trace_id === trace.trace_id)?.created_at;
+    const app = buildApp({ logger: false, store: runs, diagnosis: {
+      baseUrl: "http://offline-agentservice.test",
+      fetchImpl: async () => Response.json({ ...trace, diagnosis: diagnosis() }),
+    } });
+    const restarted = new PostgresRunStore(databaseUrl, { searchPath: TEST_SCHEMA });
+    try {
+      const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+      assert.equal(result.statusCode, 200);
+      assert.deepEqual(await restarted.getTrace(trace.trace_id), { ...trace, diagnosis: diagnosis() });
+      assert.deepEqual(await restarted.getRun(run.run_id), run);
+      assert.equal((await restarted.listTraceRecords()).find(row => row.document.trace_id === trace.trace_id)?.created_at, createdAt);
+      // A stale snapshot cannot overwrite the diagnosis saved by another pool.
+      assert.equal(await restarted.saveDiagnosis(trace, { ...diagnosis(), cause: "stale writer" }), undefined);
+      await runs.saveTrace(trace);
+      const writes = await Promise.all([
+        runs.saveDiagnosis(trace, diagnosis()),
+        restarted.saveDiagnosis(trace, { ...diagnosis(), cause: "competing writer" }),
+      ]);
+      assert.equal(writes.filter(Boolean).length, 1);
+      assert.deepEqual(await restarted.getTrace(trace.trace_id), writes.find(Boolean));
+      const current = await runs.getTrace(trace.trace_id);
+      assert.ok(current);
+      await assert.rejects(runs.saveDiagnosis(current, { ...diagnosis(), confidence: 2 }));
+      assert.deepEqual(await restarted.getTrace(trace.trace_id), current);
+    } finally {
+      await app.close();
+      await restarted.close();
     }
   });
 });

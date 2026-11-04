@@ -1,4 +1,4 @@
-import type { Run, Trace } from "@mesa/shared";
+import type { Diagnosis, Run, Trace } from "@mesa/shared";
 import pg from "pg";
 import { applyMigrations, postgresPoolConfig, quoteIdent } from "../agents/postgres.js";
 import {
@@ -117,6 +117,20 @@ export class PostgresRunStore implements RunStore {
     const result = await this.pool.query<{ document: unknown }>(
       "SELECT document FROM traces WHERE trace_id = $1",
       [traceId],
+    );
+    const row = result.rows[0];
+    return row ? readStoredTrace(row.document) : undefined;
+  }
+
+  async saveDiagnosis(expected: Trace, diagnosis: Diagnosis): Promise<Trace | undefined> {
+    const updated = assertTrace(structuredClone({ ...expected, diagnosis }));
+    // jsonb equality ignores object-key order. The UPDATE is the compare-and-set;
+    // a separate SELECT followed by saveTrace would lose concurrent writes.
+    const result = await this.pool.query<{ document: unknown }>(
+      `UPDATE traces SET document = $3::jsonb
+       WHERE trace_id = $1 AND document = $2::jsonb
+       RETURNING document`,
+      [expected.trace_id, JSON.stringify(expected), JSON.stringify(updated)],
     );
     const row = result.rows[0];
     return row ? readStoredTrace(row.document) : undefined;

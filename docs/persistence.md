@@ -2,6 +2,15 @@
 
 Agent, Run, and Trace records live in the backend process (`apps/backend`). The stores are modules in that process. They are not a separate service, and they are not part of the agent service or the mock shop.
 
+Stored traces can be diagnosed explicitly through
+[`POST /traces/:traceId/diagnose`](../apps/backend/README.md#diagnose-a-stored-trace).
+The service produces `diagnosis`; the backend validates and persists only that
+field with a compare-and-set against the original document. Memory and Postgres
+reject a stale update; Postgres performs the comparison in the same SQL UPDATE.
+The operation preserves the trace's first-insert time, associated Run and all
+protected fields. No migration is needed. With Postgres the diagnosis survives
+a new pool/process and is included in normal backups. Memory is still transient.
+
 This is epic [#64](https://github.com/mesagroup/MESA-AgentFailureLab/issues/64). Agent CRUD ([#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)) shipped in [#71](https://github.com/mesagroup/MESA-AgentFailureLab/pull/71). Run and Trace persistence ([#74](https://github.com/mesagroup/MESA-AgentFailureLab/issues/74)) uses the same Postgres and the same migration runner. The Run and Trace tables finish the schema work in [#73](https://github.com/mesagroup/MESA-AgentFailureLab/issues/73). `001_agents.sql` is unchanged.
 
 Each document has one JSON Schema. Writes call the matching function from `@mesa/shared/validate`:
