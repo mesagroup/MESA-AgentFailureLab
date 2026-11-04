@@ -1,18 +1,24 @@
-# Agent persistence
+# Persistence
 
-Agent registration records live in the backend process (`apps/backend`). The store is a module in that process. It is not a separate service, and it is not part of the agent service or the mock shop.
+Agent, Run, and Trace records live in the backend process (`apps/backend`). The stores are modules in that process. They are not a separate service, and they are not part of the agent service or the mock shop.
 
-This is the first slice of epic [#64](https://github.com/mesagroup/MESA-AgentFailureLab/issues/64). It closes the Agent CRUD in [#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50). Runs and traces stay in memory. That work is [PR 2](#out-of-scope--pr-2-runtrace).
+This is epic [#64](https://github.com/mesagroup/MESA-AgentFailureLab/issues/64). Agent CRUD ([#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)) shipped in [#71](https://github.com/mesagroup/MESA-AgentFailureLab/pull/71). Run and Trace persistence ([#74](https://github.com/mesagroup/MESA-AgentFailureLab/issues/74)) uses the same Postgres and the same migration runner. The Run and Trace tables finish the schema work in [#73](https://github.com/mesagroup/MESA-AgentFailureLab/issues/73). `001_agents.sql` is unchanged.
 
-`packages/shared/schemas/agent.schema.json` is the document. Every create and replace calls `validateAgent` from `@mesa/shared/validate`. This change does not edit the schema.
+Each document has one JSON Schema. Writes call the matching function from `@mesa/shared/validate`:
+
+| Document | Schema | Validator |
+| --- | --- | --- |
+| Agent | `packages/shared/schemas/agent.schema.json` | `validateAgent` |
+| Run | `packages/shared/schemas/run.schema.json` | `validateRun` |
+| Trace | `packages/shared/schemas/trace.schema.json` | `validateTrace` |
+
+These files are not edited by the store. SQL stores the document as `jsonb`. It does not restate each field.
 
 ## Why Postgres, and why memory remains
 
-Agents have to survive a process restart and a redeploy. The lab's hosted target is Postgres on Render, selected with `DATABASE_URL`. The backend talks to it with `pg` (node-postgres). There is no Prisma and no second service.
+Agents, runs, and traces have to survive a process restart and a redeploy. The lab's hosted target is one Postgres database on Render, selected with `DATABASE_URL`. The backend talks to it with `pg` (node-postgres). There is no Prisma and no second service. Runs and traces are not a second database.
 
-The Agent document is a JSON Schema with nested tasks, docs, and instance URLs. The store keeps that document as one `jsonb` value. The schema file stays the contract. SQL does not restate each field.
-
-CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. The same `AgentStore` interface has an in-memory implementation. `DATABASE_URL` empty means that implementation. `GET /health` then reports `agent_store: "memory"`. A restart drops those rows and seeds `reference-shop` again.
+CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. `AgentStore` and `RunStore` each have an in-memory implementation. `DATABASE_URL` empty means both implementations. `GET /health` then reports `agent_store: "memory"` and `run_store: "memory"`. A restart drops those rows. The agent store seeds `reference-shop` again. The run store does not seed anything.
 
 `instance.base_url` and `test_instance.base_url` are the agent runtime (port 3002 for the reference agent). They are not the mock shop.
 
@@ -21,14 +27,20 @@ The harness runner still loads `packages/shared/examples/agent-reference-stub.js
 ## Architecture
 
 ```text
-openAgentStore(env)
-  DATABASE_URL blank  -> MemoryAgentStore
-  DATABASE_URL set    -> PostgresAgentStore
-                         migrate() then seedIfMissing()
-buildApp({ agents })  -> registerAgentRoutes
+openAgentStore(env)          openRunStore(env)
+  DATABASE_URL blank           DATABASE_URL blank
+    -> MemoryAgentStore          -> MemoryStore (empty)
+  DATABASE_URL set             DATABASE_URL set
+    -> PostgresAgentStore        -> PostgresRunStore
+       migrate() then seed          migrate() (no seed)
+buildApp({ agents, store })
+  registerAgentRoutes
+  GET /runs, GET /traces, POST /runs, POST /attacker/jury-case
 ```
 
-`src/agents/store.ts` defines the interface. Both implementations honor it.
+Both openers read the same variable. A blank or missing `DATABASE_URL` is memory for both. A URL is Postgres for both. `src/index.ts` opens the agent store first (migrate, then seed), then the run store (migrate). The second migrate sees the files already recorded and does not run them again. On shutdown the process closes the run store, then the agent store.
+
+`src/agents/store.ts` defines `AgentStore`. Both agent implementations honor it.
 
 | Method | Behavior |
 | --- | --- |
@@ -40,11 +52,35 @@ buildApp({ agents })  -> registerAgentRoutes
 | `seedIfMissing()` | Insert the reference fixture only when `reference-shop` is absent |
 | `close()` | End the pool, or a no-op for memory |
 
-`src/agents/open.ts` reads `DATABASE_URL`. A blank or missing value returns `MemoryAgentStore`, which seeds in its constructor. A URL returns `PostgresAgentStore`, applies migrations, then seeds. `src/index.ts` does that before `listen`, and closes the store when the process closes the Fastify app.
+`src/agents/open.ts` reads `DATABASE_URL`. A blank or missing value returns `MemoryAgentStore`, which seeds in its constructor. A URL returns `PostgresAgentStore`, applies migrations, then seeds. `src/persistence/open.ts` does the same selection for runs and traces and does not seed. `src/index.ts` does both before `listen`, and closes both stores when the process closes the Fastify app.
 
 `MemoryAgentStore` is a `Map`. Records are cloned on the way in and out. `PostgresAgentStore` uses a pool of at most 5 connections and a 10 second connect timeout. A URL with `sslmode=require`, or a host ending in `.render.com`, uses TLS with `rejectUnauthorized: false` (Render's public certificate). Compose and other local URLs stay non-TLS.
 
 Writes that fail `validateAgent` throw `AgentValidationError` (HTTP 400). A duplicate id throws `AgentConflictError` (HTTP 409). A missing id throws `AgentNotFoundError` (HTTP 404). Deleting `reference-shop` throws `ProtectedAgentError` (HTTP 409).
+
+### RunStore
+
+`src/persistence/store.ts` defines the interface. `MemoryStore` (`src/persistence/memory.ts`) and `PostgresRunStore` (`src/persistence/postgres.ts`) both honor it. Existing imports of `RunStore`, `MemoryStore`, and `ContractError` from `src/persistence/memory.ts` still resolve. The agent service scripts construct `MemoryStore` and pass it into the harness. They do not open Postgres.
+
+| Method | Behavior |
+| --- | --- |
+| `saveRun(run)` | `validateRun`, then insert or replace by `run_id`. A replace keeps the first-insert time |
+| `getRun(runId)` | One run, or absent |
+| `listRuns()` | First-save order, then `run_id` |
+| `listRunsByAgent(agentId)` | That agent's runs, oldest first. This is the `runs (agent_id, created_at)` lookup. It is not a separate HTTP route |
+| `saveTrace(trace)` | `validateTrace`, then insert or replace by `trace_id`. A replace keeps the first-insert time and refreshes `started_at` from the document |
+| `getTrace(traceId)` | One trace, or absent |
+| `listTraces()` | First-save order, then `trace_id` |
+| `listTracesByRun(runId)` | Traces for that run, oldest first. This is the `traces (run_id)` lookup. It is not a separate HTTP route |
+| `close()` | End the pool, or a no-op for memory |
+
+`MemoryStore` is two `Map`s. Records are cloned on the way in and out. Saving an id that is already present replaces the value and does not move it in the map. `PostgresRunStore` uses the same pool settings as agents (at most 5 connections, 10 second connect timeout, TLS rules above).
+
+A write that fails `validateRun` or `validateTrace` throws `ContractError` and stores nothing. The harness turns that into HTTP 500 on `POST /runs` and `POST /attacker/jury-case`, which is the same status the in-memory store already produced. `GET` of a missing id is still 404 `{ "error": "not_found", "message": "No run …" }` or `"No trace …"`.
+
+There is no delete method and no foreign key. Deleting an agent does not delete runs or traces that name it. Saving a trace does not require the run row to exist. That matches the memory maps.
+
+The store does not interpret the documents. `outcome.verifier` is still written only by the deterministic verifier. `fault.labels` are still written only by the injector or the attacker. `diagnosis` stays null until Grok, and Grok still does not write the verifier or the labels. ADR-001 is unchanged.
 
 ## Data model
 
@@ -68,20 +104,68 @@ CREATE TABLE IF NOT EXISTS agents (
 
 `schema_migrations.version` is the SQL file name (`001_agents.sql`).
 
-Runs and traces do not have tables yet. Later files in the same directory own them (`002_….sql`, `003_….sql`). Do not store them in `agents`.
+### Runs
+
+File: `apps/backend/migrations/002_runs.sql`. Do not edit `001_agents.sql` to add this table.
+
+```sql
+CREATE TABLE IF NOT EXISTS runs (
+  run_id text PRIMARY KEY,
+  agent_id text NOT NULL,
+  document jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS runs_agent_id_created_at_idx
+  ON runs (agent_id, created_at, run_id);
+
+CREATE INDEX IF NOT EXISTS runs_created_at_run_id_idx
+  ON runs (created_at, run_id);
+```
+
+`document` is the Run object inside `GET /runs`. The Run schema has no `created_at`. The column is the first insert time, copied so the store can order without parsing JSON. A later `saveRun` for the same `run_id` replaces `document` and `agent_id` and leaves `created_at` alone, so the row does not jump in the store list. `agent_id` is copied from the document for the agent lookup. The API response does not include the column.
+
+`listRuns()` orders by `created_at`, then `run_id` (oldest first). `GET /runs` passes that list through `sessionView`, which reverses it, so the dashboard snapshot is newest start first. `runs_agent_id_created_at_idx` serves `listRunsByAgent` (`WHERE agent_id = ? ORDER BY created_at, run_id`). `runs_created_at_run_id_idx` serves `listRuns()`. `GET /runs/:runId` uses the primary key and returns the Run document alone.
+
+### Traces
+
+File: `apps/backend/migrations/003_traces.sql`.
+
+```sql
+CREATE TABLE IF NOT EXISTS traces (
+  trace_id text PRIMARY KEY,
+  run_id text NOT NULL,
+  agent_id text NOT NULL,
+  document jsonb NOT NULL,
+  started_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS traces_run_id_created_at_idx
+  ON traces (run_id, created_at, trace_id);
+
+CREATE INDEX IF NOT EXISTS traces_created_at_trace_id_idx
+  ON traces (created_at, trace_id);
+```
+
+`document` is the Trace object `GET /traces` returns. `run_id`, `agent_id`, and `started_at` are copied from that document. `started_at` is the attempt's own clock (a required Trace field). `created_at` is the first insert and is not a Trace field. A later save refreshes `started_at` from the new document and keeps `created_at`.
+
+`traces_run_id_created_at_idx` serves `listTracesByRun` (`WHERE run_id = ? ORDER BY created_at, trace_id`). `traces_created_at_trace_id_idx` serves `GET /traces`. `GET /traces/:traceId` uses the primary key.
+
+Neither table references `agents` or the other table. Runs are not stored inside `agents.document`.
 
 ## Migrations and bootstrap
 
 Migrations run inside the backend process when it starts and `DATABASE_URL` is set. There is no separate migrate command. The memory store does not run SQL.
 
-The runner in `src/agents/postgres.ts`:
+The runner is `applyMigrations` in `src/agents/postgres.ts`. `PostgresAgentStore.migrate()` and `PostgresRunStore.migrate()` both call it:
 
 1. Creates `schema_migrations` if needed.
-2. Reads `apps/backend/migrations/*.sql` in name order. From the compiled image that directory is `/app/migrations` (the Dockerfile copies it next to `dist/`).
+2. Reads `apps/backend/migrations/*.sql` in name order (`001_agents.sql`, `002_runs.sql`, `003_traces.sql`). From the compiled image that directory is `/app/migrations` (the Dockerfile copies it next to `dist/`).
 3. Skips a file whose name is already in `schema_migrations`.
-4. Runs the file in a transaction, then records the file name.
+4. Runs the file in a transaction, then records the file name. A UTF-8 BOM is stripped and CRLF is normalized to LF before the script runs, so a Windows checkout applies the same statements.
 
-The statements also use `IF NOT EXISTS`, so applying `001_agents.sql` by hand is safe. Starting the process twice does not insert a second seed row and does not rewrite an existing agent.
+The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second seed row and does not rewrite an existing agent. It also does not duplicate run or trace rows. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
 
 Do not edit a file after it has been applied in a shared database. The runner will not apply it again. Add the next numbered file instead.
 
@@ -99,11 +183,27 @@ The fixture is `packages/shared/examples/agent-reference-stub.json`. Its `agent_
 | Process restart | New empty map, then seed. Other agents are gone | Rows stay, including agents other than the seed |
 | `seedIfMissing()` again in the same process | No overwrite | No overwrite |
 
-There is no `POST /internal/agents/reset`. The architect note on #50 marked that route optional, and this PR does not add it.
+There is no `POST /internal/agents/reset`. The architect note on #50 marked that route optional, and that route is still absent. Runs and traces are not seeded. A fresh memory store is empty. A fresh Postgres database has the tables and no run or trace rows.
 
 A local wipe of Postgres data is `docker compose down -v`, which deletes the `mesa-pgdata` volume. The next start runs migrations on an empty database and seeds `reference-shop` because that id is missing.
 
-`deleteAllRowsForTests` exists on `PostgresAgentStore` for the test suite. It is not an HTTP route.
+`deleteAllRowsForTests` exists on `PostgresAgentStore` (agents) and on `PostgresRunStore` (runs, then traces) for the test suites. Neither is an HTTP route.
+
+## Retention
+
+Nothing in this store expires. There is no TTL, no row cap, and no purge job.
+
+| Event | Memory | Postgres |
+| --- | --- | --- |
+| Process restart | Runs and traces are gone. Agents other than the reseeded `reference-shop` are gone | Every run, trace, and agent row stays |
+| `DELETE /agents/:id` (not the seed) | That agent row is gone. Runs and traces that name it stay | Same |
+| Save the same `run_id` or `trace_id` again | Document replaced. List position unchanged | Document replaced. `created_at` unchanged, so list position stays |
+| `docker compose down` | The process is gone | The `mesa-pgdata` volume keeps agents, runs, and traces |
+| `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds `reference-shop` only |
+
+There is no `DELETE /runs` or `DELETE /traces`. A jury reset of run history is a volume wipe, or a manual `DELETE` against `runs` and `traces`. Backup and a written reset procedure are [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75), not this store.
+
+`created_at` on `runs` and `traces` is an order column. It is not a retention clock. Rows are not deleted because they are old.
 
 ## API reference
 
@@ -120,11 +220,45 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
   "status": "ok",
   "service": "backend",
   "role": "harness",
-  "agent_store": "memory"
+  "agent_store": "memory",
+  "run_store": "memory"
 }
 ```
 
-`agent_store` is `"postgres"` when `DATABASE_URL` is set.
+`agent_store` and `run_store` are `"postgres"` when `DATABASE_URL` is set. The rest of the health body is unchanged (`contract_version`, `mock_base_url`, `grok_forbidden_write_paths`).
+
+### `GET /runs`, `GET /runs/:runId`, `GET /traces`, `GET /traces/:traceId`
+
+`GET /traces` is `{ "traces": [ ... ] }`, oldest first. One trace is the Trace document. `GET /runs/:runId` is the Run document alone.
+
+`GET /runs` is the dashboard snapshot from `src/harness/session.ts` ([#79](https://github.com/mesagroup/MESA-AgentFailureLab/pull/79)). The store still supplies the documents. `sessionView` reverses the store order and attaches links and counts. It does not score the run. `outcome.verifier` on `trace_links` is copied from the stored trace.
+
+```json
+{
+  "runs": [],
+  "trace_links": [],
+  "counts": {
+    "scope": "harness_session",
+    "agents": 1,
+    "runs": 0,
+    "queued": 0,
+    "running": 0,
+    "passed": 0,
+    "failed": 0,
+    "error": 0
+  }
+}
+```
+
+`runs` is newest start first. Each element is a Run document. The SQL `created_at` column is not added to that JSON. `trace_links[i]` describes `runs[i]`. `counts.scope` stays `harness_session`. With `DATABASE_URL` set, `counts` tallies the Postgres rows this process can see, including rows written before the current process started. Without it, a restart drops the runs and the counts go back to zero (the agent seed remains, so `counts.agents` is at least 1).
+
+404 for an unknown id:
+
+```json
+{ "error": "not_found", "message": "No run missing-run" }
+```
+
+`POST /runs` and `POST /attacker/jury-case` still return the same bodies. They write through whichever store `DATABASE_URL` selected. `POST /diagnose` on the agent service is not this store. Grok still writes `diagnosis` only, and only on the trace it is given. The harness does not call Grok.
 
 ### `GET /agents`
 
@@ -283,8 +417,8 @@ The path is the id. The server sets `updated_at` and ignores a client `updated_a
 
 | Variable | Who reads it | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | backend, at startup | Postgres URL. Empty or unset means in-memory. Compose sets `postgres://mesa:mesa@mesa-postgres:5432/mesa`. Render sets it from `fromDatabase.connectionString`. Do not commit a real URL. Turbo passes this variable into `pnpm dev` |
-| `TEST_DATABASE_URL` | `apps/backend` tests only | Disposable database for `test/agents-postgres.test.ts`. Unset skips those tests. CI leaves it unset. The suite creates schema `mesa_agent_test` and deletes rows there. It does not write `public.agents`. A host containing `.render.com` is refused. Turbo passes this variable into `pnpm test` |
+| `DATABASE_URL` | backend, at startup | Postgres URL for agents, runs, and traces. Empty or unset means both stores stay in memory. Compose sets `postgres://mesa:mesa@mesa-postgres:5432/mesa`. Render sets it from `fromDatabase.connectionString`. Do not commit a real URL. Turbo passes this variable into `pnpm dev` |
+| `TEST_DATABASE_URL` | `apps/backend` tests only | Disposable database for `test/agents-postgres.test.ts` and `test/runs-postgres.test.ts`. Unset skips those files. CI leaves it unset. The agent file uses schema `mesa_agent_test` and does not write `public.agents`. The run file drops and recreates schema `mesa_run_test` only, then deletes rows there. It does not write `public.runs` or `public.traces`. A host containing `.render.com` is refused before connect. Turbo passes this variable into `pnpm test` |
 
 `apps/backend/.env.example` documents `DATABASE_URL` and leaves it commented out. Compose's `environment` block wins over a copied `.env`.
 
@@ -299,7 +433,7 @@ pnpm install
 pnpm dev:backend
 ```
 
-`GET http://127.0.0.1:3001/health` reports `agent_store` `memory`. `GET /agents/reference-shop` returns the seed. Other agents disappear when the process stops.
+`GET http://127.0.0.1:3001/health` reports `agent_store` and `run_store` as `memory`. `GET /agents/reference-shop` returns the seed. `GET /runs` is a snapshot with empty `runs` and `trace_links` until something calls `POST /runs`. Other agents, and every run and trace, disappear when the process stops.
 
 Windows PowerShell:
 
@@ -322,9 +456,9 @@ This starts the four web processes and Postgres 16 (`mesa-postgres`) on the `mes
 
 User, password, and database name are `mesa`. That password is a local default, not a production secret.
 
-`GET /health` on the backend reports `agent_store` `postgres`.
+`GET /health` on the backend reports `agent_store` and `run_store` as `postgres`.
 
-Agent rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` again.
+Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 1 because the seed is back.
 
 Windows PowerShell, from the repo root:
 
@@ -357,13 +491,19 @@ pnpm dev:backend
 
 `docker compose config` must stay valid. CI runs that check. It does not start the database.
 
-The backend image also boots with no `DATABASE_URL` (CI's `docker run` health check). It uses the memory store and answers `GET /health`.
+The backend image also boots with no `DATABASE_URL` (CI's `docker run` health check). It uses the memory stores and answers `GET /health`.
+
+To see a run survive a restart, start Compose (or the host command above), `POST /runs` with `{ "phase": "baseline", "task_ids": ["T1"] }`, stop the backend process, start it again with the same `DATABASE_URL`, and `GET /runs`. The run and its trace are still there. With no `DATABASE_URL`, that `GET` is empty after the restart.
 
 ## Postgres-only tests
 
 `apps/backend/test/agents-postgres.test.ts` exercises `PostgresAgentStore`: migrate twice, create, conflict, protected delete, a second pool that still sees the row, and the HTTP routes on that store.
 
-The file skips the suite when `TEST_DATABASE_URL` is unset, which is the CI default. `pnpm test` then still passes. Set the variable to a disposable local database to run the suite. It creates schema `mesa_agent_test`, deletes rows in that schema, and does not touch `public.agents`.
+`apps/backend/test/runs-postgres.test.ts` exercises `PostgresRunStore`: drop and recreate schema `mesa_run_test`, migrate twice (the second call skips files already recorded), the lookup indexes, a rejected invalid run, a run saved with its trace, a replace that keeps `created_at`, a second pool that still sees both documents, and `GET /runs` / `GET /traces` on that store.
+
+Both files skip when `TEST_DATABASE_URL` is unset, which is the CI default. `pnpm test` then still passes. Set the variable to a disposable local database to run them. Do not point it at Render. A URL whose host contains `.render.com` throws before a connection is opened.
+
+Postgres 16 matches Compose (`postgres:16-alpine`) and the Render blueprint. From the repo root, with that server listening on `127.0.0.1:5432` (user, password, and database `mesa`):
 
 ```bash
 export TEST_DATABASE_URL=postgres://mesa:mesa@127.0.0.1:5432/mesa
@@ -377,11 +517,25 @@ $env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"
 pnpm --filter @mesa/backend test
 ```
 
-Root `pnpm test` forwards `TEST_DATABASE_URL` (see `turbo.json`). Do not point it at Render.
+Clear the variable in the same PowerShell session when you want the skip again:
 
-In-memory CRUD coverage is `apps/backend/test/agents.test.ts`. That file always runs.
+```powershell
+Remove-Item Env:TEST_DATABASE_URL
+pnpm --filter @mesa/backend test
+```
 
-The Postgres tests use the same `pg` driver as production, against a real server, instead of an embedded engine. They stay out of CI so `pnpm test` does not need a database. They were run locally against Postgres 16.
+Bash:
+
+```bash
+unset TEST_DATABASE_URL
+pnpm --filter @mesa/backend test
+```
+
+Root `pnpm test` forwards `TEST_DATABASE_URL` (see `turbo.json`).
+
+In-memory coverage always runs: `apps/backend/test/agents.test.ts` for agents, `apps/backend/test/runs.test.ts` for runs and traces. The migration runner test normalizes a BOM and CRLF (`\r\n`) so a Windows checkout does not change the SQL that reaches Postgres.
+
+The Postgres tests use the same `pg` driver as production, against a real server, instead of an embedded engine. They stay out of CI so `pnpm test` does not need a database.
 
 ## Render (review before apply)
 
@@ -400,17 +554,14 @@ Confirm the free `mesa-backend` service can open that private-network host. `con
 
 A Blueprint sync refreshes `DATABASE_URL` from the database. `XAI_API_KEY` stays `sync: false`.
 
-Runs and traces are not in this database.
+The same database holds agents, runs, and traces once the backend from this tree is deployed and `DATABASE_URL` is set. `render.yaml` is not changed further here. Provisioning and the Blueprint review stay in [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72), with Yuri (diamanti-sg). Do not apply the Blueprint until that review is done.
 
-## Out of scope / PR 2 (Run/Trace)
+## Left for #75 (cutover, seed, backup)
 
-This PR does not persist Runs or Traces. `src/persistence/memory.ts` is still the Run and Trace store. Restart still drops them. The shop catalog is still in memory. `POST /internal/reset` on the shop is unchanged.
+[#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75) is still open. This store does not do that work.
 
-PR 2 should:
+- Cutover from a memory process to Postgres does not import runs or traces that existed only in that process. They are already gone when the process stops. After `DATABASE_URL` is set, new runs are written to Postgres. Old memory rows are not copied.
+- The `reference-shop` seed is unchanged: insert on boot when the id is missing, never overwrite, 409 on delete. Runs and traces have no seed.
+- There is no backup command, no restore command, and no jury reset route. `docker compose down -v` is the local wipe. A hosted backup note still has to be written.
 
-- Add `apps/backend/migrations/002_….sql` and `003_….sql` for Run and Trace. Leave `001_agents.sql` unchanged. The existing runner will apply new files once, in order.
-- Keep JSON Schema (`validateRun`, `validateTrace`) as the document check, the same way `validateAgent` guards this table.
-- Keep an in-memory implementation behind the same store interface so CI still runs without `DATABASE_URL`.
-- Leave agent CRUD and the `reference-shop` seed behavior as they are here.
-
-Not in either PR: auth, multi-tenant isolation, a dedicated store service, schema changes, or moving agent execution into the backend.
+Not in this work: auth, multi-tenant isolation, a dedicated store service, edits to the JSON Schemas, or moving agent execution into the backend. The shop catalog is still in memory. `POST /internal/reset` on the shop is unchanged. The frontend Runs and Trace pages are still placeholders and do not call these routes yet. `POST /diagnose` is still the agent service, and it still does not write `outcome.verifier` or `fault.labels`.

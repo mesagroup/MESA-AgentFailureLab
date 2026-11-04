@@ -124,10 +124,10 @@ describe("harness session snapshot", () => {
     const failedTrace = retarget(example, "trace-fail", "run-failed", false);
     const otherTrace = retarget(example, "trace-other", "run-failed", true);
     const orphan = retarget(example, "trace-orphan", "run-nobody", false);
-    store.saveTrace(passedTrace);
-    store.saveTrace(failedTrace);
-    store.saveTrace(otherTrace);
-    store.saveTrace(orphan);
+    await store.saveTrace(passedTrace);
+    await store.saveTrace(failedTrace);
+    await store.saveTrace(otherTrace);
+    await store.saveTrace(orphan);
 
     const queued = baseline("run-queued", "queued", []);
     const running = baseline("run-running", "running", []);
@@ -135,7 +135,7 @@ describe("harness session snapshot", () => {
     const failed = injectedFailure();
     const errored = baseline("run-error", "error", []);
     errored.error_message = "Harness error";
-    for (const run of [queued, running, passed, failed, errored]) store.saveRun(run);
+    for (const run of [queued, running, passed, failed, errored]) await store.saveRun(run);
 
     const external = loadReferenceAgent();
     external.agent_id = "agent-ext-001";

@@ -2,7 +2,8 @@ import type { Run, RunStatus, Trace, TraceOutcome, TraceTotals } from "@mesa/sha
 
 /**
  * In-process view for the lab dashboard.
- * Runs and traces come from the harness memory store. Agent count comes from the agent registry.
+ * Runs and traces come from the harness store (memory, or Postgres when `DATABASE_URL` is set).
+ * Agent count comes from the agent registry.
  * `outcome.verifier` is copied from each linked trace. This module does not score runs.
  */
 export const HARNESS_SESSION_SCOPE = "harness_session" as const;
@@ -24,7 +25,7 @@ export interface RunTraceLink {
   traces: LinkedTrace[];
 }
 
-/** Tallies of records currently held by this process. */
+/** Tallies of records the harness stores currently hold. */
 export interface SessionCounts {
   scope: typeof HARNESS_SESSION_SCOPE;
   agents: number;

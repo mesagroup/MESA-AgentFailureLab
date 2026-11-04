@@ -101,8 +101,8 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       assert.equal(result.trace.fault.attacker.used, false);
       assert.equal(validateRun(result.run).ok, true);
       assert.equal(validateTrace(result.trace).ok, true);
-      assert.deepEqual(store.getRun(result.run.run_id), result.run);
-      assert.deepEqual(store.getTrace(result.trace.trace_id), result.trace);
+      assert.deepEqual(await store.getRun(result.run.run_id), result.run);
+      assert.deepEqual(await store.getTrace(result.trace.trace_id), result.trace);
     }
     const last = results.at(-1);
     assert.ok(last?.trace);
@@ -143,7 +143,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
       assert.equal(validateRun(result.run).ok, true);
       assert.equal(validateTrace(result.trace).ok, true);
       assert.equal(validateTrace({ ...result.trace, injection_plan: result.run.injection_plan }).ok, false);
-      assert.deepEqual(store.getTrace(result.trace.trace_id)?.fault.labels, result.trace.fault.labels);
+      assert.deepEqual((await store.getTrace(result.trace.trace_id))?.fault.labels, result.trace.fault.labels);
     }
 
     const forged = results.find((result) => result.run.task_id === "T3");
@@ -200,7 +200,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
     assert.equal(dropped.trace.outcome.agent_claimed_success, false);
     assert.equal(dropped.trace.outcome.verifier.passed, false);
     assert.equal(dropped.run.phase, "injected");
-    assert.equal(store.getRun(dropped.run.run_id)?.injection_plan?.target, "checkout");
+    assert.equal((await store.getRun(dropped.run.run_id))?.injection_plan?.target, "checkout");
   });
 
   it("persists an after_fix replay with fix_kinds and no injection", async () => {
@@ -265,7 +265,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
     assert.equal(result?.run.status, "error");
     assert.match(result?.run.error_message ?? "", /shop down/);
     assert.deepEqual(result?.run.trace_ids, []);
-    assert.equal(store.getRun(result!.run.run_id)?.status, "error");
+    assert.equal((await store.getRun(result!.run.run_id))?.status, "error");
   });
 
   it("refuses an injection plan on a baseline run", async () => {
@@ -284,7 +284,7 @@ describe("runner against the mock shop", { concurrency: false }, () => {
         ),
       /baseline/,
     );
-    assert.equal(store.listRuns().length, 0);
+    assert.equal((await store.listRuns()).length, 0);
   });
 
   it("drives tools returned by an HTTP agent and falls back when the agent is down", async () => {

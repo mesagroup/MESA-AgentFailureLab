@@ -1,5 +1,6 @@
 import { openAgentStore } from "./agents/open.js";
 import { buildApp } from "./app.js";
+import { openRunStore } from "./persistence/open.js";
 
 main().catch((error: unknown) => {
   console.error(error);
@@ -10,13 +11,18 @@ async function main(): Promise<void> {
   const port = readPort(process.env.PORT, 3001);
   const host = process.env.HOST ?? "127.0.0.1";
   const agents = await openAgentStore(process.env);
-  const app = buildApp({ agents });
+  const runs = await openRunStore(process.env).catch(async (error: unknown) => {
+    await agents.close();
+    throw error;
+  });
+  const app = buildApp({ agents, store: runs });
   app.addHook("onClose", async () => {
+    await runs.close();
     await agents.close();
   });
 
   try {
-    app.log.info({ agent_store: agents.kind }, "agent store ready");
+    app.log.info({ agent_store: agents.kind, run_store: runs.kind }, "stores ready");
     await app.listen({ port, host });
   } catch (error) {
     app.log.error(error);
