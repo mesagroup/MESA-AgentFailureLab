@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Pencil, Play, PlusCircle, Search, Trash2 } from "lucide-react";
+import { Pencil, Play, PlusCircle, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,8 +12,18 @@ import {
 import { cn } from "@/lib/utils";
 import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
 import { createRun, deleteAgent, listAgents, saveAgent, updateAgent, type AgentDraft, type RunParams } from "@/lib/api";
-import type { Agent, AgentInstanceKind, AgentTask, RunPhase } from "@mesa/shared";
+import {
+  emptyOtelDraft,
+  otelDraftFromAgent,
+  otelSourceErrors,
+  otelSourceFromDraft,
+  otelSourceHasErrors,
+  type OtelSourceDraft,
+  type OtelSourceFieldError,
+} from "@/lib/otel";
+import type { Agent, AgentInstanceKind, AgentTask, OtelSourceAuthType, RunPhase } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
+import { OtelImportPanel } from "@/pages/OtelImportPanel";
 
 interface FormState {
   name: string;
@@ -22,6 +32,7 @@ interface FormState {
   test_instance_base_url: string;
   instance_kind: AgentInstanceKind;
   tasks: AgentTask[];
+  otel: OtelSourceDraft;
 }
 
 interface FormErrors {
@@ -38,6 +49,7 @@ const EMPTY_FORM: FormState = {
   test_instance_base_url: "",
   instance_kind: "external",
   tasks: blankTasks(),
+  otel: emptyOtelDraft(),
 };
 
 function agentToForm(agent: Agent): FormState {
@@ -48,6 +60,7 @@ function agentToForm(agent: Agent): FormState {
     test_instance_base_url: agent.test_instance.base_url,
     instance_kind: agent.instance.kind,
     tasks: structuredClone(agent.tasks),
+    otel: otelDraftFromAgent(agent.otel),
   };
 }
 
@@ -58,8 +71,11 @@ export function AgentsPage() {
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [otelErrors, setOtelErrors] = useState<OtelSourceFieldError>({});
+  const [showErrors, setShowErrors] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [runAgent, setRunAgent] = useState<Agent | null>(null);
+  const [importAgent, setImportAgent] = useState<Agent | null>(null);
 
   async function reload() {
     setAgents(await listAgents());
@@ -77,8 +93,10 @@ export function AgentsPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, tasks: blankTasks() });
+    setForm({ ...EMPTY_FORM, tasks: blankTasks(), otel: emptyOtelDraft() });
     setErrors({});
+    setOtelErrors({});
+    setShowErrors(false);
     setSheetOpen(true);
   }
 
@@ -86,6 +104,8 @@ export function AgentsPage() {
     setEditing(agent);
     setForm(agentToForm(agent));
     setErrors({});
+    setOtelErrors({});
+    setShowErrors(false);
     setSheetOpen(true);
   }
 
@@ -109,8 +129,11 @@ export function AgentsPage() {
     if (!form.instance_base_url.trim()) errs.instance_base_url = "Instance URL is required";
     const taskError = validateTasks(form.tasks);
     if (taskError) errs.tasks = taskError;
+    const nextOtelErrors = otelSourceErrors(form.otel);
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+    setOtelErrors(nextOtelErrors);
+    setShowErrors(true);
+    return Object.keys(errs).length === 0 && !otelSourceHasErrors(nextOtelErrors);
   }
 
   async function handleSave() {
@@ -122,6 +145,7 @@ export function AgentsPage() {
       test_instance_base_url: form.test_instance_base_url.trim(),
       instance_kind: form.instance_kind,
       tasks: form.tasks,
+      otel: otelSourceFromDraft(form.otel) ?? null,
     };
     try {
       if (editing) {
@@ -221,11 +245,16 @@ export function AgentsPage() {
                     {agent.instance.base_url}
                   </span>
 
-                  <span className="text-xs text-muted-foreground/60 shrink-0 w-14 text-right">
+                  <span className="text-xs text-muted-foreground/60 shrink-0 text-right">
                     {agent.tasks.length} task{agent.tasks.length !== 1 ? "s" : ""}
+                    {agent.tasks.some((task) => task.evalset) ? " · evalset" : ""}
+                    {agent.otel ? " · otel" : ""}
                   </span>
 
                   <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon-sm" variant="ghost" onClick={() => setImportAgent(agent)} title="Import OTel spans">
+                      <Upload className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="icon-sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
                       <Play className="h-3.5 w-3.5" />
                     </Button>
@@ -354,11 +383,26 @@ export function AgentsPage() {
                 </div>
               </div>
 
+              <OtelSourceFields
+                draft={form.otel}
+                errors={otelErrors}
+                showErrors={showErrors}
+                onChange={(key, value) => {
+                  const otel = { ...form.otel, [key]: value };
+                  setForm((current) => ({ ...current, otel }));
+                  if (showErrors) setOtelErrors(otelSourceErrors(otel));
+                }}
+              />
+
               <AgentTasksEditor
                 tasks={form.tasks}
+                showErrors={showErrors}
                 onChange={(tasks) => {
                   setForm((current) => ({ ...current, tasks }));
-                  setErrors((current) => ({ ...current, tasks: undefined }));
+                  setErrors((current) => ({
+                    ...current,
+                    tasks: showErrors ? validateTasks(tasks) : undefined,
+                  }));
                 }}
               />
               {errors.tasks && <p className="text-xs text-destructive">{errors.tasks}</p>}
@@ -400,6 +444,115 @@ export function AgentsPage() {
         agent={runAgent}
         onClose={() => setRunAgent(null)}
       />
+
+      <Sheet open={!!importAgent} onOpenChange={(open) => { if (!open) setImportAgent(null); }}>
+        <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">
+          <div className="shrink-0 px-8 pt-6 pb-4 border-b border-border/40">
+            <p className="text-xs text-muted-foreground mb-0.5">Import OTel spans</p>
+            <SheetTitle className="font-mono text-base font-medium tracking-tight">
+              {importAgent?.name ?? ""}
+            </SheetTitle>
+          </div>
+          <div className="flex-1 overflow-y-auto px-8 py-6">
+            {importAgent ? <OtelImportPanel agentId={importAgent.agent_id} /> : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function OtelSourceFields({
+  draft,
+  errors,
+  showErrors,
+  onChange,
+}: {
+  draft: OtelSourceDraft;
+  errors: OtelSourceFieldError;
+  showErrors: boolean;
+  onChange: <K extends keyof OtelSourceDraft>(key: K, value: OtelSourceDraft[K]) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={draft.enabled}
+          onChange={(event) => onChange("enabled", event.target.checked)}
+        />
+        <span>
+          <span className="font-medium">OTel source</span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Documents where spans come from. The importer does not call this endpoint. A bearer token stays in the named env var and is not stored here. Version 1.
+          </span>
+        </span>
+      </label>
+      {draft.enabled && (
+        <div className="space-y-3">
+          <FormField label="OTLP traces URL" error={showErrors ? errors.endpoint : undefined} required>
+            <Input
+              value={draft.endpoint}
+              onChange={(event) => onChange("endpoint", event.target.value)}
+              placeholder="https://otel.example.com/v1/traces"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.endpoint)}
+            />
+          </FormField>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Auth</label>
+            <div className="flex gap-1">
+              {(["none", "bearer"] as OtelSourceAuthType[]).map((authType) => {
+                const active = draft.authType === authType;
+                return (
+                  <button
+                    key={authType}
+                    type="button"
+                    onClick={() => onChange("authType", authType)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-sm border transition-colors",
+                      active
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
+                    )}
+                  >
+                    {authType === "bearer" ? "Bearer env var" : "None"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {draft.authType === "bearer" && (
+            <FormField
+              label="Token env var"
+              error={showErrors ? errors.token_env : undefined}
+              required
+            >
+              <Input
+                value={draft.tokenEnv}
+                onChange={(event) => onChange("tokenEnv", event.target.value)}
+                placeholder="OTEL_SOURCE_TOKEN"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono text-xs"
+                aria-invalid={showErrors && Boolean(errors.token_env)}
+              />
+              <p className="text-xs text-muted-foreground">Name only, such as OTEL_SOURCE_TOKEN. Do not paste the token.</p>
+            </FormField>
+          )}
+          <FormField label="Service name" error={showErrors ? errors.service_name : undefined}>
+            <Input
+              value={draft.serviceName}
+              onChange={(event) => onChange("serviceName", event.target.value)}
+              placeholder="reference-shop"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.service_name)}
+            />
+            <p className="text-xs text-muted-foreground">Optional. When set, every imported item must use this name.</p>
+          </FormField>
+        </div>
+      )}
     </div>
   );
 }

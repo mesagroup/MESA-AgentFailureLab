@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import {
   CHECK_REGISTRY,
   CHECK_TYPES,
+  TASK_EVALSET_VERSION,
   TASK_PERMISSIONS,
   isCheckType,
   type AgentTask,
@@ -12,6 +13,7 @@ import {
 } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { appendEvalCase, evalsetErrorMessage, evalsetIssues, removeEvalCase, writeEvalCase } from "@/lib/tasks";
 
 export function blankTasks(): AgentTask[] {
   return [blankTask("search")];
@@ -40,15 +42,19 @@ export function validateTasks(tasks: AgentTask[]): string | undefined {
       const issue = paramIssue(label, check);
       if (issue) return issue;
     }
+    const evalsetError = evalsetErrorMessage(task);
+    if (evalsetError) return `${label} evalset: ${evalsetError}`;
   }
   return undefined;
 }
 
 export function AgentTasksEditor({
   tasks,
+  showErrors = false,
   onChange,
 }: {
   tasks: AgentTask[];
+  showErrors?: boolean;
   onChange: (tasks: AgentTask[]) => void;
 }) {
   function patch(index: number, recipe: (task: AgentTask) => void) {
@@ -68,7 +74,7 @@ export function AgentTasksEditor({
         <div>
           <p className="text-xs text-muted-foreground">Tasks ({tasks.length})</p>
           <p className="text-xs text-muted-foreground/80 mt-1">
-            Setup runs before the agent. Checks are scored from shop state.
+            Setup runs before the agent. Checks are scored from shop state. An evalset helps Grok judge the Trace or Run and does not replace the verifier.
           </p>
         </div>
         <Button
@@ -83,7 +89,10 @@ export function AgentTasksEditor({
         </Button>
       </div>
 
-      {tasks.map((task, index) => (
+      {tasks.map((task, index) => {
+        const issues = evalsetIssues(task);
+        const evalCases = task.evalset?.cases ?? [];
+        return (
         <div key={`${task.task_id}-${index}`} className="rounded-xl bg-muted/40 px-4 py-4 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs font-mono text-muted-foreground">{task.task_id || "task"}</p>
@@ -298,8 +307,103 @@ export function AgentTasksEditor({
               );
             })}
           </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">Evalset</p>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => patch(index, (next) => appendEvalCase(next))}
+              >
+                Add case
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground/80">
+              Helps Grok judge this task&apos;s Trace or Run. It does not replace the verifier. Pass and fail still come from the checks above.
+            </p>
+            {task.evalset ? (
+              <p className={task.evalset.version === TASK_EVALSET_VERSION ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
+                Version {task.evalset.version}
+              </p>
+            ) : null}
+            {showErrors && issues.evalset ? <p className="text-xs text-destructive">{issues.evalset}</p> : null}
+            {evalCases.length === 0 ? (
+              <p className="text-xs text-muted-foreground/70">
+                {task.evalset
+                  ? "No cases yet. Version 1 with an empty list is valid."
+                  : "No cases. Add a case to store an evalset. Removing the last case omits the field, so the next update drops it."}
+              </p>
+            ) : (
+              evalCases.map((entry, caseIndex) => {
+                const caseError = issues.cases[caseIndex];
+                return (
+                  <div key={caseIndex} className="space-y-2 rounded-lg bg-background/70 px-3 py-3">
+                    <div className="flex items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Field label="Case id">
+                          <Input
+                            value={entry.case_id}
+                            aria-invalid={showErrors && Boolean(caseError?.case_id)}
+                            className="font-mono text-xs"
+                            onChange={(event) =>
+                              patch(index, (next) => writeEvalCase(next, caseIndex, { case_id: event.target.value }))
+                            }
+                          />
+                        </Field>
+                        {showErrors && caseError?.case_id ? (
+                          <p className="text-xs text-destructive">{caseError.case_id}</p>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Remove evalset case ${entry.case_id || caseIndex + 1}`}
+                        onClick={() => patch(index, (next) => removeEvalCase(next, caseIndex))}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <Field label="Expectation">
+                      <textarea
+                        value={entry.expectation}
+                        rows={2}
+                        aria-invalid={showErrors && Boolean(caseError?.expectation)}
+                        placeholder="What should Grok look for in the Trace or Run?"
+                        className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none"
+                        onChange={(event) =>
+                          patch(index, (next) => writeEvalCase(next, caseIndex, { expectation: event.target.value }))
+                        }
+                      />
+                    </Field>
+                    {showErrors && caseError?.expectation ? (
+                      <p className="text-xs text-destructive">{caseError.expectation}</p>
+                    ) : null}
+                    <Field label="Rubric (optional)">
+                      <textarea
+                        value={entry.rubric ?? ""}
+                        rows={2}
+                        aria-invalid={showErrors && Boolean(caseError?.rubric)}
+                        placeholder="Optional. Leave blank to omit. This does not change the verifier."
+                        className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none"
+                        onChange={(event) =>
+                          patch(index, (next) => writeEvalCase(next, caseIndex, { rubric: event.target.value }))
+                        }
+                      />
+                    </Field>
+                    {showErrors && caseError?.rubric ? (
+                      <p className="text-xs text-destructive">{caseError.rubric}</p>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

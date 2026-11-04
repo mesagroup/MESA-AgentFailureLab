@@ -4,6 +4,7 @@ Product and contributor docs live here. Architecture Decision Records do not —
 
 - [Overview](overview.md) — what the lab is, and Track 03
 - [Agent tasks](agent-tasks.md) — `AgentTask` setup, check registry, and an example
+- [OpenTelemetry import](otel.md) — source on the agent, span mapping, and the boundary with production import (#51)
 - [Canonical shop scenario](../apps/agentservice/scenarios/shop-readback-v1/README.md) — #99 fixture, isolated HTTP experiment, negative controls and handoff to #100
 - [Shop experiment command](shop-experiment.md) — #100 HTTP pipeline, explicit offline/live modes, evidence reports and exit codes
 - [Architecture](architecture.md) — four processes; mock-shop is a stand-alone HTTP target

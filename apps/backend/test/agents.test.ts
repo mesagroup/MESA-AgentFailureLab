@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Agent } from "@mesa/shared";
+import { TASK_EVALSET_VERSION, type Agent, type TaskEvalset } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import { openAgentStore, agentStoreKind } from "../src/agents/open.js";
 import {
@@ -280,6 +280,66 @@ describe("agent HTTP API", () => {
     assert.equal(await second.get(created.agent_id), undefined);
     await first.close();
     await second.close();
+  });
+
+  it("stores an optional task evalset and accepts a body that omits it", async () => {
+    const app = buildApp({ logger: false });
+    try {
+      const seed = (await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` })).json() as Agent;
+      assert.equal(seed.tasks.find((task) => task.task_id === "T1")?.evalset?.version, TASK_EVALSET_VERSION);
+      assert.equal(seed.tasks.find((task) => task.task_id === "T2")?.evalset, undefined);
+
+      const sample: TaskEvalset = {
+        version: TASK_EVALSET_VERSION,
+        cases: [{ case_id: "cart-claim", expectation: "The assistant claims two mugs only after add_to_cart." }],
+      };
+      const withEval = externalAgent("eval-owner");
+      withEval.tasks[1]!.evalset = sample;
+      const created = await app.inject({ method: "POST", url: "/agents", payload: withEval });
+      assert.equal(created.statusCode, 201);
+      assert.deepEqual(created.json().tasks[1].evalset, sample);
+
+      const cleared = structuredClone(created.json()) as Agent;
+      delete cleared.tasks[1]!.evalset;
+      const put = await app.inject({
+        method: "PUT",
+        url: `/agents/${cleared.agent_id}`,
+        payload: cleared,
+      });
+      assert.equal(put.statusCode, 200);
+      assert.equal(put.json().tasks[1].evalset, undefined);
+      assert.equal(put.json().tasks[0].evalset.version, TASK_EVALSET_VERSION);
+
+      const empty = structuredClone(put.json()) as Agent;
+      empty.tasks[0]!.evalset = { version: TASK_EVALSET_VERSION, cases: [] };
+      const emptied = await app.inject({
+        method: "PUT",
+        url: `/agents/${empty.agent_id}`,
+        payload: empty,
+      });
+      assert.equal(emptied.statusCode, 200);
+      assert.deepEqual(emptied.json().tasks[0].evalset, { version: TASK_EVALSET_VERSION, cases: [] });
+
+      const bad = structuredClone(emptied.json()) as Agent;
+      bad.tasks[0]!.evalset = { version: 2, cases: [] } as unknown as TaskEvalset;
+      const rejected = await app.inject({
+        method: "PUT",
+        url: `/agents/${bad.agent_id}`,
+        payload: bad,
+      });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(rejected.json().error, "invalid_agent");
+      const still = await app.inject({ method: "GET", url: `/agents/${bad.agent_id}` });
+      assert.deepEqual(still.json().tasks[0].evalset, { version: TASK_EVALSET_VERSION, cases: [] });
+
+      const omitted = externalAgent("eval-omitted");
+      for (const task of omitted.tasks) delete task.evalset;
+      const bare = await app.inject({ method: "POST", url: "/agents", payload: omitted });
+      assert.equal(bare.statusCode, 201);
+      assert.ok((bare.json().tasks as Agent["tasks"]).every((task) => task.evalset === undefined));
+    } finally {
+      await app.close();
+    }
   });
 
   it("lists agents by created_at", async () => {
