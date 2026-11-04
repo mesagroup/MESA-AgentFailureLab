@@ -42,7 +42,7 @@ A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what 
 
 ## Evalset
 
-`evalset` is judge input stored on the task. It is not the verifier. `POST /agents` and `PUT /agents/:agent_id` carry it inside `tasks[]`. There is no other route, and there is no generate-evalset endpoint. Generating cases is a later change.
+`evalset` is judge input stored on the task. It is not the verifier. `POST /agents` and `PUT /agents/:agent_id` carry it inside `tasks[]`. `POST /evalset/generate` on the backend (proxy) and on agentservice proposes a document that matches this schema. That call does not save the Agent. The operator reviews the cases on the form and saves with the usual Agent CRUD.
 
 `version` is the shape of the object. Only `1` is valid (`TASK_EVALSET_VERSION`). A consumer that does not know the version must reject the document.
 
@@ -69,7 +69,7 @@ A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what 
 
 The reference shop seed puts that case on T1. T2–T5 omit `evalset`. The library desk tasks omit it too. A stored agent that omits the field still validates, including a row written before this field existed, when that row is otherwise valid and not older than its fixture.
 
-The Agents create and edit form edits `evalset` in the task editor. Each case has `case_id`, `expectation`, and an optional `rubric`. The form writes `version` `1` and does not offer another version. A new task omits `evalset`. Adding a case stores `{ "version": 1, "cases": [...] }`. Removing the last case deletes the field, so `PUT /agents/:agent_id` drops a stored evalset. An evalset loaded as `version` `1` with `cases: []` stays that way until a case is added. There is no generate-evalset control. A task loaded from `GET /agents/:agent_id` keeps its evalset because the editor clones the task. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
+The Agents create and edit form edits `evalset` in the task editor. Each case has `case_id`, `expectation`, and an optional `rubric`. The form writes `version` `1` and does not offer another version. A new task omits `evalset`. Adding a case stores `{ "version": 1, "cases": [...] }`. Removing the last case deletes the field, so `PUT /agents/:agent_id` drops a stored evalset. An evalset loaded as `version` `1` with `cases: []` stays that way until a case is added. **Genera evalset** and **Modifica con AI** call `POST /evalset/generate` and load the proposal into the same fields. Nothing is stored until the operator saves the Agent. The AI does not judge a Trace or Run here. A task loaded from `GET /agents/:agent_id` keeps its evalset because the editor clones the task. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
 
 Seeding the cart uses `write:cart`. Checking out uses `write:order`. Those calls are harness setup. They are not agent steps and they are not injected.
 

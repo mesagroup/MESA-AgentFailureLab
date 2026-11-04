@@ -178,21 +178,27 @@ export function validateOtelSource(agent: Pick<Agent, "otel">): string[] {
   return [];
 }
 
-/** Duplicate `case_id` values inside one task's evalset. The schema already checked the shape. */
-function validateEvalset(task: AgentTask, taskIndex: number): string[] {
-  const cases = task.evalset?.cases;
-  if (!cases) return [];
+/** Duplicate `case_id` values. `pathPrefix` is the JSON-pointer prefix for `cases`. */
+export function evalsetDuplicateCaseIds(
+  cases: readonly { case_id: string }[],
+  pathPrefix = "/cases",
+): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
   cases.forEach((entry, caseIndex) => {
     if (seen.has(entry.case_id)) {
-      errors.push(
-        `/tasks/${taskIndex}/evalset/cases/${caseIndex}/case_id duplicate case_id ${entry.case_id}`,
-      );
+      errors.push(`${pathPrefix}/${caseIndex}/case_id duplicate case_id ${entry.case_id}`);
     }
     seen.add(entry.case_id);
   });
   return errors;
+}
+
+/** Duplicate `case_id` values inside one task's evalset. The schema already checked the shape. */
+function validateEvalset(task: AgentTask, taskIndex: number): string[] {
+  const cases = task.evalset?.cases;
+  if (!cases) return [];
+  return evalsetDuplicateCaseIds(cases, `/tasks/${taskIndex}/evalset/cases`);
 }
 
 function validateCheck(check: AgentTaskCheck, path: string): string[] {

@@ -396,6 +396,7 @@ export function AgentsPage() {
 
               <AgentTasksEditor
                 tasks={form.tasks}
+                docs={editing?.docs}
                 showErrors={showErrors}
                 onChange={(tasks) => {
                   setForm((current) => ({ ...current, tasks }));

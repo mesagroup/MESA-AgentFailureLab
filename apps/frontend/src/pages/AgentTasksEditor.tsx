@@ -1,11 +1,12 @@
-import type { ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   CHECK_REGISTRY,
   CHECK_TYPES,
   TASK_EVALSET_VERSION,
   TASK_PERMISSIONS,
   isCheckType,
+  type Agent,
   type AgentTask,
   type AgentTaskCheck,
   type CheckParamField,
@@ -13,6 +14,8 @@ import {
 } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { generateEvalset } from "@/lib/api";
+import { applyProposedEvalset, buildEvalsetGenerateBody, evalsetAiErrorText } from "@/lib/evalset";
 import { appendEvalCase, evalsetErrorMessage, evalsetIssues, removeEvalCase, writeEvalCase } from "@/lib/tasks";
 
 export function blankTasks(): AgentTask[] {
@@ -50,13 +53,19 @@ export function validateTasks(tasks: AgentTask[]): string | undefined {
 
 export function AgentTasksEditor({
   tasks,
+  docs,
   showErrors = false,
   onChange,
 }: {
   tasks: AgentTask[];
+  docs?: Agent["docs"];
   showErrors?: boolean;
   onChange: (tasks: AgentTask[]) => void;
 }) {
+  const [instructions, setInstructions] = useState<Record<number, string>>({});
+  const [aiBusy, setAiBusy] = useState<Record<number, boolean>>({});
+  const [aiError, setAiError] = useState<Record<number, string>>({});
+  const [aiToast, setAiToast] = useState<Record<number, string>>({});
   function patch(index: number, recipe: (task: AgentTask) => void) {
     onChange(
       tasks.map((task, taskIndex) => {
@@ -66,6 +75,32 @@ export function AgentTasksEditor({
         return next;
       }),
     );
+  }
+
+  async function runEvalsetAi(index: number, mode: "generate" | "revise") {
+    const task = tasks[index];
+    if (!task) return;
+    setAiBusy((current) => ({ ...current, [index]: true }));
+    setAiError((current) => ({ ...current, [index]: "" }));
+    setAiToast((current) => ({ ...current, [index]: "" }));
+    try {
+      const result = await generateEvalset(
+        buildEvalsetGenerateBody(task, { mode, instruction: instructions[index], docs }),
+      );
+      patch(index, (next) => applyProposedEvalset(next, result.evalset));
+      setAiToast((current) => ({
+        ...current,
+        [index]: "Proposed evalset loaded into this form. Review the cases. Nothing is saved until you save the Agent.",
+      }));
+    } catch (error) {
+      const shown = evalsetAiErrorText(error);
+      setAiError((current) => ({
+        ...current,
+        [index]: shown.details ? `${shown.message} (${shown.details})` : shown.message,
+      }));
+    } finally {
+      setAiBusy((current) => ({ ...current, [index]: false }));
+    }
   }
 
   return (
@@ -321,8 +356,45 @@ export function AgentTasksEditor({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground/80">
-              Helps Grok judge this task&apos;s Trace or Run. It does not replace the verifier. Pass and fail still come from the checks above.
+              Helps Grok judge this task&apos;s Trace or Run. It does not replace the verifier. Pass and fail still come from the checks above. AI assist proposes cases only; it does not judge a Trace or Run here.
             </p>
+            <Field label="Instruction for AI (optional)">
+              <textarea
+                value={instructions[index] ?? ""}
+                rows={2}
+                placeholder="Optional. Example: cover the product-page claim and keep case ids stable."
+                className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none"
+                onChange={(event) =>
+                  setInstructions((current) => ({ ...current, [index]: event.target.value }))
+                }
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="gap-1.5"
+                disabled={Boolean(aiBusy[index])}
+                onClick={() => void runEvalsetAi(index, "generate")}
+              >
+                <Sparkles className="h-3 w-3" />
+                {aiBusy[index] ? "Working…" : "Genera evalset"}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="gap-1.5"
+                disabled={Boolean(aiBusy[index]) || evalCases.length === 0}
+                onClick={() => void runEvalsetAi(index, "revise")}
+              >
+                <Sparkles className="h-3 w-3" />
+                Modifica con AI
+              </Button>
+            </div>
+            {aiToast[index] ? <p className="text-xs text-foreground">{aiToast[index]}</p> : null}
+            {aiError[index] ? <p className="text-xs text-destructive">{aiError[index]}</p> : null}
             {task.evalset ? (
               <p className={task.evalset.version === TASK_EVALSET_VERSION ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
                 Version {task.evalset.version}
