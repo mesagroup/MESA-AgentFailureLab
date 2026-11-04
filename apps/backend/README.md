@@ -75,6 +75,19 @@ pnpm --filter @mesa/backend jury-demo -- --run
 
 `--run` needs the shop and this server already up. `--export` rewrites `fixtures/jury/*.json` and starts a shop itself.
 
+## Backup and reset
+
+These are CLI scripts, not HTTP routes. From the repo root, the extra `--` is required so pnpm forwards the flags. `DATABASE_URL` selects Postgres. A copied `apps/backend/.env` is read when that variable is blank in the shell. A shell value wins. Details, PowerShell, cutover, and rollback are in [docs/persistence.md](../../docs/persistence.md).
+
+```bash
+pnpm --filter @mesa/backend db:export -- --out mesa-backup.json
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+pnpm --filter @mesa/backend db:reset -- --yes
+```
+
+`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. `db:reset` deletes runs, traces, and agents other than `reference-shop`. The seed row stays, including an edited one. `--yes` is required. There is no reset route.
+
 ## Dashboard snapshot
 
 No auth. The lab dashboard reads two lists. `GET /agents` is the agent registry. `GET /runs` is the run and trace store. Both are memory when `DATABASE_URL` is unset and Postgres when it is set. Together they are a harness session snapshot: the records those stores hold right now. With Postgres, the run and trace rows are still there after a restart. `counts.scope` stays `harness_session`. ADR-001 leaves multi-day series, uptime percentages, and agent ranking out of this API.
@@ -137,13 +150,13 @@ The reference seed is `reference-shop` (`instance.kind` `reference`, five tasks)
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`. `session.ts` builds the dashboard snapshot from runs, traces, and the agent count
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
 - `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
-- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged
-- `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`
+- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged. Backup does not add a migration
+- `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`. `cli.ts` is `db:export`, `db:import`, and `db:reset`
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
 
 ## Persistence
 
-Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those stores, the `AgentStore` and `RunStore` interfaces, `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, seed and 409 behavior, retention, every `/agents` status code with request and response examples, the dashboard `GET /runs` snapshot, env vars, the Compose and Windows PowerShell runbook, and the Postgres-only tests. Cutover, backup, and a jury reset procedure are still [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75).
+Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those stores, the `AgentStore` and `RunStore` interfaces, `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, seed and 409 behavior, retention, every `/agents` status code with request and response examples, the dashboard `GET /runs` snapshot, env vars, the Compose and Windows PowerShell runbook, the Postgres-only tests, and the backup, jury reset, cutover, rollback, and Render free-plan limits ([#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75)).
 
 `GET /runs` reads that run store and builds the dashboard snapshot above. The store lists oldest first. `sessionView` reverses that list so the snapshot is newest start first.
 
@@ -153,4 +166,4 @@ Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-
 pnpm --filter @mesa/backend test
 ```
 
-Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Run and trace store tests in `test/runs.test.ts` always run. Postgres tests in `test/agents-postgres.test.ts` and `test/runs-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI. Point that variable at a local Postgres 16. Do not point it at Render. PowerShell: `$env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"`.
+Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Run and trace store tests in `test/runs.test.ts` always run. Backup tests in `test/transfer.test.ts` always run (in-memory round trip, idempotent re-import, reset keeping the seed, HTTP export). Postgres tests in `test/agents-postgres.test.ts`, `test/runs-postgres.test.ts`, and `test/transfer-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI. Point that variable at a local Postgres 16. Do not point it at Render. The backup file uses schema `mesa_transfer_test` and does not write `public`. PowerShell: `$env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"`.
