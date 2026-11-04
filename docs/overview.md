@@ -42,6 +42,8 @@ The web UI is a scaffold. It does not call the backend.
 | **Testa agente** — start a test, list runs, toggle faults | Planned ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` already starts a batch. |
 | **Ispeziona traccia** — timeline, culprit step, diagnosis when present | Planned ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)). `GET /traces` already returns stored traces. Hand-written traces are in `packages/shared/examples`. |
 | Open the fix as a GitHub issue | Planned ([#52](https://github.com/mesagroup/MESA-AgentFailureLab/issues/52)). Agent has no destination repository field yet. |
+| **Fix → replay → before/after** — choose a proposed fix, replay `after_fix`, compare `outcome.verifier` | Planned ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). `POST /runs` with `phase: after_fix` and `fix_kinds` exists; the fix is recorded, not yet sent to the agent ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). |
+| Demo script and video storyboard | Planned ([#56](https://github.com/mesagroup/MESA-AgentFailureLab/issues/56)) → `docs/demo-script.md`. |
 
 ## Under evaluation
 
@@ -54,7 +56,7 @@ These areas are still being shaped. Some lab machinery already exists. The scree
 
 ## Open points
 
-- UX for choosing proposed fixes, replaying `after_fix`, and showing before/after from `outcome.verifier` ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)).
+- UX for choosing proposed fixes (#53): one fix or several, who confirms.
 - Structured jury, as above.
 - Regression content: the demo task list versus a custom suite.
 - Extra screens beyond Agent CRUD, Testa agente, and Ispeziona traccia.
@@ -63,7 +65,7 @@ These areas are still being shaped. Some lab machinery already exists. The scree
 
 This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-verifier-grok.md). The architectural freeze for the mock, the verifier, and Grok is [ADR-001](../adr/001-mock-verifier-grok.md). Further decisions go in [`adr/`](../adr/README.md) as `NNN-kebab-title.md`. They do not go in this folder.
 
-## Three surfaces
+## Code ownership
 
 | Path | Team | Owns |
 | --- | --- | --- |

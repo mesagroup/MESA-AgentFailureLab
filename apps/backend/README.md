@@ -1,6 +1,6 @@
 # @mesa/backend
 
-Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Runs and traces are stored in memory.
+Harness for the Agent Failure Lab. It runs an agent's tasks (T1–T5 on the shopping demo), injects labeled faults, and is the only writer of `outcome.verifier`. Runs and traces are stored in memory.
 
 The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
