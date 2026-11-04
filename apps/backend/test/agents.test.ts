@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import { openAgentStore, agentStoreKind } from "../src/agents/open.js";
-import { listMigrationFiles, postgresPoolConfig } from "../src/agents/postgres.js";
+import { listMigrationFiles, normalizeMigrationSql, postgresPoolConfig } from "../src/agents/postgres.js";
 import { MemoryAgentStore, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
@@ -51,8 +51,13 @@ describe("agent store selection", () => {
     }
   });
 
-  it("lists the agent migrations in order", () => {
-    assert.deepEqual(listMigrationFiles(), ["001_agents.sql"]);
+  it("lists the migrations in order", () => {
+    assert.deepEqual(listMigrationFiles(), ["001_agents.sql", "002_runs.sql", "003_traces.sql"]);
+  });
+
+  it("normalizes a BOM and Windows CRLF before a migration is applied", () => {
+    assert.equal(normalizeMigrationSql("\uFEFFselect 1;\r\nselect 2;\r"), "select 1;\nselect 2;\n");
+    assert.equal(normalizeMigrationSql("select 1;\n"), "select 1;\n");
   });
 
   it("turns Render sslmode=require into unverified TLS and leaves local URLs alone", () => {

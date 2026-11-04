@@ -166,7 +166,7 @@ async function runOne(
     injection_plan: plan,
     fix_kinds: fixKinds,
   };
-  options.store.saveRun(running);
+  await options.store.saveRun(running);
 
   try {
     const prepared = await prepareWorld(taskId, options.mock, sessionId);
@@ -265,8 +265,8 @@ async function runOne(
       diagnosis: null,
     };
 
-    const savedTrace = options.store.saveTrace(trace);
-    const savedRun = options.store.saveRun({
+    const savedTrace = await options.store.saveTrace(trace);
+    const savedRun = await options.store.saveRun({
       ...running,
       status: status === "completed" ? "passed" : "failed",
       trace_ids: [savedTrace.trace_id],
@@ -286,7 +286,7 @@ async function runOne(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Harness error";
-    options.store.saveRun({
+    await options.store.saveRun({
       ...running,
       status: "error",
       trace_ids: [],
@@ -295,7 +295,7 @@ async function runOne(
     });
     if (error instanceof ContractError) throw error;
     return {
-      run: options.store.getRun(runId) ?? running,
+      run: (await options.store.getRun(runId)) ?? running,
       trace: null,
       prepass: [],
       session_id: sessionId,

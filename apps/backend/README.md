@@ -1,6 +1,6 @@
 # @mesa/backend
 
-Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Agent records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. Runs and traces stay in memory. See [persistence](../../docs/persistence.md).
+Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Agent, Run, and Trace records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. See [persistence](../../docs/persistence.md).
 
 The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
@@ -28,7 +28,7 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents in memory.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
 
 Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
@@ -38,7 +38,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness, contract version, `agent_store` (`memory` or `postgres`), paths Grok must not write |
+| `GET` | `/health` | Liveness, contract version, `agent_store` and `run_store` (`memory` or `postgres`), paths Grok must not write |
 | `GET` | `/agents` | `{ agents }` list, ordered by `created_at` then `agent_id` |
 | `GET` | `/agents/:agent_id` | One agent. 404 if absent |
 | `POST` | `/agents` | Create. Body is an Agent document. Omit `agent_id`, `created_at`, and `updated_at` and the server assigns them. 201, 400 if invalid, 409 if the id exists |
@@ -48,7 +48,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `POST` | `/runs` | Batch. Body: `phase`, optional `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `grant_cancel`, `timeout_ms` |
 | `GET` | `/attacker/jury-case` | Juror note and the security plan. Does not start a run |
 | `POST` | `/attacker/jury-case` | Unattacked T5 (grant is `read` only) and the attacker case. Optional `include_baseline` (default true) |
-| `GET` | `/runs` | In-memory runs, newest start first, plus `trace_links` and harness-session `counts`. See [Dashboard snapshot](#dashboard-snapshot) |
+| `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
@@ -65,7 +65,7 @@ pnpm --filter @mesa/backend jury-demo -- --run
 
 ## Dashboard snapshot
 
-No auth. The lab dashboard reads two lists that already exist on this process. `GET /agents` is the agent registry (memory, or Postgres when `DATABASE_URL` is set). `GET /runs` is the in-memory Run/Trace store. Together they are a harness session snapshot: the records this process holds right now. `counts.scope` is `harness_session`. ADR-001 leaves multi-day series, uptime percentages, and agent ranking out of this API.
+No auth. The lab dashboard reads two lists. `GET /agents` is the agent registry. `GET /runs` is the run and trace store. Both are memory when `DATABASE_URL` is unset and Postgres when it is set. Together they are a harness session snapshot: the records those stores hold right now. With Postgres, the run and trace rows are still there after a restart. `counts.scope` stays `harness_session`. ADR-001 leaves multi-day series, uptime percentages, and agent ranking out of this API.
 
 ### `GET /agents`
 
@@ -125,15 +125,15 @@ The reference seed is `reference-shop` (`instance.kind` `reference`, five tasks)
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`. `session.ts` builds the dashboard snapshot from runs, traces, and the agent count
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
 - `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
-- `migrations/` — numbered SQL files. `001_agents.sql` is the only one so far. Later files can add Run and Trace tables
-- `src/persistence/` — in-memory Run and Trace store. Saves are validated with `@mesa/shared/validate`
+- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged
+- `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
 
 ## Persistence
 
-Agent records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those two stores, the `AgentStore` interface, `001_agents.sql`, seed and 409 behavior, every `/agents` status code with request and response examples, env vars, the Compose and Windows PowerShell runbook, the Postgres-only tests, and what Run/Trace persistence (PR 2) still has to add.
+Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those stores, the `AgentStore` and `RunStore` interfaces, `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, seed and 409 behavior, retention, every `/agents` status code with request and response examples, the dashboard `GET /runs` snapshot, env vars, the Compose and Windows PowerShell runbook, and the Postgres-only tests. Cutover, backup, and a jury reset procedure are still [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75).
 
-Runs and traces are not in that store. `GET /runs` reads them from memory for the dashboard snapshot above.
+`GET /runs` reads that run store and builds the dashboard snapshot above. The store lists oldest first. `sessionView` reverses that list so the snapshot is newest start first.
 
 ## Tests
 
@@ -141,4 +141,4 @@ Runs and traces are not in that store. `GET /runs` reads them from memory for th
 pnpm --filter @mesa/backend test
 ```
 
-Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Postgres tests in `test/agents-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI.
+Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Run and trace store tests in `test/runs.test.ts` always run. Postgres tests in `test/agents-postgres.test.ts` and `test/runs-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI. Point that variable at a local Postgres 16. Do not point it at Render. PowerShell: `$env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"`.

@@ -55,11 +55,61 @@ export function postgresPoolConfig(connectionString: string): pg.PoolConfig {
   };
 }
 
-function quoteIdent(name: string): string {
+export function quoteIdent(name: string): string {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) {
     throw new Error(`Invalid Postgres identifier ${name}.`);
   }
   return name;
+}
+
+/**
+ * SQL files are LF in git. A Windows checkout may hand the runner CRLF, and a
+ * copied file may start with a BOM. Postgres accepts either ending, but one
+ * normalized form keeps the script identical on both.
+ */
+export function normalizeMigrationSql(sql: string): string {
+  return sql.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/**
+ * Apply every pending `migrations/*.sql` file in name order.
+ * Each file runs in its own transaction. A file already recorded in
+ * `schema_migrations` is skipped. Shipped files stay unchanged; add the next
+ * numbered file instead. Agent and run stores both call this.
+ */
+export async function applyMigrations(pool: pg.Pool, dir = migrationsDirectory()): Promise<void> {
+  const files = listMigrationFiles(dir);
+  if (files.length === 0) {
+    throw new Error(`No SQL migrations found in ${dir}.`);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
+        version text PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    for (const file of files) {
+      const seen = await client.query(`SELECT 1 FROM ${MIGRATION_TABLE} WHERE version = $1`, [file]);
+      if ((seen.rowCount ?? 0) > 0) continue;
+      const sql = normalizeMigrationSql(readFileSync(join(dir, file), "utf8"));
+      try {
+        await client.query("BEGIN");
+        await client.query(sql);
+        await client.query(
+          `INSERT INTO ${MIGRATION_TABLE} (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`,
+          [file],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    }
+  } finally {
+    client.release();
+  }
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -98,39 +148,7 @@ export class PostgresAgentStore implements AgentStore {
   }
 
   async migrate(): Promise<void> {
-    const dir = migrationsDirectory();
-    const files = listMigrationFiles(dir);
-    if (files.length === 0) {
-      throw new Error(`No SQL migrations found in ${dir}.`);
-    }
-    const client = await this.pool.connect();
-    try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS ${MIGRATION_TABLE} (
-          version text PRIMARY KEY,
-          applied_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      for (const file of files) {
-        const seen = await client.query(`SELECT 1 FROM ${MIGRATION_TABLE} WHERE version = $1`, [file]);
-        if ((seen.rowCount ?? 0) > 0) continue;
-        const sql = readFileSync(join(dir, file), "utf8");
-        try {
-          await client.query("BEGIN");
-          await client.query(sql);
-          await client.query(
-            `INSERT INTO ${MIGRATION_TABLE} (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`,
-            [file],
-          );
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        }
-      }
-    } finally {
-      client.release();
-    }
+    await applyMigrations(this.pool);
   }
 
   async list(): Promise<Agent[]> {

@@ -125,7 +125,7 @@ describe("harness HTTP API", { concurrency: false }, () => {
       assert.equal(storedTrace.statusCode, 200);
       assert.equal(storedTrace.json().outcome.verifier.passed, false);
       assert.equal(storedTrace.json().diagnosis, null);
-      assert.equal(store.getTrace(failed.trace.trace_id)?.fault.labels[0]?.code, "forged_tool_result");
+      assert.equal((await store.getTrace(failed.trace.trace_id))?.fault.labels[0]?.code, "forged_tool_result");
     } finally {
       await app.close();
     }

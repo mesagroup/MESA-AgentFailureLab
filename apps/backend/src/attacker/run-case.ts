@@ -139,7 +139,7 @@ interface BuiltAttempt {
   store: RunStore;
 }
 
-function commitBuilt(input: BuiltAttempt): JuryAttempt {
+async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
   const runId = `run-${JURY_TASK_ID}-${input.phase}-${randomUUID()}`;
   const traceId = `trace-${JURY_TASK_ID}-${input.phase}-${randomUUID()}`;
   const label = input.labels[0];
@@ -166,7 +166,7 @@ function commitBuilt(input: BuiltAttempt): JuryAttempt {
     injection_plan: finishedPlan,
     fix_kinds: [],
   };
-  input.store.saveRun(running);
+  await input.store.saveRun(running);
 
   try {
     const outcome = verifyOutcome({
@@ -204,8 +204,8 @@ function commitBuilt(input: BuiltAttempt): JuryAttempt {
       },
       diagnosis: null,
     };
-    const savedTrace = input.store.saveTrace(trace);
-    const savedRun = input.store.saveRun({
+    const savedTrace = await input.store.saveTrace(trace);
+    const savedRun = await input.store.saveRun({
       ...running,
       status: status === "completed" ? "passed" : "failed",
       trace_ids: [savedTrace.trace_id],
@@ -222,7 +222,7 @@ function commitBuilt(input: BuiltAttempt): JuryAttempt {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Harness error";
-    input.store.saveRun({
+    await input.store.saveRun({
       ...running,
       status: "error",
       trace_ids: [],
@@ -261,7 +261,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
       startedMs,
     });
     const shopState = await options.mock.state();
-    baseline = commitBuilt({
+    baseline = await commitBuilt({
       agentId: options.agent.agent_id,
       store: options.store,
       phase: "baseline",
@@ -301,7 +301,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
     actions: consulted.actions,
   });
   const shopState = await options.mock.state();
-  const attacked = commitBuilt({
+  const attacked = await commitBuilt({
     agentId: options.agent.agent_id,
     store: options.store,
     phase: "injected",

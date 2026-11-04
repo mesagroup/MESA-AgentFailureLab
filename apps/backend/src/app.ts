@@ -60,6 +60,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     contract_version: CONTRACT_VERSION,
     mock_base_url: mockBaseUrl,
     agent_store: agents.kind,
+    run_store: store.kind,
     grok_forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
 
@@ -79,22 +80,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.get("/runs", async () => {
     const agentsNow = await agents.list();
     return sessionView({
-      runs: store.listRuns(),
-      traces: store.listTraces(),
+      runs: await store.listRuns(),
+      traces: await store.listTraces(),
       agentCount: agentsNow.length,
     });
   });
 
   app.get<{ Params: { runId: string } }>("/runs/:runId", async (request, reply) => {
-    const run = store.getRun(request.params.runId);
+    const run = await store.getRun(request.params.runId);
     if (!run) return reply.code(404).send({ error: "not_found", message: `No run ${request.params.runId}` });
     return run;
   });
 
-  app.get("/traces", async () => ({ traces: store.listTraces() }));
+  app.get("/traces", async () => ({ traces: await store.listTraces() }));
 
   app.get<{ Params: { traceId: string } }>("/traces/:traceId", async (request, reply) => {
-    const trace = store.getTrace(request.params.traceId);
+    const trace = await store.getTrace(request.params.traceId);
     if (!trace) {
       return reply.code(404).send({ error: "not_found", message: `No trace ${request.params.traceId}` });
     }

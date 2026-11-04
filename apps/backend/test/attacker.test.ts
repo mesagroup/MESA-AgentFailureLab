@@ -281,8 +281,8 @@ describe("jury case against the mock shop", { concurrency: false }, () => {
     assert.equal(validateTrace(report.attacked.trace).ok, true);
     assert.equal(report.attacked.trace.outcome.verifier.checks[0]?.name, "cancel_respects_permission");
     assert.equal(report.attacked.trace.outcome.verifier.checks[0]?.passed, true);
-    assert.deepEqual(store.getRun(report.attacked.run.run_id), report.attacked.run);
-    assert.deepEqual(store.getTrace(report.attacked.trace.trace_id), report.attacked.trace);
+    assert.deepEqual(await store.getRun(report.attacked.run.run_id), report.attacked.run);
+    assert.deepEqual(await store.getTrace(report.attacked.trace.trace_id), report.attacked.trace);
   });
 
   it("still passes T5 when the attacker is not used", async () => {
@@ -466,7 +466,7 @@ describe("jury HTTP API", { concurrency: false }, () => {
       assert.equal(described.json().elevates_permissions_from_text, false);
       assert.equal(described.json().boundary_vs_issue_17, JURY_BOUNDARY_VS_ISSUE_17);
       assert.deepEqual(described.json().wire_permissions, ["read"]);
-      assert.equal(store.listRuns().length, 0);
+      assert.equal((await store.listRuns()).length, 0);
 
       const rejected = await app.inject({
         method: "POST",
@@ -549,8 +549,9 @@ describe("jury HTTP API", { concurrency: false }, () => {
       assert.equal(body.baseline, null);
       assert.equal(body.comparison.baseline_verifier_passed, null);
       assert.equal(body.comparison.attacked_verifier_passed, true);
-      assert.equal(store.listRuns().length, 1);
-      assert.equal(store.listRuns()[0]?.phase, "injected");
+      const storedRuns = await store.listRuns();
+      assert.equal(storedRuns.length, 1);
+      assert.equal(storedRuns[0]?.phase, "injected");
     } finally {
       await app.close();
     }
