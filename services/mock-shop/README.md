@@ -17,6 +17,8 @@ That is `turbo run dev --filter=@mesa/mock-shop`. It listens on `http://127.0.0.
 
 `pnpm --filter @mesa/mock-shop build` then `pnpm --filter @mesa/mock-shop start` runs the compiled server. This package is not part of `apps/backend`.
 
+The container image is `services/mock-shop/Dockerfile`, built from the repo root. It listens on `0.0.0.0:8787` and answers `GET /health`. Compose service `mesa-mock-shop` and the Render service of the same name use that image. See [docs/deploy.md](../../docs/deploy.md).
+
 ## Permissions
 
 Header: `X-Permissions: read,write:cart,write:order,write:order:cancel`
