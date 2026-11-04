@@ -4,14 +4,19 @@ import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
+import { registerAgentRoutes } from "./agents/routes.js";
+import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
+import { sessionView } from "./harness/session.js";
+import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
   store?: RunStore;
+  agents?: AgentStore;
   agent?: Agent;
   mockBaseUrl?: string;
   mock?: MockShopClient;
@@ -19,12 +24,16 @@ export interface BuildAppOptions {
 
 /**
  * Harness API. This process is not the mock shop.
+ * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
+ * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
+  registerFrontendCors(app);
   const store = options.store ?? new MemoryStore();
+  const agents = options.agents ?? new MemoryAgentStore();
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";
   const agent = options.agent ?? loadReferenceAgent();
   const mock = options.mock ?? createHttpMockClient(mockBaseUrl);
@@ -54,8 +63,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     role: "harness",
     contract_version: CONTRACT_VERSION,
     mock_base_url: mockBaseUrl,
+    agent_store: agents.kind,
+    run_store: store.kind,
     grok_forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
+
+  registerAgentRoutes(app, agents);
 
   app.get("/faults", async () => ({
     faults: FAULT_CATALOG.map((entry) => ({
@@ -68,18 +81,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     presets: TASK_FAULT_PRESETS,
   }));
 
-  app.get("/runs", async () => ({ runs: store.listRuns() }));
+  app.get("/runs", async () => {
+    const agentsNow = await agents.list();
+    return sessionView({
+      runs: await store.listRuns(),
+      traces: await store.listTraces(),
+      agentCount: agentsNow.length,
+    });
+  });
 
   app.get<{ Params: { runId: string } }>("/runs/:runId", async (request, reply) => {
-    const run = store.getRun(request.params.runId);
+    const run = await store.getRun(request.params.runId);
     if (!run) return reply.code(404).send({ error: "not_found", message: `No run ${request.params.runId}` });
     return run;
   });
 
-  app.get("/traces", async () => ({ traces: store.listTraces() }));
+  app.get("/traces", async () => ({ traces: await store.listTraces() }));
 
   app.get<{ Params: { traceId: string } }>("/traces/:traceId", async (request, reply) => {
-    const trace = store.getTrace(request.params.traceId);
+    const trace = await store.getTrace(request.params.traceId);
     if (!trace) {
       return reply.code(404).send({ error: "not_found", message: `No trace ${request.params.traceId}` });
     }
@@ -96,7 +116,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         agent,
         store,
         mock,
+        mockBaseUrl,
         includeBaseline: parsed.includeBaseline,
+        fixKinds: parsed.fixKinds,
+        note: parsed.note,
+        taskId: parsed.taskId,
+        permissions: parsed.permissions,
+        parentRunId: parsed.parentRunId,
       });
     } catch (error) {
       if (error instanceof ContractError) {
@@ -110,9 +136,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.post("/runs", async (request, reply) => {
     const parsed = parseRunRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    const registered = await agents.get(parsed.value.agentId);
+    if (!registered) {
+      return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
+    }
     try {
       const results = await runTasks({
-        agent,
+        agent: registered,
         store,
         mock,
         mockBaseUrl,
@@ -139,6 +169,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 }
 
 interface RunRequest {
+  agentId: string;
   phase: RunPhase;
   taskIds?: string[];
   driver?: DriverMode;
@@ -149,23 +180,71 @@ interface RunRequest {
   timeoutMs?: number;
 }
 
-function parseJuryRequest(
-  body: unknown,
-): { ok: true; includeBaseline: boolean } | { ok: false; message: string } {
+function parseJuryRequest(body: unknown):
+  | {
+      ok: true;
+      includeBaseline: boolean;
+      fixKinds?: string[];
+      note?: string;
+      taskId?: string;
+      permissions?: string[];
+      parentRunId?: string;
+    }
+  | { ok: false; message: string } {
   if (body === undefined || body === null) return { ok: true, includeBaseline: true };
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
-  if (body.include_baseline === undefined) return { ok: true, includeBaseline: true };
-  if (typeof body.include_baseline !== "boolean") {
+  if (body.include_baseline !== undefined && typeof body.include_baseline !== "boolean") {
     return { ok: false, message: "include_baseline must be a boolean." };
   }
-  return { ok: true, includeBaseline: body.include_baseline };
+  let fixKinds: string[] | undefined;
+  if (body.fix_kinds !== undefined) {
+    if (!Array.isArray(body.fix_kinds) || body.fix_kinds.some((kind) => typeof kind !== "string")) {
+      return { ok: false, message: "fix_kinds must be an array of strings." };
+    }
+    fixKinds = body.fix_kinds;
+  }
+  let note: string | undefined;
+  if (body.note !== undefined) {
+    if (typeof body.note !== "string") return { ok: false, message: "note must be a string." };
+    note = body.note;
+  }
+  let taskId: string | undefined;
+  if (body.task_id !== undefined) {
+    if (typeof body.task_id !== "string" || body.task_id.trim() === "") {
+      return { ok: false, message: "task_id must be a non-empty string." };
+    }
+    taskId = body.task_id.trim();
+  }
+  let permissions: string[] | undefined;
+  if (body.permissions !== undefined) {
+    if (!Array.isArray(body.permissions) || body.permissions.some((entry) => typeof entry !== "string")) {
+      return { ok: false, message: "permissions must be an array of strings." };
+    }
+    permissions = body.permissions;
+  }
+  let parentRunId: string | undefined;
+  if (body.parent_run_id !== undefined) {
+    if (typeof body.parent_run_id !== "string" || body.parent_run_id.trim() === "") {
+      return { ok: false, message: "parent_run_id must be a non-empty string." };
+    }
+    parentRunId = body.parent_run_id.trim();
+  }
+  return {
+    ok: true,
+    includeBaseline: body.include_baseline === undefined ? true : body.include_baseline,
+    fixKinds,
+    note,
+    taskId,
+    permissions,
+    parentRunId,
+  };
 }
 
 function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok: false; message: string } {
-  if (body === undefined || body === null) {
-    return { ok: true, value: { phase: "baseline" } };
-  }
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
+  if (typeof body.agent_id !== "string" || body.agent_id.trim() === "") {
+    return { ok: false, message: "agent_id is required and must be a non-empty string." };
+  }
 
   const phase = body.phase === undefined ? "baseline" : body.phase;
   if (phase !== "baseline" && phase !== "injected" && phase !== "after_fix") {
@@ -227,6 +306,7 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
   return {
     ok: true,
     value: {
+      agentId: body.agent_id,
       phase,
       taskIds,
       driver,

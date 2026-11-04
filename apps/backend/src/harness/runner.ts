@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, FixKind, InjectionPlan, Run, RunPhase, Trace, TraceStatus } from "@mesa/shared";
 import { FIX_KINDS } from "@mesa/shared";
-import { probeAgent, runRemoteAgent, type AgentRunResponse } from "../agent/http.js";
+import { agentRunRequest, probeAgent, runRemoteAgent, type AgentRunResponse } from "../agent/http.js";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { normalizePlan, presetPlan } from "../injector/catalog.js";
 import type { MockShopClient } from "../mock/client.js";
@@ -9,11 +9,11 @@ import { ContractError, type RunStore } from "../persistence/memory.js";
 import { taskById } from "../reference-agent.js";
 import { prePass, type PrePassFinding } from "../verifier/prepass.js";
 import { verifyOutcome } from "../verifier/verify.js";
-import { executeAttempt, traceBounds } from "./execute.js";
+import { executeAttempt, traceBounds, type ToolBoundaryHook } from "./execute.js";
 import { prepareWorld } from "./world.js";
 
 export type DriverMode = "scripted" | "http" | "auto";
-export type InjectionRequest = "preset" | null | Record<string, unknown>;
+export type InjectionRequest = "preset" | null | InjectionPlan | Record<string, unknown>;
 
 export interface RunTasksOptions {
   agent: Agent;
@@ -28,9 +28,23 @@ export interface RunTasksOptions {
   parentRunId?: string | null;
   grantCancel?: boolean;
   timeoutMs?: number;
+  /**
+   * Appended to the task prompt the agent sees and to the user step.
+   * Poisoned content only. Not a second speaker.
+   */
+  attachedNote?: string;
+  /**
+   * Set only when the security attacker (or another attacker) is driving this run.
+   * Requires an injection plan. Baseline stays unset.
+   */
+  attackerPayloadId?: string;
+  /** Agent-service tool hook. Absent on catalog presets, which keep their own effect. */
+  toolHook?: ToolBoundaryHook;
   /** Override the remote agent poster. Tests use this to avoid a live agent process. */
   callAgent?: (baseUrl: string, request: Parameters<typeof runRemoteAgent>[1]) => Promise<AgentRunResponse>;
   probe?: (baseUrl: string) => Promise<boolean>;
+  /** Test hook for `controlled_retry` backoff. Production waits. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface TaskRunResult {
@@ -85,6 +99,19 @@ function resolveFixKinds(phase: RunPhase, fixKinds: readonly string[] | undefine
   return kinds;
 }
 
+function resolveAttackerPayloadId(value: string | undefined, plan: InjectionPlan | null): string | null {
+  if (value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) throw new Error("attacker payload id must be a non-empty string.");
+  if (!plan) throw new Error("An attacker payload requires an injection plan.");
+  return trimmed;
+}
+
+function withAttachedNote(prompt: string, note: string | undefined): string {
+  if (note === undefined || note.length === 0) return prompt;
+  return `${prompt}\n\n${note}`;
+}
+
 function agentBaseUrl(agent: Agent, phase: RunPhase): string {
   return phase === "baseline" ? agent.instance.base_url : agent.test_instance.base_url;
 }
@@ -120,7 +147,8 @@ async function runOne(
   const task = taskById(options.agent, taskId);
   const plan = resolvePlan(options.phase, taskId, options.injection);
   const fixKinds = resolveFixKinds(options.phase, options.fixKinds);
-  const permissions = permissionsFor(taskId, options.grantCancel ?? true);
+  const attackerPayloadId = resolveAttackerPayloadId(options.attackerPayloadId, plan);
+  const permissions = permissionsFor(task, options.grantCancel ?? true);
   const sessionId = sessionIdFor(taskId);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runId = `run-${taskId}-${options.phase}-${randomUUID()}`;
@@ -138,21 +166,23 @@ async function runOne(
     injection_plan: plan,
     fix_kinds: fixKinds,
   };
-  options.store.saveRun(running);
+  await options.store.saveRun(running);
 
   try {
-    const prepared = await prepareWorld(taskId, options.mock, sessionId);
+    const prepared = await prepareWorld(task, options.mock, sessionId);
+    const prompt = withAttachedNote(task.prompt, options.attachedNote);
     const remote = await loadActions(
       options,
       driver,
-      task.prompt,
-      taskId,
+      running,
+      prompt,
+      task,
       sessionId,
       permissions,
       prepared.orderId,
     );
     const execution = await executeAttempt({
-      prompt: task.prompt,
+      prompt,
       taskId,
       actions: remote.actions,
       client: options.mock,
@@ -162,6 +192,9 @@ async function runOne(
       timeoutMs,
       startedMs,
       claimedSuccess: remote.claimedSuccess,
+      toolHook: options.toolHook,
+      fixKinds: running.fix_kinds,
+      sleep: options.sleep,
     });
     const shopState = await options.mock.state();
     const outcome = verifyOutcome({
@@ -225,13 +258,15 @@ async function runOne(
       fault: {
         injected: finishedPlan !== null,
         labels: finishedPlan ? execution.labels : [],
-        attacker: { used: false, payload_id: null },
+        attacker: attackerPayloadId
+          ? { used: true, payload_id: attackerPayloadId }
+          : { used: false, payload_id: null },
       },
       diagnosis: null,
     };
 
-    const savedTrace = options.store.saveTrace(trace);
-    const savedRun = options.store.saveRun({
+    const savedTrace = await options.store.saveTrace(trace);
+    const savedRun = await options.store.saveRun({
       ...running,
       status: status === "completed" ? "passed" : "failed",
       trace_ids: [savedTrace.trace_id],
@@ -251,7 +286,7 @@ async function runOne(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Harness error";
-    options.store.saveRun({
+    await options.store.saveRun({
       ...running,
       status: "error",
       trace_ids: [],
@@ -260,7 +295,7 @@ async function runOne(
     });
     if (error instanceof ContractError) throw error;
     return {
-      run: options.store.getRun(runId) ?? running,
+      run: (await options.store.getRun(runId)) ?? running,
       trace: null,
       prepass: [],
       session_id: sessionId,
@@ -273,25 +308,29 @@ async function runOne(
 async function loadActions(
   options: RunTasksOptions,
   driver: "scripted" | "http",
+  run: Run,
   prompt: string,
-  taskId: string,
+  task: Agent["tasks"][number],
   sessionId: string,
   permissions: string[],
   orderId: string | undefined,
 ): Promise<{ actions: PlannedAction[]; claimedSuccess?: boolean }> {
   if (driver === "scripted") {
-    return { actions: scriptedActions(taskId, { permissions, orderId }) };
+    return { actions: scriptedActions(task, { permissions, orderId }) };
   }
   const call = options.callAgent ?? runRemoteAgent;
-  const response = await call(agentBaseUrl(options.agent, options.phase), {
+  const request = agentRunRequest({
     agent_id: options.agent.agent_id,
-    task_id: taskId,
+    task_id: task.task_id,
+    task,
     prompt,
     session_id: sessionId,
     permissions,
     mock_base_url: options.mockBaseUrl,
     order_id: orderId,
+    fix_kinds: run.fix_kinds,
   });
+  const response = await call(agentBaseUrl(options.agent, options.phase), request);
   if (response.executed) {
     throw new Error(
       "This harness MVP mediates tool calls. The agent response must set executed to false and return actions.",

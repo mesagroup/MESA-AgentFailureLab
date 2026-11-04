@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FAULT_CATEGORIES, type InjectionPlan } from "@mesa/shared";
-import { scriptedActions } from "../src/agent/scripted.js";
+import { scriptedActions as planFromTask } from "../src/agent/scripted.js";
+import { loadReferenceAgent } from "../src/reference-agent.js";
+
+const seedTasks = new Map(loadReferenceAgent().tasks.map((task) => [task.task_id, task]));
+
+function scriptedActions(taskId: string, ctx: { permissions: readonly string[]; orderId?: string }) {
+  const task = seedTasks.get(taskId);
+  if (!task) throw new Error(`No seed task ${taskId}.`);
+  return planFromTask(task, ctx);
+}
 import { executeAttempt } from "../src/harness/execute.js";
 import {
   FAULT_CATALOG,

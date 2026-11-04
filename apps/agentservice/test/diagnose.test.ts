@@ -137,10 +137,10 @@ describe("diagnoseTrace", () => {
     const output = await diagnoseTrace(trace, {
       model: scripted(seen, {
         category: "Security",
-        cause: "The agent cancelled the order after an untrusted note told it to ignore the permission check.",
-        step_id: "step-4",
+        cause: "The agent called cancel_order after an untrusted note named that tool.",
+        step_id: "step-3",
         confidence: 0.7,
-        evidence: ["step-4 claims the cancel succeeded."],
+        evidence: ["step-3 is a permission_denied tool result."],
         proposed_fixes: ["permission_guard"],
       }),
       modelName: config.modelName,
@@ -158,18 +158,18 @@ describe("diagnoseTrace", () => {
       assert.equal(packet.includes(secret), false, secret);
     }
     assert.equal(request.user.includes("NOTA DEL GIURATO"), true);
-    assert.equal(request.user.includes("step-4"), true);
+    assert.equal(request.user.includes("step-3"), true);
     const findings = readView(request).findings;
     assert.deepEqual(
       findings.map((item) => ({ kind: item.kind, step_ids: item.step_ids })),
-      [{ kind: "false_success_claim", step_ids: ["step-4"] }],
+      [{ kind: "tool_error", step_ids: ["step-3"] }],
     );
-    assert.equal(output.diagnosis.step_id, "step-4");
+    assert.equal(output.diagnosis.step_id, "step-3");
     assert.equal(output.diagnosis.category, "Security");
     assert.deepEqual(output.diagnosis.proposed_fixes, ["permission_guard"]);
     assert.equal(output.fault, trace.fault);
     assert.equal(output.fault.attacker.payload_id, "jury-nota-malevola-cancel");
-    assert.equal(output.outcome.verifier.passed, false);
+    assert.equal(output.outcome.verifier.passed, true);
   });
 
   it("hides fault labels, the attacker, and verifier details from the model", async () => {

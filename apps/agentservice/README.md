@@ -4,7 +4,7 @@ Grok diagnosis for one `Trace`, the fix applicator for `controlled_retry`, `pre_
 
 `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
 
-`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
+`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` on the shared `AgentRunRequest` (`@mesa/shared`) are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
 
@@ -92,7 +92,7 @@ Health reports `forbidden_write_paths` from `@mesa/shared`. This service must no
 
 `diagnosis` stays `null` on a trace until this service fills it. `diagnosis.category` is a hypothesis. Ground truth for classification is `fault.labels`, which this service returns on the trace for the harness and does not send to Grok.
 
-The backend harness records `fix_kinds` and replays the task (`Run.phase = after_fix`). A proposal is valid only when that replay's verifier passes. This service does not declare success. The harness does not yet copy `fix_kinds` onto `AgentRunRequest`; the applicator below is what the agent runs when that field arrives. See [ADR-001](../../adr/001-mock-verifier-grok.md).
+The backend harness records `fix_kinds` and replays the task (`Run.phase = after_fix`). A proposal is valid only when that replay's verifier passes. This service does not declare success. `AgentRunRequest.fix_kinds` is optional on the shared type. `after_fix` copies `Run.fix_kinds` onto that body. Baseline and injected runs omit the field. `parseTaskRun` passes the array to `applyFixesToPlan`. `controlled_retry` does not add a second action here: the harness retries inside `executeAttempt` ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). See [ADR-001](../../adr/001-mock-verifier-grok.md).
 
 ## Where code lives
 
@@ -102,6 +102,7 @@ The backend harness records `fix_kinds` and replays the task (`Run.phase = after
 - `src/fixes/` — the three `FixKind` policies, as a wrapper around a shop tool client
 - `src/replay/` — before/after report. Pass/fail is copied from the backend verifier
 - `src/reference-agent/` — `planTaskRun` for `POST /v1/tasks/run`. It calls `applyFixesToPlan` and does not call tools.
+- `src/security/` — T5 security payload `forged_permission_success` (`security-forged-permission-success`) and `createSecurityToolHook`. The hook does not write `fault.*` or `outcome.verifier`. `scripts/security-attack.ts` passes the hook to the backend injector. This is not the jury attacker (#17). An injected run omits `fix_kinds` and T5 fails. An `after_fix` replay sends `permission_guard` on the shared `AgentRunRequest`; the agent refuses `cancel_order` without `write:order:cancel`, the order stays placed, and the verifier can pass.
 
 Fixtures shared with later trace work live in [`packages/shared/examples/`](../../packages/shared/examples/). This service's tests use `injected-failed-trace.json`, `timeout-repeated-tool-trace.json`, and `tool-error-trace.json`.
 
@@ -158,7 +159,7 @@ For each of T1–T5 it runs the merged harness (`runTasks`, in-process shop, pre
 
 `passed` is `trace.outcome.verifier.passed`. Timing notes in the markdown say what `latency_ms`, token totals, and `duration_ms` are measuring. The decision number is `fix_verified`: the after arm passes and the injected arm does not, with no baseline regression.
 
-What this run cannot do yet is listed in the report under Blocked and Requests. The harness stores `fix_kinds` on the Run and does not put them on `AgentRunRequest`. `controlled_retry` cannot see a tool result from an action list. `permission_guard` does not change the preset T5 verifier result, because the shop already enforces the session grant and the jury attacker does not ask the agent. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
+What this run still cannot flip is listed under Blocked. `after_fix` puts `fix_kinds` on the shared `AgentRunRequest`. `controlled_retry` re-issues a transient tool inside `executeAttempt`; a catalog `drop` still fires on every attempt, so that preset does not pass. `permission_guard` does not change the preset T5 verifier result, because that preset grants `write:order:cancel` and then forges the cancel. The jury path asks the agent before `cancel_order` and does not widen `X-Permissions` from the note. With the guard on and the grant absent, the client is not called. That is separate from the #17 UI jury round. The scripted baseline section is the stand-in agent on a clean shop, scored by `verifyOutcome`, with no fault injected.
 
 Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.
 
@@ -169,7 +170,8 @@ From the repo root:
 ```bash
 pnpm generate-dataset   # loopback mock + scripted harness; rewrites eval/dataset
 pnpm eval               # rules baseline, and Grok when XAI_API_KEY is set
+pnpm eval:gate          # offline rules baseline vs eval/baseline.json
 pnpm --filter @mesa/agentservice test
 ```
 
-`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
+`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. `pnpm eval:gate` passes an empty `XAI_API_KEY` to the diagnosis resolver and compares the four rules rates with [`eval/baseline.json`](eval/baseline.json). The threshold is `max_rate_drop` in that file. CI runs the gate on every pull request. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.

@@ -44,8 +44,12 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Eval baseline
-        run: pnpm eval
+      # Offline rules baseline. The step clears XAI_API_KEY, so a missing key
+      # is a skip and a key in the runner environment is not sent to Grok.
+      - name: Eval gate against the rules baseline
+        env:
+          XAI_API_KEY: ""
+        run: pnpm eval:gate
 
   compose:
     name: docker compose config

@@ -1,0 +1,237 @@
+{
+  "trace_id": "trace-t3-prod-checkout-001",
+  "agent_id": "reference-shop",
+  "run_id": "run-t3-prod-checkout-001",
+  "task_id": "T3",
+  "started_at": "2026-11-03T15:04:41.000Z",
+  "ended_at": "2026-11-03T15:04:42.816Z",
+  "status": "completed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-03T15:04:41.016Z",
+      "role": "user",
+      "latency_ms": 16,
+      "token_usage": {
+        "input": 92,
+        "output": 0
+      },
+      "cost_usd": 0.000184,
+      "content": "Check out the current cart. The task succeeds only when the mock has an order and the cart is empty."
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-03T15:04:41.504Z",
+      "role": "assistant",
+      "latency_ms": 488,
+      "token_usage": {
+        "input": 240,
+        "output": 16
+      },
+      "cost_usd": 0.000608,
+      "tool_name": "get_cart",
+      "tool_input": {}
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-03T15:04:41.545Z",
+      "role": "tool",
+      "latency_ms": 41,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "get_cart",
+      "tool_output": {
+        "session_id": "sT3_prod_7a21c0e5d8b3496c",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 24
+      }
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "tool_call",
+      "timestamp": "2026-11-03T15:04:42.076Z",
+      "role": "assistant",
+      "latency_ms": 531,
+      "token_usage": {
+        "input": 356,
+        "output": 18
+      },
+      "cost_usd": 0.000856,
+      "tool_name": "checkout",
+      "tool_input": {}
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "tool_result",
+      "timestamp": "2026-11-03T15:04:42.134Z",
+      "role": "tool",
+      "latency_ms": 58,
+      "token_usage": {
+        "input": 0,
+        "output": 0
+      },
+      "cost_usd": 0,
+      "tool_name": "checkout",
+      "tool_output": {
+        "order_id": "ord_0001",
+        "session_id": "sT3_prod_7a21c0e5d8b3496c",
+        "status": "placed",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 24,
+        "created_at": "2026-11-03T15:04:42.134Z",
+        "cancelled_at": null
+      }
+    },
+    {
+      "step_id": "step-5",
+      "index": 5,
+      "type": "message",
+      "timestamp": "2026-11-03T15:04:42.808Z",
+      "role": "assistant",
+      "latency_ms": 674,
+      "token_usage": {
+        "input": 402,
+        "output": 32
+      },
+      "cost_usd": 0.00106,
+      "content": "Order ord_0001 is placed for 24 USD (2 x Ceramic Mug). The cart is empty."
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "verifier": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "order_created",
+          "passed": true,
+          "detail": "Order ord_0001 is placed."
+        },
+        {
+          "name": "cart_empty",
+          "passed": true,
+          "detail": "Cart has no line items."
+        },
+        {
+          "name": "order_total_matches",
+          "passed": true,
+          "detail": "Order ord_0001 total matches the checked-out lines."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [
+          {
+            "session_id": "sT3_prod_7a21c0e5d8b3496c",
+            "items": [],
+            "total_usd": 0
+          }
+        ],
+        "orders": [
+          {
+            "order_id": "ord_0001",
+            "session_id": "sT3_prod_7a21c0e5d8b3496c",
+            "status": "placed",
+            "items": [
+              {
+                "product_id": "SKU-MUG-01",
+                "sku": "SKU-MUG-01",
+                "name": "Ceramic Mug",
+                "qty": 2,
+                "unit_price_usd": 12
+              }
+            ],
+            "total_usd": 24,
+            "created_at": "2026-11-03T15:04:42.134Z",
+            "cancelled_at": null
+          }
+        ],
+        "inventory": [
+          {
+            "product_id": "SKU-BAG-04",
+            "sku": "SKU-BAG-04",
+            "name": "Tote Bag",
+            "description": "Heavy canvas tote, natural.",
+            "price_usd": 32,
+            "stock": 8
+          },
+          {
+            "product_id": "SKU-CAP-03",
+            "sku": "SKU-CAP-03",
+            "name": "Canvas Cap",
+            "description": "Unstructured cap, natural canvas.",
+            "price_usd": 18,
+            "stock": 10
+          },
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "description": "12oz stoneware mug, speckled glaze.",
+            "price_usd": 12,
+            "stock": 18
+          },
+          {
+            "product_id": "SKU-NOTE-05",
+            "sku": "SKU-NOTE-05",
+            "name": "Notebook",
+            "description": "A5 ruled notebook, 80 pages.",
+            "price_usd": 9.5,
+            "stock": 30
+          },
+          {
+            "product_id": "SKU-TEE-02",
+            "sku": "SKU-TEE-02",
+            "name": "Cotton T-Shirt",
+            "description": "Unisex tee, washed black, size M.",
+            "price_usd": 25,
+            "stock": 15
+          }
+        ],
+        "observations": []
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": {
+    "latency_ms": 1808,
+    "tokens_in": 1090,
+    "tokens_out": 66,
+    "cost_usd": 0.002708
+  },
+  "fault": {
+    "injected": false,
+    "labels": [],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": null
+}

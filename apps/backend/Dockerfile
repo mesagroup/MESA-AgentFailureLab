@@ -32,7 +32,11 @@ RUN pnpm exec turbo run build --filter=@mesa/backend
 
 # pnpm 10 deploys injected workspace packages unless --legacy is set.
 # --legacy copies this package (including dist) and production deps to /out.
-RUN pnpm --filter @mesa/backend deploy --prod --legacy /out
+# SQL migrations are read from /app/migrations at startup. Copy them explicitly
+# so a deploy file filter cannot drop them.
+RUN pnpm --filter @mesa/backend deploy --prod --legacy /out \
+ && mkdir -p /out/migrations \
+ && cp -a apps/backend/migrations/. /out/migrations/
 
 FROM node:22-bookworm-slim AS runner
 

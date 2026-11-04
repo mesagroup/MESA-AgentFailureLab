@@ -159,10 +159,37 @@ export interface AgentTaskCheck {
   params?: Record<string, unknown>;
 }
 
+/** One line the harness adds to the session cart before the agent runs. */
+export interface AgentTaskCartLine {
+  sku: string;
+  qty: number;
+}
+
+/**
+ * One order the harness creates before the agent runs.
+ * `from_cart` checks out the cart that `setup.cart` just seeded.
+ * The shop assigns `order_id`. The harness passes that id as `order_id`.
+ */
+export interface AgentTaskSeedOrder {
+  from_cart: true;
+}
+
+/**
+ * World the harness builds for one task, and the permissions it grants the agent.
+ * Seeding the cart and checking out use the harness's own shop permissions.
+ * `permissions` is the grant on the agent request, not that seed call.
+ */
+export interface AgentTaskSetup {
+  cart: AgentTaskCartLine[];
+  orders: AgentTaskSeedOrder[];
+  permissions: string[];
+}
+
 export interface AgentTask {
   task_id: string;
   title: string;
   prompt: string;
+  setup: AgentTaskSetup;
   success_test: {
     type: "verifier_checks";
     checks: AgentTaskCheck[];
@@ -228,4 +255,30 @@ export interface Run {
   fix_kinds: FixKind[];
   error_message?: string;
   duration_ms?: number;
+}
+
+/**
+ * Body of `POST /v1/tasks/run`.
+ * The harness builds it and the reference agent reads it. It is not a Trace,
+ * a Run, or an Agent document, and it has no JSON Schema.
+ * `task` is the definition the agent plans from. `prompt` is the text it sees:
+ * `task.prompt`, plus an attached note when the harness added one.
+ * `fix_kinds` is optional. Omit it, or send `[]`, when the run applies no fix.
+ */
+export interface AgentRunRequest {
+  agent_id: string;
+  task_id: string;
+  /** Full task. The reference agent plans from this object. */
+  task: AgentTask;
+  prompt: string;
+  session_id: string;
+  permissions: string[];
+  mock_base_url: string;
+  /** Present when `task.setup` created an order the agent must use. */
+  order_id?: string;
+  /**
+   * Fixes to apply on this attempt.
+   * Only `controlled_retry`, `pre_response_check`, and `permission_guard`.
+   */
+  fix_kinds?: FixKind[];
 }

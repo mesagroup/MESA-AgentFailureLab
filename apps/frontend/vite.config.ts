@@ -14,9 +14,10 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     proxy: {
-      "/agents": "http://127.0.0.1:3001",
-      "/runs": "http://127.0.0.1:3001",
-      "/traces": "http://127.0.0.1:3001",
+      "/api": {
+        target: "http://127.0.0.1:3001",
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
     },
   },
   preview: {

@@ -4,11 +4,14 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  CHECK_TYPES,
   FAULT_CATEGORIES,
   FIX_KINDS,
   RUN_PHASES,
   RUN_STATUSES,
+  TASK_PERMISSIONS,
   TRACE_STATUSES,
+  type Agent,
   type Trace,
 } from "../src/index.js";
 import {
@@ -140,7 +143,57 @@ describe("examples", () => {
     );
     for (const task of result.value.tasks) {
       assert.equal(task.success_test.type, "verifier_checks");
+      assert.ok(Array.isArray(task.setup.cart));
+      assert.ok(Array.isArray(task.setup.orders));
+      assert.ok(task.setup.permissions.length > 0);
     }
+    const checkout = result.value.tasks.find((task) => task.task_id === "T3");
+    assert.deepEqual(checkout?.setup.cart, [{ sku: "SKU-MUG-01", qty: 2 }]);
+    assert.deepEqual(checkout?.setup.orders, []);
+    const cancel = result.value.tasks.find((task) => task.task_id === "T5");
+    assert.deepEqual(cancel?.setup.orders, [{ from_cart: true }]);
+    assert.deepEqual(cancel?.setup.permissions, ["read", "write:order:cancel"]);
+  });
+
+  it("rejects an unknown check, invalid params, and a duplicate task id", () => {
+    const unknown = clone(agent) as Agent;
+    unknown.tasks[0]!.success_test.checks[0]!.name = "task_complete";
+    assert.equal(validateAgent(unknown).ok, false);
+
+    const missingQty = clone(agent) as Agent;
+    missingQty.tasks[1]!.success_test.checks[0]!.params = { sku: "SKU-MUG-01" };
+    const missing = validateAgent(missingQty);
+    assert.equal(missing.ok, false);
+    if (!missing.ok) assert.match(missing.errors.join(" "), /qty/);
+
+    const extra = clone(agent) as Agent;
+    extra.tasks[1]!.success_test.checks[0]!.params = { sku: "SKU-MUG-01", qty: 2, note: "no" };
+    const extraResult = validateAgent(extra);
+    assert.equal(extraResult.ok, false);
+    if (!extraResult.ok) assert.match(extraResult.errors.join(" "), /note/);
+
+    const duplicate = clone(agent) as Agent;
+    duplicate.tasks[1]!.task_id = "T1";
+    const duplicated = validateAgent(duplicate);
+    assert.equal(duplicated.ok, false);
+    if (!duplicated.ok) assert.match(duplicated.errors.join(" "), /duplicate task_id T1/);
+  });
+
+  it("keeps the check registry and the agent schema on the same names", () => {
+    const schema = JSON.parse(readFileSync(join(root, "schemas", "agent.schema.json"), "utf8")) as {
+      $defs: {
+        task: {
+          properties: {
+            setup: { properties: { permissions: { items: { enum: string[] } } } };
+            success_test: { properties: { checks: { items: { properties: { name: { enum: string[] } } } } } };
+          };
+        };
+      };
+    };
+    assert.deepEqual(schema.$defs.task.properties.success_test.properties.checks.items.properties.name.enum, [
+      ...CHECK_TYPES,
+    ]);
+    assert.deepEqual(schema.$defs.task.properties.setup.properties.permissions.items.enum, [...TASK_PERMISSIONS]);
   });
 
   it("accepts the injected run that points at the trace", () => {

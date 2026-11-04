@@ -6,7 +6,7 @@
  * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
-export const CONTRACT_VERSION = "0.1.0";
+export const CONTRACT_VERSION = "0.2.0";
 
 /** Trace paths Grok must not write. The harness and verifier own them. */
 export const GROK_FORBIDDEN_WRITE_PATHS = [
@@ -28,11 +28,29 @@ export {
   TRACE_STORE_KINDS,
 } from "./types.js";
 
+export {
+  CHECK_REGISTRY,
+  CHECK_TYPES,
+  TASK_PERMISSIONS,
+  isCheckType,
+  validateAgentTasks,
+} from "./checks.js";
+
+export type { CheckParamField, CheckParamType, CheckType, CheckTypeSpec } from "./checks.js";
+
+export { planShopTask, taskNeedsOrderId } from "./shop-plan.js";
+
+export type { ShopPlanAction, ShopPlanResult } from "./shop-plan.js";
+
 export type {
   Agent,
   AgentInstanceKind,
+  AgentRunRequest,
   AgentTask,
+  AgentTaskCartLine,
   AgentTaskCheck,
+  AgentTaskSeedOrder,
+  AgentTaskSetup,
   AgentToolDoc,
   Diagnosis,
   FaultCategory,

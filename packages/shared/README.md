@@ -10,12 +10,24 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types. This entry does not load Ajv, so the frontend can import it.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.2.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-stub.json` — the reference agent fixture (T1–T5). The harness loads this; it is not a second schema.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
+
+## Agent run request
+
+`AgentRunRequest` is the body of `POST /v1/tasks/run`. It is a TypeScript type in `src/types.ts`, not a fourth JSON Schema. Trace, Agent, and Run stay the schema documents.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `agent_id`, `task_id`, `task`, `prompt`, `session_id`, `permissions`, `mock_base_url` | yes | `task` is the full `AgentTask`. The reference agent plans from it. `prompt` is the text it sees and may include an attached note after `task.prompt` |
+| `order_id` | no | Present when `task.setup.orders` created an order |
+| `fix_kinds` | no | `controlled_retry`, `pre_response_check`, `permission_guard`. Omit it, or send `[]`, when the run applies no fix. The reference agent reads this field and passes it to `applyFixesToPlan` when the plan is the canonical lab plan |
+
+The reference agent does not write `outcome.verifier` or `fault.*`. A task it cannot plan is refused. The format of `task` is in [docs/agent-tasks.md](../../docs/agent-tasks.md).
 
 ## Run is not a Trace
 
@@ -63,7 +75,7 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 
 ## Agent
 
-`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. The reference stub registers T1–T5. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
+`instance.kind` is `reference` or `external`. `instance.base_url` is the agent runtime, not the mock shop. `tasks[].success_test.type` is `verifier_checks`. Each task has `setup` (cart, orders, granted permissions) and check `params` constrained by the check registry. The reference stub registers T1–T5 as that data. The shop that produces `mock_state_snapshot` is [`services/mock-shop`](../../services/mock-shop). Hand-written traces for T2, T3, and T5 use the harness fault codes and live in this package's `examples/` directory. The harness loads the reference stub and executes tool calls itself.
 
 ## Examples
 
@@ -75,8 +87,9 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 - [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
 - [`examples/agent-reference-stub.json`](examples/agent-reference-stub.json) — reference agent with T1–T5.
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
+- [`examples/production/`](examples/production/) — three clean production exports (T1, T3, T5) for the import screen. No fault labels. `diagnosis` is null. Usage notes are in that folder's README.
 
-`apps/agentservice` loads these traces in its diagnosis tests. The T2, T3, and T5 catalog fixtures are in this directory for the timeline and diagnosis.
+`apps/agentservice` loads the fault traces in its diagnosis tests. The T2, T3, and T5 catalog fixtures are in this directory for the timeline and diagnosis. The production files are import fixtures. They stay out of the eval manifest because they have no `fault.labels` ground truth.
 
 ## Scripts
 
