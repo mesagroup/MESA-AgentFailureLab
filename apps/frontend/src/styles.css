@@ -1,95 +1,141 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  color: #1c1917;
-  background: #f6f4ef;
-  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
-  line-height: 1.5;
+  /* Light: warm off-white — islands float over this */
+  --background: oklch(0.971 0.004 90);
+  --foreground: oklch(0.161 0.012 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.161 0.012 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.161 0.012 264);
+  --primary: oklch(0.511 0.096 186.391);
+  --primary-foreground: oklch(0.984 0.014 180.72);
+  --secondary: oklch(0.945 0.004 90);
+  --secondary-foreground: oklch(0.161 0.012 264);
+  --muted: oklch(0.945 0.004 90);
+  --muted-foreground: oklch(0.5 0.008 90);
+  --accent: oklch(0.945 0.004 90);
+  --accent-foreground: oklch(0.161 0.012 264);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.914 0.004 90);
+  --input: oklch(0.914 0.004 90);
+  --ring: oklch(0.511 0.096 186.391);
+  --chart-1: oklch(0.855 0.138 181.071);
+  --chart-2: oklch(0.704 0.14 182.503);
+  --chart-3: oklch(0.6 0.118 184.704);
+  --chart-4: oklch(0.511 0.096 186.391);
+  --chart-5: oklch(0.437 0.078 188.216);
+  --radius: 0.5rem;
+  /* Sidebar island */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.161 0.012 264);
+  --sidebar-primary: oklch(0.511 0.096 186.391);
+  --sidebar-primary-foreground: oklch(0.984 0.014 180.72);
+  --sidebar-accent: oklch(0.945 0.004 90);
+  --sidebar-accent-foreground: oklch(0.161 0.012 264);
+  --sidebar-border: oklch(0 0 0 / 0.07);
+  --sidebar-ring: oklch(0.511 0.096 186.391);
+  /* Island shadow */
+  --shadow-island: 0 1px 4px oklch(0 0 0 / 0.07), 0 0 0 1px oklch(0 0 0 / 0.05);
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  --background: oklch(0.118 0.014 265);
+  --foreground: oklch(0.985 0.003 248);
+  --card: oklch(0.213 0.025 266);
+  --card-foreground: oklch(0.985 0.003 248);
+  --popover: oklch(0.213 0.025 266);
+  --popover-foreground: oklch(0.985 0.003 248);
+  --primary: oklch(0.6 0.118 184.704);
+  --primary-foreground: oklch(0.123 0.03 268);
+  --secondary: oklch(0.27 0.02 265);
+  --secondary-foreground: oklch(0.985 0.003 248);
+  --muted: oklch(0.27 0.02 265);
+  --muted-foreground: oklch(0.627 0.013 262);
+  --accent: oklch(0.27 0.02 265);
+  --accent-foreground: oklch(0.985 0.003 248);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: oklch(0.6 0.118 184.704);
+  --chart-1: oklch(0.855 0.138 181.071);
+  --chart-2: oklch(0.704 0.14 182.503);
+  --chart-3: oklch(0.6 0.118 184.704);
+  --chart-4: oklch(0.511 0.096 186.391);
+  --chart-5: oklch(0.437 0.078 188.216);
+  /* Sidebar: dark slate at 82% opacity */
+  --sidebar: oklch(0.19 0.018 265);
+  --sidebar-foreground: oklch(0.985 0.003 248);
+  --sidebar-primary: oklch(0.6 0.118 184.704);
+  --sidebar-primary-foreground: oklch(0.118 0.014 265);
+  --sidebar-accent: oklch(0.26 0.018 265);
+  --sidebar-accent-foreground: oklch(0.985 0.003 248);
+  --sidebar-border: oklch(1 0 0 / 0.08);
+  --sidebar-ring: oklch(0.6 0.118 184.704);
+  --shadow-island: 0 2px 8px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(1 0 0 / 0.07);
 }
 
-body {
-  margin: 0;
+@theme inline {
+  --font-sans: 'Geist Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-main {
-  max-width: 52rem;
-  margin: 0 auto;
-  padding: 4rem 1.5rem 5rem;
-}
-
-.eyebrow {
-  margin: 0 0 0.5rem;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #7c2d12;
-}
-
-h1 {
-  margin: 0 0 1rem;
-  font-size: 2.4rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.lede,
-.meta {
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 1rem;
-}
-
-.meta {
-  color: #44403c;
-}
-
-code {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.92em;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-article {
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 0.75rem;
-  padding: 1rem 1rem 0.25rem;
-}
-
-h2 {
-  margin: 0 0 0.35rem;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.95rem;
-}
-
-article p {
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.92rem;
-  color: #44403c;
-}
-
-a {
-  color: #9a3412;
-}
-
-@media (max-width: 720px) {
-  main {
-    padding-top: 2.5rem;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-
-  h1 {
-    font-size: 2rem;
+  body {
+    @apply bg-background text-foreground;
   }
-
-  .grid {
-    grid-template-columns: 1fr;
+  html {
+    @apply font-sans;
   }
+}
+
+@utility shadow-island {
+  box-shadow: var(--shadow-island);
 }

@@ -22,7 +22,7 @@ pnpm install
 pnpm exec turbo run dev --filter=@mesa/backend
 ```
 
-Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-shop` when you drive a real batch.
+Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-shop` when you drive a real batch from `pnpm dev`. Compose starts `mesa-mock-shop` and sets `MOCK_SHOP_URL` to `http://mesa-mock-shop:8787`.
 
 - Dev server: http://127.0.0.1:3001
 - Health: http://127.0.0.1:3001/health

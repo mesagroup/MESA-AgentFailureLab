@@ -2,18 +2,18 @@
 
 Monorepo for Track 03 — Agent Failure Lab / CHAOS.AI. Frontend, Backend, and the AI Engineer each get an app. Contracts, product docs, and architecture decisions sit outside those apps.
 
-The lab runs a shopping agent against a mock store, scores the task with a deterministic verifier, and uses Grok only to diagnose failures and propose fixes. A fix counts after the harness replays it and the verifier agrees. The shop is its own HTTP server. The harness and the agent service call it by URL. Details: [docs/overview.md](docs/overview.md), [docs/architecture.md](docs/architecture.md), and [ADR-001](adr/001-mock-verifier-grok.md).
+CHAOS.AI / Agent Failure Lab is a generic lab: register an agent, test it with injected faults, inspect the trace, and get a diagnosis and proposed fixes. A fix counts after the harness replays it and the deterministic verifier agrees. The same loop is planned for production traces and for opening a GitHub issue from a diagnosis. The mock shop and the shopping agent (tasks T1–T5) are the demo example. The demo shop is its own HTTP server. The harness and the agent service call it by URL. Product boundaries, and what is still planned: [docs/overview.md](docs/overview.md). Runtime: [docs/architecture.md](docs/architecture.md). Freeze: [ADR-001](adr/001-mock-verifier-grok.md). Narrative: [racconto v2](https://cursor.com/canvas/store-dd8d0140-8ad3-43f8-94aa-372bb19c176d/0ad71f2e-bbbc-444f-aab0-7bf91b830aae).
 
 ## Monorepo map
 
 ```
 /
   apps/
-    frontend/        # web UI — registration, runs, timeline
-    backend/         # harness, verifier, injector, persistence
-    agentservice/    # Grok reference agent, diagnosis, fix proposals
+    frontend/        # web UI scaffold — Agent CRUD, Testa agente, Ispeziona traccia are planned
+    backend/         # harness, verifier, injector, in-memory Run/Trace persistence
+    agentservice/    # Grok diagnosis, MVP fixes, reference demo agent (T1–T5)
   services/
-    mock-shop/       # stand-alone HTTP shop; external target via URL, port 8787
+    mock-shop/       # demo HTTP shop for T1–T5; external target via URL, port 8787
   packages/
     shared/          # JSON Schema + TypeScript contracts (Trace, Agent, Run)
   docs/              # product and contributor docs (not ADRs)
@@ -25,10 +25,10 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 
 | Path | Team | Owns |
 | --- | --- | --- |
-| [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
-| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. |
-| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. The harness calls `MOCK_SHOP_URL`. Own process, separate from the harness. |
-| [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Proposes T1–T5 actions (`executed: false`). Grok diagnosis writes `diagnosis` only. |
+| [`apps/frontend`](apps/frontend/README.md) | Frontend | Scaffold today. Planned: Agent CRUD, Testa agente, Ispeziona traccia. The timeline will render `Trace`. Before/after will use `Run` + `outcome.verifier`. |
+| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. No Agent CRUD API yet. |
+| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Demo example: stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. The harness calls `MOCK_SHOP_URL`. Own process, separate from the harness. |
+| [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference demo agent proposes T1–T5 actions (`executed: false`). Grok diagnosis writes `diagnosis` only. MVP fixes: `controlled_retry`, `pre_response_check`, `permission_guard`. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
 | [`docs/`](docs/README.md) | All | Overview, runtime architecture, and contributor guide. |
 | [`adr/`](adr/README.md) | Architect | Numbered ADRs, separate from `docs/`. |
@@ -59,7 +59,7 @@ Shortcuts: `pnpm dev:frontend`, `pnpm dev:backend`, `pnpm dev:agentservice`, `pn
 
 ## Dataset e risultati
 
-Il testo fra i marcatori è l'output di `pnpm eval` (definizioni, provenienza, tabella del baseline solo-regole). Non va ricopiato a mano. Spiegazione: [docs/eval.md](docs/eval.md). Matrice di confusione e righe per trace: [apps/agentservice/eval/results/latest.md](apps/agentservice/eval/results/latest.md).
+Il dataset qui sotto è l'esempio demo (shop e task T1–T5). Il prodotto è il lab generico, in [docs/overview.md](docs/overview.md). Il testo fra i marcatori è l'output di `pnpm eval` (definizioni, provenienza, tabella del baseline solo-regole). Non va ricopiato a mano. Spiegazione: [docs/eval.md](docs/eval.md). Matrice di confusione e righe per trace: [apps/agentservice/eval/results/latest.md](apps/agentservice/eval/results/latest.md).
 
 ```bash
 pnpm generate-dataset
@@ -91,18 +91,18 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 - repeated_tool_call → Reasoning / (none)
 - timeout → Execution / controlled_retry
 
-> **Colonna Grok — segnaposto.** Non è un risultato. Si riempie eseguendo `pnpm eval` con `XAI_API_KEY` impostata.
+> **Colonna Grok — live** (`grok-3`), una passata. Errori nel denominatore: 0.
 
 | Metrica | Baseline (solo regole) | Grok |
 | --- | --- | --- |
-| Accuratezza di categoria | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step esatto | 4/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Step entro ±1 | 10/19 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Hit del fix proposto | 4/7 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Fix non applicabile | 12 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Latenza media (ms) | 0.032 | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Token in/out | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
-| Costo USD | n/a | *(segnaposto: `pnpm eval` con XAI_API_KEY)* |
+| Accuratezza di categoria | 4/19 | 5/19 |
+| Step esatto | 4/19 | 5/19 |
+| Step entro ±1 | 10/19 | 13/19 |
+| Hit del fix proposto | 4/7 | 7/7 |
+| Fix non applicabile | 12 | 12 |
+| Latenza media (ms) | 0.042 | 9852.200 |
+| Token in/out | n/a | 19746/1339 |
+| Costo USD | n/a | 0.045721 |
 <!-- eval-scoreboard:end -->
 
 ## Limiti noti
@@ -112,19 +112,20 @@ La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest
 - Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
 - L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
 - Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.
-- Senza `XAI_API_KEY` il costo di Grok è n/a. La baseline solo-regole non riporta token né costo.
+- Costo Grok riportato dal provider: 0.045721 USD (totale), token in/out 19746/1339. La baseline solo-regole non riporta token né costo.
 <!-- eval-limits:end -->
 
 Copy an app's `.env.example` to `.env` only when you need overrides. Do not commit `.env` or a Grok API key. `XAI_API_KEY` in `apps/agentservice/.env.example` is an empty placeholder.
 
 ## Docker and Render
 
-Three images, built from the repo root so `packages/shared` is in the context:
+Four images, built from the repo root so the workspace is in the context:
 
 ```bash
 docker build -f apps/frontend/Dockerfile -t mesa-frontend .
 docker build -f apps/backend/Dockerfile -t mesa-backend .
 docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .
+docker build -f services/mock-shop/Dockerfile -t mesa-mock-shop .
 docker compose up --build
 ```
 
@@ -133,12 +134,13 @@ docker compose up --build
 | `mesa-frontend` | 3000 | `GET /health` |
 | `mesa-backend` | 3001 | `GET /health` |
 | `mesa-agentservice` | 3002 | `GET /health` |
+| `mesa-mock-shop` | 8787 | `GET /health` |
 
-Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`). The Render Blueprint groups the same three free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. The shop stays off that stack: run `@mesa/mock-shop` yourself on port 8787 and set `MOCK_SHOP_URL`. It is not a Blueprint service yet ([#21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
+Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publishes the ports above on a shared network (`mesa-frontend`, `mesa-backend`, `mesa-agentservice`, `mesa-mock-shop`) and sets the harness `MOCK_SHOP_URL` to `http://mesa-mock-shop:8787`. The Render Blueprint groups the same four free Frankfurt services in project `mesa-agent-failure-lab`, environment `demo`. The shop stays its own service. Env vars, `XAI_API_KEY`, and the Dashboard apply steps: [docs/deploy.md](docs/deploy.md).
 
 ## Docs
 
-- [Overview](docs/overview.md) — product, track, boundaries
+- [Overview](docs/overview.md) — generic lab, demo shop, implemented vs planned
 - [Architecture](docs/architecture.md) — stand-alone mock shop, ports, ADR-001 writers, Render
 - [Getting started](docs/getting-started.md) — contributor workflow and stack choices
 - [Jury demo](docs/demo-jury.md) — one security case, baseline comparison, limitations
@@ -151,7 +153,7 @@ Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publ
 `packages/shared` exports the frozen shapes. `outcome.verifier` is the only pass/fail authority. `diagnosis` stays null until Grok writes it, and Grok must not write `outcome.verifier` or `fault.labels`.
 
 - **Trace** — steps, per-step timings and costs, totals, `outcome.verifier`, fault labels, `diagnosis`
-- **Agent** — instance, test instance, trace store, docs, tasks with `verifier_checks` (the reference stub has T1–T5)
-- **Run** — harness metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`), not nested in Trace
+- **Agent** — instance, test instance, trace store, docs, tasks with `verifier_checks`. Any non-empty task list is valid. The reference stub is the shopping demo and has T1–T5.
+- **Run** — harness metadata (`phase` is `baseline`, `injected`, or `after_fix`; plus `injection_plan`, `fix_kinds`, `trace_ids`), not nested in Trace
 
-Hand-written T2, T3, and T5 traces are in `packages/shared/examples` and use the injector catalog codes. The reference agent is `POST /v1/tasks/run` on port 3002. The harness owns tool execution and `outcome.verifier`.
+Hand-written T2, T3, and T5 traces are in `packages/shared/examples` and use the injector catalog codes. The reference demo agent is `POST /v1/tasks/run` on port 3002. The harness owns tool execution and `outcome.verifier`.

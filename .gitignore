@@ -22,6 +22,13 @@ coverage/
 # editor / os
 .DS_Store
 .idea/
+.vscode/
+
+# claude code
+.claude/
+
+# local handoff / notes (not committed)
+docs/
 
 # vite
 *.local
