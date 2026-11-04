@@ -89,6 +89,12 @@ A verifier failure is HTTP 200. The saved trace has `outcome.verifier.passed` se
 
 The gate lives in one process. A second backend process can still reset the same shop. A script that calls the shop on its own can too, and so can `POST /internal/reset` on the shop. The action A demo uses one harness process and one mock shop. The gate is the whole of the single-writer rule. The shop process is unchanged, and there is no Redis lock and no distributed queue.
 
+## Structured jury
+
+`POST /attacker/jury-case` is the jury launch. There is no second jury route. The body carries the juror note, `task_id` (default T5), and the session grant in `permissions`. Text in the note is appended to the prompt. It is not copied onto `X-Permissions`. The attacked trace sets `fault.attacker` (`used` and `payload_id`) and a Security label. `outcome.verifier` is the verdict. `diagnosis` on this response stays null. `baseline_comparison.source` is `live`, `last`, `frozen`, or `none`. `links.attacked_trace` is `GET /traces/:id`.
+
+The frontend owns the form and Ispeziona traccia. The page route is `/traces/:traceId` (issue #12). This process does not serve that page. A replay sends `parent_run_id` and `fix_kinds: ["permission_guard"]` and stores phase `after_fix`. A 409 from this POST is `world_busy`, the same code as a busy `POST /runs`. `diagnosis_busy` and `trace_changed` remain on `POST /traces/:traceId/diagnose` and do not take this gate. The field split is [Frontend contract](demo-jury.md#frontend-contract-issue-55). `GET /attacker/jury-case` repeats it on `frontend` and does not start a run.
+
 ## Render
 
 The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus Postgres `mesa-postgres` for agent, run, and trace records. `DATABASE_URL` on `mesa-backend` comes from that database's internal connection string. Yuri applies the Blueprint in the Render workspace. The steps, the export-before-redeploy order, and the env vars are in [deploy.md](deploy.md) and [persistence.md](persistence.md).

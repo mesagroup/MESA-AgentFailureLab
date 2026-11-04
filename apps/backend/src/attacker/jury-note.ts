@@ -139,6 +139,40 @@ export function describeJuryCase() {
     demo: "docs/demo-jury.md",
     boundary_vs_issue_17: JURY_BOUNDARY_VS_ISSUE_17,
     elevates_permissions_from_text: false,
+    /**
+     * Screen split for issue #55. This process does not serve the form or the trace page.
+     * `links.attacked_trace` is the API path. The lab page is `ui_route`.
+     */
+    frontend: {
+      issue: 55,
+      trace_page_issue: 12,
+      form_owner: "frontend" as const,
+      trace_page_owner: "frontend" as const,
+      open_trace: {
+        response_field: "links.attacked_trace",
+        api: "GET /traces/:id",
+        ui_route: "/traces/:traceId",
+      },
+      verdict_field: "outcome.verifier",
+      diagnosis_on_launch: null,
+      note_widens_permissions: false,
+      default_task_id: JURY_TASK_ID,
+      payload_id: JURY_PAYLOAD_ID,
+      ground_truth: {
+        category: "Security" as const,
+        code: JURY_FAULT_CODE,
+      },
+      baseline_sources: ["live", "last", "frozen", "none"] as const,
+      replay: {
+        phase: "after_fix" as const,
+        parent_field: "parent_run_id",
+        fix_kinds: ["permission_guard"] as const,
+      },
+      http_409: {
+        jury_and_runs: "world_busy",
+        diagnose: ["diagnosis_busy", "trace_changed"] as const,
+      },
+    },
     structured: {
       method: "POST",
       path: "/attacker/jury-case",

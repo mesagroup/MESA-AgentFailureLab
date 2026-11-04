@@ -243,6 +243,8 @@ Replay the same note with `permission_guard`. The parent is the injected run. Th
 
 `include_baseline: false` still fills `baseline_comparison` from the last stored baseline, or from the frozen T5 pair. A missing parent, a baseline parent, an unknown task, an unknown permission, an empty note, or a replay without `fix_kinds` is HTTP 400.
 
+The form and the trace page are not this process. `GET /attacker/jury-case` returns that split on `frontend`. The field table for issue #55 is [Frontend contract](../../docs/demo-jury.md#frontend-contract-issue-55). `links.attacked_trace` is `GET /traces/:id`. The lab page that renders it is `/traces/:traceId` (issue #12). `diagnosis` stays null on this response. A later `POST /traces/:traceId/diagnose` is a different call. HTTP 409 from this POST is `world_busy`. `diagnosis_busy` and `trace_changed` stay on the diagnose route.
+
 ## Backup and reset
 
 These are CLI scripts, not HTTP routes. From the repo root, the extra `--` is required so pnpm forwards the flags. `DATABASE_URL` selects Postgres. A copied `apps/backend/.env` is read when that variable is blank in the shell. A shell value wins. Details, PowerShell, cutover, and rollback are in [docs/persistence.md](../../docs/persistence.md).
