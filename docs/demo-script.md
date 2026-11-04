@@ -234,11 +234,11 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 
 **6. Scegli il fix → replay `after_fix` → before/after**
 - OGGI (2 vie):
-  - a. `POST /runs` con `{"agent_id":"reference-shop","phase":"after_fix","task_ids":["T3"],"injection":"preset","fix_kinds":["pre_response_check"]}`. Il Run registra `fix_kinds`, ma il fix **non arriva ancora all'agente** (#40/#41): il verdetto può restare failed.
+  - a. `POST /runs` con `{"agent_id":"reference-shop","phase":"after_fix","task_ids":["T3"],"injection":"preset","fix_kinds":["pre_response_check"]}`. Il Run registra `fix_kinds` e l'harness li copia sulla richiesta della nuova run (#40/#41). Non è una patch in-lab: `after_fix` è una run successiva, dopo che il possessore ha modificato l'agente sul proprio deploy. Il verdetto resta `outcome.verifier`.
   - b. Fonte attendibile per l'efficacia: `pnpm --filter @mesa/agentservice replay` → `apps/agentservice/replay/latest.md`, colonna `fix_verified` per task.
 - DOMANI (#53): in **Ispeziona traccia** → "Scegli fix" → "Replay" → vista before/after.
 - Atteso: before (injected) **failed** → after (after_fix) **passed**, senza regressioni sul baseline.
-- Fallimento tipico: after ancora failed perché `fix_kinds` non viene propagato (via a), oppure un fix non adatto alla categoria. Prima di registrare, controllare `latest.md`.
+- Fallimento tipico: after ancora failed perché il deploy del possessore non include la modifica, oppure un fix non adatto alla categoria. Prima di registrare, controllare `latest.md`.
 
 **7. Regression suite**
 - OGGI: `POST /runs` con `{"agent_id":"reference-shop","phase":"baseline"}` (senza `task_ids` = i task di quell'agente; il seed è T1–T5) → 5 trace, tutte passed. Il replay del passo 6b include anche "baseline con tutti e tre i fix" (nessuna regressione).

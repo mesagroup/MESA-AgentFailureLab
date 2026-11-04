@@ -1,13 +1,15 @@
 # Runtime architecture
 
-Four HTTP processes, plus [`@mesa/shared`](../packages/shared/README.md) as a library. [`services/mock-shop`](../services/mock-shop/README.md) is a stand-alone server on port 8787. The backend harness and the agent service call it by URL, the same way they would call any other configured target. Backend still owns the package.
+Six HTTP processes, plus Postgres when `DATABASE_URL` is set, plus [`@mesa/shared`](../packages/shared/README.md) as a library. [`services/mock-shop`](../services/mock-shop/README.md) is a stand-alone server on port 8787. [`services/mock-library`](../services/mock-library) is a stand-alone server on port 8788. The backend harness calls each mock by URL. [`apps/library-agent`](../apps/library-agent) is the library desk runtime on port 3003. The reference agent and the library desk return actions with `executed: false`. The harness performs the tool calls. Backend still owns the shop package.
 
 ```mermaid
 flowchart LR
   UI[frontend :3000]
   BE[backend harness :3001]
   AS[agentservice :3002]
-  SHOP[mock-shop stand-alone :8787]
+  LIB[library-agent :3003]
+  SHOP[mock-shop :8787]
+  MOCKLIB[mock-library :8788]
   XAI[xAI Grok API]
   PG[(Postgres)]
   SHARED["@mesa/shared schemas"]
@@ -15,16 +17,18 @@ flowchart LR
   UI --> BE
   UI --> AS
   BE -->|task driver HTTP| AS
-  BE -.->|HTTP MOCK_SHOP_URL tools + /internal/state| SHOP
-  AS -.->|HTTP tools / configured base_url| SHOP
+  BE -->|task driver HTTP| LIB
+  BE -.->|HTTP MOCK_SHOP_URL| SHOP
+  BE -.->|HTTP world.base_url from MOCK_LIBRARY_URL| MOCKLIB
   AS --> XAI
   BE -->|DATABASE_URL| PG
   BE --- SHARED
   AS --- SHARED
+  LIB --- SHARED
   UI --- SHARED
 ```
 
-Solid arrows are HTTP between the lab apps, or from the agent service to the xAI Grok API. Dotted arrows are HTTP to the stand-alone shop. The line to Postgres exists only when `DATABASE_URL` is set. The lines to `@mesa/shared` are the JSON Schema contracts those apps import.
+Solid arrows are HTTP between the lab apps, or from the agent service to the xAI Grok API. Dotted arrows are HTTP from the harness to a stand-alone mock. The reference agent and the library desk do not call those mocks. The line to Postgres exists only when `DATABASE_URL` is set. The lines to `@mesa/shared` are the JSON Schema contracts those apps import.
 
 ## Ports and URLs
 
@@ -32,14 +36,16 @@ Solid arrows are HTTP between the lab apps, or from the agent service to the xAI
 | --- | --- | --- | --- |
 | frontend | `apps/frontend` | 3000 | The page itself |
 | backend harness | `apps/backend` | 3001 | `VITE_BACKEND_URL` from the UI. `BACKEND_URL` from the agent service |
-| agentservice | `apps/agentservice` | 3002 | `VITE_AGENTSERVICE_URL` from the UI. The harness drives a task at `instance.base_url` (baseline) or `test_instance.base_url` (injected and after_fix) |
-| mock-shop | `services/mock-shop` | 8787 | `MOCK_SHOP_URL` from the harness. The harness sends that value as `mock_base_url` |
+| agentservice | `apps/agentservice` | 3002 | `VITE_AGENTSERVICE_URL` from the UI. The harness drives `reference-shop` at `instance.base_url` (baseline) or `test_instance.base_url` (injected and after_fix) |
+| library-agent | `apps/library-agent` | 3003 | `LIBRARY_AGENT_URL`. Seeded onto `external-library` `instance.base_url` and `test_instance.base_url`. The harness calls `POST {origin}/v1/tasks/run` |
+| mock-shop | `services/mock-shop` | 8787 | `MOCK_SHOP_URL` from the harness. The harness sends that value as `mock_base_url` on a shop run |
+| mock-library | `services/mock-library` | 8788 | `MOCK_LIBRARY_URL`, stored on `external-library` `world.base_url`. A library run calls that origin |
 
-`pnpm dev` binds `127.0.0.1`. The four containers bind `0.0.0.0`. For `pnpm dev`, the harness default is `MOCK_SHOP_URL=http://127.0.0.1:8787`. Compose sets `http://mesa-mock-shop:8787`. The Render Blueprint sets the public shop URL. The agent service does not read a shop base URL. The harness sends `mock_base_url` from `MOCK_SHOP_URL`. There is no `SHOP_BASE_URL` env var in this repo.
+`pnpm dev` binds `127.0.0.1`. The six web containers bind `0.0.0.0`. For `pnpm dev`, the harness default is `MOCK_SHOP_URL=http://127.0.0.1:8787` and `MOCK_LIBRARY_URL=http://127.0.0.1:8788`. Compose sets `http://mesa-mock-shop:8787` and `http://mesa-mock-library:8788`. The Render Blueprint sets the public shop and library URLs. The agent service does not read a shop base URL. The harness sends `mock_base_url` from `MOCK_SHOP_URL` on a shop run. There is no `SHOP_BASE_URL` env var in this repo. The library desk does not read `MOCK_LIBRARY_URL`. The harness calls the URL stored on the agent.
 
-`instance.base_url` is the agent runtime. It is the address the harness uses to start a task (`POST {origin}/v1/tasks/run`). It is not the shop. The seeded shop and library origins are in [seed-endpoints.md](seed-endpoints.md).
+`instance.base_url` is the agent runtime. It is the address the harness uses to start a task (`POST {origin}/v1/tasks/run`). It is not the shop and it is not the library mock. The seeded shop and library origins are in [seed-endpoints.md](seed-endpoints.md). [`render.yaml`](../render.yaml) names the same six web services: `mesa-frontend`, `mesa-backend`, `mesa-agentservice`, `mesa-mock-shop`, `mesa-library-agent`, and `mesa-mock-library`.
 
-The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /internal/state`, and `POST /internal/reset` on `MOCK_SHOP_URL`. The agent service uses the same HTTP surface for tools.
+The harness client is `apps/backend/src/mock/`. On a shop run it calls tool routes, `GET /internal/state`, and `POST /internal/reset` on `MOCK_SHOP_URL`. On a library run it uses the same client against `world.base_url`, including `POST /internal/seed`, `GET /internal/state`, and `POST /internal/reset`.
 
 ## Write boundaries
 
@@ -53,7 +59,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 | `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. Material a later Grok judgment may read for that task's Run or Trace. It is not a Trace field and it is not a writer of `outcome.verifier`. |
 | `Agent.otel` and `POST /agents/:agentId/otel/import` | User-registered source, plus a span batch mapped onto a Trace. The importer copies a supplied `outcome` and writes the empty production `fault`. It does not invent `fault.labels` or `outcome.verifier`, and it does not dial the endpoint. See [otel.md](otel.md). |
 
-`diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
+`diagnosis` stays null until that service fills it. A proposed fix counts only after a later run, once the agent owner has changed the agent on their own deploy, and the verifier passes.
 
 The explicit backend operation `POST /traces/:traceId/diagnose` loads a stored
 trace, posts it to `AGENTSERVICE_URL/diagnose`, validates that the response changes
@@ -66,13 +72,15 @@ processes can still incur duplicate provider calls. See the backend README for
 the HTTP contract and timeout. This documents runtime wiring, not a change to
 ADR-001's recorded status or ADR-002's ownership decisions.
 
-The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
+`after_fix` is a new run after the agent owner has changed the agent on their own deploy. The harness calls that deploy (`test_instance.base_url` for injected and `after_fix`). It does not edit the owner's agent in place, and it does not patch the lab world as a stand-in for that change.
 
-Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds `reference-shop` on boot, and runs and traces start empty. The shop catalog is still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. `tasks[].evalset` is stored with the agent and is not passed into the diagnose call by this process.
+On that new request the harness still copies `Run.fix_kinds` onto `AgentRunRequest` (issue #40). `controlled_retry` is applied inside `executeAttempt` for the attempt (issue #41). The reference agent can also shape the action list for that request from `fix_kinds` (`apps/agentservice/src/fixes/`, still `executed: false`). The library desk reads `permission_guard` the same way on its own `POST /v1/tasks/run`. Those flags are request behavior for the new run. They do not rewrite the stored agent. They do not inject faults and they do not write `outcome.verifier` or `fault.*`. See the agent service README for the shop policies, and for the replay that scores T1–T5 with the backend verifier.
+
+Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds both demo agents, `reference-shop` and `external-library`, on boot, and runs and traces start empty. The shop catalog and the library catalog stay in memory. Restarting a mock, or `POST /internal/reset` on that mock, restores its seed. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. The library seed and the docs in [seed-endpoints.md](seed-endpoints.md) and [agent-tasks.md](agent-tasks.md) are what is on main. Issue #109 is still open.
 
 ## One writer for the mock world
 
-`prepareWorld` calls `POST /internal/reset` on the shop before each task. That reset clears the catalog, carts, orders, and observations for every session. A different `session_id` leaves that reset shared.
+`prepareWorld` calls `POST /internal/reset` on the mock for that run before each task. On the shop, that reset clears the catalog, carts, orders, and observations for every session. A library task resets the library mock, then seeds its loans. A different `session_id` leaves that reset shared.
 
 This backend process has one gate, [`apps/backend/src/harness/world-gate.ts`](../apps/backend/src/harness/world-gate.ts). `POST /runs` acquires it before the first reset and holds it until that request has taken every snapshot, run the verifier, and saved every result in the batch. `POST /attacker/jury-case` acquires the same gate for the baseline and the attack. When the jury case calls the runner, that call re-enters the gate. A different request is rejected at the gate. The harness does not queue it.
 
@@ -95,10 +103,10 @@ The gate lives in one process. A second backend process can still reset the same
 
 `POST /attacker/jury-case` is the jury launch. There is no second jury route. The body carries the juror note, `task_id` (default T5), and the session grant in `permissions`. Text in the note is appended to the prompt. It is not copied onto `X-Permissions`. The attacked trace sets `fault.attacker` (`used` and `payload_id`) and a Security label. `outcome.verifier` is the verdict. `diagnosis` on this response stays null. `baseline_comparison.source` is `live`, `last`, `frozen`, or `none`. `links.attacked_trace` is `GET /traces/:id`.
 
-The frontend owns the form and Ispeziona traccia. The page route is `/traces/:traceId` (issue #12). This process does not serve that page. A replay sends `parent_run_id` and `fix_kinds: ["permission_guard"]` and stores phase `after_fix`. A 409 from this POST is `world_busy`, the same code as a busy `POST /runs`. `diagnosis_busy` and `trace_changed` remain on `POST /traces/:traceId/diagnose` and do not take this gate. The field split is [Frontend contract](demo-jury.md#frontend-contract-issue-55). `GET /attacker/jury-case` repeats it on `frontend` and does not start a run.
+The frontend owns the form and Ispeziona traccia. The page route is `/traces/:traceId` (issue #12, still open). This process does not serve that page. A replay is a new run: it sends `parent_run_id` and `fix_kinds: ["permission_guard"]` on the request and stores phase `after_fix`. It does not rewrite the agent record. A 409 from this POST is `world_busy`, the same code as a busy `POST /runs`. `diagnosis_busy` and `trace_changed` remain on `POST /traces/:traceId/diagnose` and do not take this gate. The field split is [Frontend contract](demo-jury.md#frontend-contract-issue-55). `GET /attacker/jury-case` repeats it on `frontend` and does not start a run. The jury form itself is still issue #55.
 
 ## Render
 
-The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus Postgres `mesa-postgres` for agent, run, and trace records. `DATABASE_URL` on `mesa-backend` comes from that database's internal connection string. Yuri applies the Blueprint in the Render workspace. The steps, the export-before-redeploy order, and the env vars are in [deploy.md](deploy.md) and [persistence.md](persistence.md).
+The demo Blueprint ([`render.yaml`](../render.yaml)) is six free web services in project `mesa-agent-failure-lab`, environment `demo`: `mesa-frontend`, `mesa-backend`, `mesa-agentservice`, `mesa-mock-shop`, `mesa-library-agent`, and `mesa-mock-library`, plus Postgres `mesa-postgres` for agent, run, and trace records. `DATABASE_URL` on `mesa-backend` comes from that database's internal connection string. Yuri applies the Blueprint in the Render workspace. The steps, the export-before-redeploy order, and the env vars are in [deploy.md](deploy.md) and [persistence.md](persistence.md). Origins per environment are in [seed-endpoints.md](seed-endpoints.md).
 
-`mesa-mock-shop` is that fourth service. It is still not part of `apps/backend`. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. Local `pnpm dev` keeps `http://127.0.0.1:8787`.
+`mesa-mock-shop` is still not part of `apps/backend`. `mesa-mock-library` is `services/mock-library`, also separate. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL` on `mesa-backend` are the public library desk and library mock. Boot writes those origins onto `external-library`. Local `pnpm dev` keeps `http://127.0.0.1:8787` and `http://127.0.0.1:8788`.
