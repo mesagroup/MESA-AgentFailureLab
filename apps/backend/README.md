@@ -39,12 +39,20 @@ curl --fail-with-body -X POST \
 curl --fail-with-body http://127.0.0.1:3001/traces/TRACE_ID
 ```
 
-The server calls `AGENTSERVICE_URL/diagnose` using the stored trace. It validates
-the full response with `validateTrace`, requires a non-null Diagnosis with an
-existing culprit step, and checks that **every field except `diagnosis`** is
-semantically identical (object-key order is irrelevant). It constructs the saved
-document from the authoritative original plus that Diagnosis. It never trusts
-remote copies of outcome, fault, steps, totals, IDs or timestamps.
+The server looks up the stored Agent with the trace's `agent_id`, then the task
+matching `task_id`. If that task has `evalset`, the upstream body is
+`{ "trace": <stored Trace>, "evalset": <task evalset> }`. Otherwise it posts the
+stored trace alone, which is the original agentservice contract. Missing agents,
+unknown task ids, and tasks that omit `evalset` all take that bare-trace path.
+There is no `POST /runs/:runId/diagnose`.
+
+The server validates the full response with `validateTrace`, requires a non-null
+Diagnosis with an existing culprit step, and checks that **every field except
+`diagnosis`** is semantically identical (object-key order is irrelevant). It
+constructs the saved document from the authoritative original plus that Diagnosis.
+It never trusts remote copies of outcome, fault, steps, totals, IDs or timestamps.
+Assisted judgement from the evalset is stored only in `diagnosis`. The evalset is
+not copied onto the Trace.
 
 The store atomically compares the current trace with the original before saving
 diagnosis. An intervening update/deletion yields `409 trace_changed` instead of
@@ -59,6 +67,12 @@ replace the mock/world gate in #97. Separate backend processes/stores can still
 issue duplicate paid calls; PostgreSQL CAS prevents lost updates, not duplicate
 provider usage. Use one backend process for this MVP. A failure after upstream
 success but before persistence can require another paid call on retry.
+
+Cache / idempotency is the stored `diagnosis` on that `trace_id`. An evalset
+edit after a successful diagnose does **not** invalidate the cache. A later
+`POST` still returns `x-diagnosis-cached: true` and does not call Grok. There is
+no force flag. Re-judging after an evalset change is a future operator action,
+not this MVP.
 
 ### Configuration and metadata
 

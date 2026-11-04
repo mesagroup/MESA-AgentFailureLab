@@ -1,8 +1,8 @@
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS } from "@mesa/shared";
-import { validateTrace } from "@mesa/shared/validate";
 import Fastify from "fastify";
 import { DiagnosisFailed, diagnoseTrace } from "./diagnosis/diagnose.js";
 import type { DiagnosisModel } from "./diagnosis/diagnose.js";
+import { parseDiagnoseRequest } from "./diagnosis/request.js";
 import {
   EvalsetGenerateError,
   generateEvalset,
@@ -29,6 +29,7 @@ export interface AppDeps {
 /**
  * Agent service.
  * `POST /diagnose` writes `Trace.diagnosis` only.
+ * The body is a Trace, or `{ trace, evalset? }` when the caller resolved a task evalset.
  * `POST /evalset/generate` proposes a TaskEvalset. It does not save an Agent.
  * `POST /v1/tasks/run` proposes tool actions with `executed: false`,
  * plus `refused` and `embedded` from the shared plan.
@@ -94,17 +95,18 @@ export function buildApp(deps: AppDeps = {}) {
   });
 
   app.post("/diagnose", async (request, reply) => {
-    const parsed = validateTrace(request.body);
+    const parsed = parseDiagnoseRequest(request.body);
     if (!parsed.ok) {
-      return reply.code(400).send({ error: "invalid_trace", errors: parsed.errors });
+      return reply.code(400).send({ error: parsed.error, errors: parsed.errors });
     }
     if (model === null) {
       return reply.code(503).send({ error: "grok_not_configured" });
     }
     try {
-      return await diagnoseTrace(parsed.value, {
+      return await diagnoseTrace(parsed.value.trace, {
         model,
         modelName: config.modelName,
+        evalset: parsed.value.evalset,
         onUsage(usage) {
           request.log.info({ diagnosis_usage: usage }, "diagnosis usage");
         },

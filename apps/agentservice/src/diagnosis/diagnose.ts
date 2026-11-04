@@ -1,5 +1,5 @@
 import { FAULT_CATEGORIES, FIX_KINDS } from "@mesa/shared";
-import type { Diagnosis, Trace, TraceStep } from "@mesa/shared";
+import type { Diagnosis, TaskEvalset, Trace, TraceStep } from "@mesa/shared";
 import { validateTrace } from "@mesa/shared/validate";
 
 /**
@@ -52,6 +52,11 @@ interface PromptView {
   totals: Trace["totals"];
   agent_claimed_success: boolean;
   findings: DiagnosisFinding[];
+  /**
+   * Present only when the caller supplied a task evalset.
+   * Guidance for writing `diagnosis`. Not a verifier verdict.
+   */
+  evalset?: TaskEvalset;
 }
 
 export interface ModelUsage {
@@ -80,6 +85,8 @@ export interface DiagnoseOptions {
   model: DiagnosisModel;
   modelName: string;
   onUsage?: (usage: ModelUsage) => void;
+  /** Task evalset resolved by the backend. Omit it to keep the original prompt. */
+  evalset?: TaskEvalset;
 }
 
 export interface DiagnosedTrace extends Trace {
@@ -97,7 +104,7 @@ export class DiagnosisFailed extends Error {
 
 export async function diagnoseTrace(trace: Trace, options: DiagnoseOptions): Promise<DiagnosedTrace> {
   const findings = prePass(trace);
-  const view = toPromptView(trace, findings);
+  const view = toPromptView(trace, findings, options.evalset);
   const prompt = renderPrompt(view);
   let completion: ModelCompletion;
   try {
@@ -224,8 +231,12 @@ export function diagnosisFindings(trace: Trace): readonly DiagnosisFinding[] {
     );
 }
 
-function toPromptView(trace: Trace, findings: readonly DiagnosisFinding[]): PromptView {
-  return {
+function toPromptView(
+  trace: Trace,
+  findings: readonly DiagnosisFinding[],
+  evalset: TaskEvalset | undefined,
+): PromptView {
+  const view: PromptView = {
     task_id: trace.task_id,
     started_at: trace.started_at,
     ended_at: trace.ended_at,
@@ -235,6 +246,10 @@ function toPromptView(trace: Trace, findings: readonly DiagnosisFinding[]): Prom
     agent_claimed_success: trace.outcome.agent_claimed_success,
     findings: [...findings],
   };
+  if (evalset !== undefined) {
+    view.evalset = evalset;
+  }
+  return view;
 }
 
 function stepsForModel(trace: Trace): TraceStep[] {
@@ -284,6 +299,13 @@ function renderPrompt(view: PromptView): { system: string; user: string } {
     "confidence is a number from 0 to 1.",
     "cause is one or two sentences on the failure mechanism.",
     "Findings are mechanical checks. Ground-truth labels and verifier checks are not in the user message. Do not invent them.",
+    ...(view.evalset !== undefined
+      ? [
+          "The evalset is user-authored GUIDANCE for judging this task's trace.",
+          "Fold that guidance into diagnosis.cause and diagnosis.evidence only.",
+          "It is not the verifier and not ground-truth labels. Do not write outcome.verifier or fault fields.",
+        ]
+      : []),
   ].join("\n");
   return { system, user: JSON.stringify(view) };
 }

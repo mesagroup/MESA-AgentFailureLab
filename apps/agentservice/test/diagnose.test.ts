@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
-import type { Trace } from "@mesa/shared";
-import { FAULT_CATEGORIES, FIX_KINDS } from "@mesa/shared";
+import type { TaskEvalset, Trace } from "@mesa/shared";
+import { FAULT_CATEGORIES, FIX_KINDS, TASK_EVALSET_VERSION } from "@mesa/shared";
 import { validateTrace } from "@mesa/shared/validate";
 import { DiagnosisFailed, diagnoseTrace } from "../src/diagnosis/diagnose.js";
 import type { DiagnosisModel, ModelCompletionRequest, ModelUsage } from "../src/diagnosis/diagnose.js";
@@ -85,6 +85,50 @@ describe("diagnoseTrace", () => {
     }
     assert.equal(seen[0]?.system.includes("culprit_step_id"), false);
     assert.equal(seen[0]?.system.includes("suggested_fix_ids"), false);
+    assert.equal(seen[0]?.system.includes("evalset"), false);
+    assert.equal(seen[0]?.system.includes("GUIDANCE"), false);
+    const promptView = JSON.parse(seen[0]!.user) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(promptView, "evalset"), false);
+  });
+
+  it("puts a supplied evalset in the prompt as guidance and still leaves verifier and fault", async () => {
+    const input = pending("injected-failed-trace.json");
+    const evalset: TaskEvalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [
+        {
+          case_id: "claim-after-catalog",
+          expectation: "The assistant claims checkout only after a confirming read.",
+          rubric: "Cite the claim step. Do not score cart state; that is outcome.verifier.",
+        },
+      ],
+    };
+    const seen: ModelCompletionRequest[] = [];
+    const frozenOutcome = input.outcome;
+    const frozenFault = input.fault;
+    const output = await diagnoseTrace(input, {
+      model: scripted(seen, {
+        category: "Verification",
+        cause: "The agent claimed success from the checkout tool result.",
+        step_id: "step-5",
+        confidence: 0.8,
+        evidence: ["step-5 claims the order was placed."],
+        proposed_fixes: ["pre_response_check"],
+      }),
+      modelName: config.modelName,
+      evalset,
+    });
+    const request = seen[0]!;
+    const view = JSON.parse(request.user) as { evalset?: TaskEvalset };
+    assert.deepEqual(view.evalset, evalset);
+    assert.equal(request.system.includes("GUIDANCE"), true);
+    assert.equal(request.system.includes("diagnosis.cause"), true);
+    assert.equal(request.system.includes("outcome.verifier"), true);
+    assert.equal(output.outcome, frozenOutcome);
+    assert.equal(output.fault, frozenFault);
+    assert.equal(output.outcome.verifier.passed, input.outcome.verifier.passed);
+    assert.deepEqual(output.fault.labels, input.fault.labels);
+    assert.equal(Object.hasOwn(output, "evalset"), false);
   });
 
   it("does not send harness phase ids to the model", async () => {

@@ -297,6 +297,12 @@ describe("examples", () => {
   });
 
   it("validates a standalone evalset with the same rules as on a task", () => {
+    const result = validateAgent(agent);
+    assertOk(result, "agent");
+    if (!result.ok) return;
+    const t1 = result.value.tasks[0]!.evalset;
+    assert.ok(t1);
+    assertOk(validateTaskEvalset(t1), "t1 evalset");
     const ok = validateTaskEvalset({
       version: TASK_EVALSET_VERSION,
       cases: [{ case_id: "claim", expectation: "Cite the catalog read." }],
@@ -304,6 +310,7 @@ describe("examples", () => {
     assertOk(ok, "evalset");
     const empty = validateTaskEvalset({ version: TASK_EVALSET_VERSION, cases: [] });
     assertOk(empty, "empty evalset");
+    assert.equal(validateTaskEvalset({ version: 2, cases: [] }).ok, false);
     const duplicate = validateTaskEvalset({
       version: TASK_EVALSET_VERSION,
       cases: [

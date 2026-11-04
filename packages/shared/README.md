@@ -108,7 +108,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 | `cases[].expectation` | yes | What the judge should look for in the Trace or Run. Not a world-state assertion. |
 | `cases[].rubric` | no | How to score the expectation. Free text. |
 
-`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. Proposing cases is `POST /evalset/generate` (agentservice, proxied by the backend). That route does not persist the Agent.
+`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. Proposing cases is `POST /evalset/generate` (agentservice, proxied by the backend). That route does not persist the Agent. `validateTaskEvalset` in `@mesa/shared/validate` checks a standalone object of that shape (including duplicate `case_id` values). The backend diagnose path may send it next to a Trace; it is still not a Trace field. `CONTRACT_VERSION` stays `0.3.0` for this HTTP envelope.
 
 ### OTel source
 
