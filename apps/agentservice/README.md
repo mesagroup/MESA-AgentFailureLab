@@ -2,7 +2,7 @@
 
 Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
 
-The reference agent (`src/reference-agent/`) and fix application (`src/fixes/`) are not in this change.
+`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. The backend harness executes the actions, injects faults, and writes the verifier. Optional `fix_kinds` are parsed and passed to `applyFixesToPlan`. That function is a pass-through in `src/reference-agent/apply-fixes-hook.ts` until [PR #36](https://github.com/mesagroup/MESA-AgentFailureLab/pull/36) merges. After that, change the import in `plan.ts` to `../fixes/plan.js`. Do not copy the three fix policies into this package. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
 

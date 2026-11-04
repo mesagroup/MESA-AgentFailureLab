@@ -6,6 +6,7 @@ import type { DiagnosisModel } from "./diagnosis/diagnose.js";
 import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
+import { parseTaskRun, planTaskRun } from "./reference-agent/plan.js";
 
 export interface AppDeps {
   config?: DiagnosisConfig;
@@ -15,7 +16,10 @@ export interface AppDeps {
 }
 
 /**
- * Agent service. `POST /diagnose` writes `Trace.diagnosis` only.
+ * Agent service.
+ * `POST /diagnose` writes `Trace.diagnosis` only.
+ * `POST /v1/tasks/run` proposes tool actions with `executed: false`.
+ * The harness executes those actions, injects faults, and writes `outcome.verifier`.
  */
 export function buildApp(deps: AppDeps = {}) {
   const config = deps.config ?? parseDiagnosisConfig(process.env);
@@ -33,7 +37,8 @@ export function buildApp(deps: AppDeps = {}) {
 
   app.get("/", async () => ({
     service: "agentservice",
-    message: "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. See GET /health.",
+    message:
+      "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. POST /v1/tasks/run proposes actions for the harness. See GET /health.",
     contract_version: CONTRACT_VERSION,
   }));
 
@@ -45,6 +50,14 @@ export function buildApp(deps: AppDeps = {}) {
     contract_version: CONTRACT_VERSION,
     forbidden_write_paths: GROK_FORBIDDEN_WRITE_PATHS,
   }));
+
+  app.post("/v1/tasks/run", async (request, reply) => {
+    const parsed = parseTaskRun(request.body);
+    if (!parsed.ok) {
+      return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    }
+    return planTaskRun(parsed.value);
+  });
 
   app.post("/diagnose", async (request, reply) => {
     const parsed = validateTrace(request.body);
