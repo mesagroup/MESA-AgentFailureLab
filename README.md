@@ -10,7 +10,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 /
   apps/
     frontend/        # web UI — registration, runs, timeline
-    backend/         # harness scaffold, verifier, persistence
+    backend/         # harness, verifier, injector, persistence
     agentservice/    # Grok reference agent, diagnosis, fix proposals
   services/
     mock-shop/       # inspectable e-commerce API for T1–T5
@@ -26,7 +26,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 | Path | Team | Owns |
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
-| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, persistence. No auth. Scaffold only for now. |
+| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, in-memory Run/Trace persistence. No auth. |
 | [`services/mock-shop`](services/mock-shop/README.md) | Backend | Mock shop: catalog, cart, checkout, cancel, `GET /internal/state`. Not inside `apps/backend`. |
 | [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference agent and Grok diagnosis. Writes `diagnosis` only. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |

@@ -13,6 +13,7 @@ Package exports:
 - `@mesa/shared` — `CONTRACT_VERSION` (`0.1.0`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types. This entry does not load Ajv, so the frontend can import it.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
+- `@mesa/shared/examples/agent-reference-stub.json` — the reference agent fixture (T1–T5). The harness loads this; it is not a second schema.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 

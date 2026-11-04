@@ -1,10 +1,19 @@
 # @mesa/backend
 
-Deterministic verifier and harness runner. This app will be the only writer of `outcome.verifier` and will record harness `Run` metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`).
+Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Runs and traces are stored in memory.
 
-The inspectable shop is a separate package, [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
+The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
-This directory is a scaffold: Fastify boots, and `GET /health` answers. There is no verifier, no persistence, and no auth.
+## What this process writes
+
+| Field | Writer |
+| --- | --- |
+| `outcome.verifier` and `outcome.success` | Deterministic verifier, from `GET /internal/state` and the task's `success_test.checks` |
+| `fault.labels`, `fault.injected` | Injector, from the Run's `injection_plan` |
+| `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner |
+| `diagnosis` | Nobody here. It stays `null` until Grok, which must not write the rows above |
+
+`outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. A fix kind recorded on an `after_fix` run is harness metadata; this MVP replays the task and scores it, and does not yet patch the agent.
 
 ## Run from the monorepo root
 
@@ -13,29 +22,43 @@ pnpm install
 pnpm exec turbo run dev --filter=@mesa/backend
 ```
 
-Equivalent root script: `pnpm dev:backend`.
+Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-shop` when you drive a real batch.
 
 - Dev server: http://127.0.0.1:3001
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT` or `HOST`. Real env files are gitignored. Do not commit database URLs.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, or `MOCK_SHOP_URL`. Do not commit `.env`.
 
-`turbo run dev` builds `@mesa/shared` first. Contracts come from that package. JSON Schema is the source of truth for Trace and Agent.
+`turbo run dev` builds `@mesa/shared` first. JSON Schema is the source of truth for Trace, Agent, and Run.
 
-## Boundaries
+## HTTP
 
-- The verifier is deterministic. It reads mock state and `success_test.checks`. It does not call Grok and it does not score trace prose.
-- Grok (in `@mesa/agentservice`) must not write `outcome.verifier` or `fault.labels`.
-- Fault labels and `attacker` are written by the injector on chaos runs.
-- A fix counts only after this harness replays the task (`phase: after_fix`) and the verifier passes. See [ADR-001](../../adr/001-mock-verifier-grok.md).
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness, contract version, paths Grok must not write |
+| `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
+| `POST` | `/runs` | Batch. Body: `phase`, optional `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `grant_cancel`, `timeout_ms` |
+| `GET` | `/runs`, `/runs/:runId` | Stored runs |
+| `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
-## Where later code goes
+`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` and expects `{ "executed": false, "actions": [...] }`. The harness then performs those actions, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
-Keep new modules inside this app so the other packages stay independent:
+Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code.
 
-- `src/verifier/` — check runner over mock-shop state (`GET /internal/state`)
-- `src/harness/` — baseline / injected / after_fix phases and `Run` persistence
-- `src/persistence/` — trace and run storage
+## Layout
 
-Do not put ADRs or product docs in this app. Use `adr/` and `docs/`.
+- `src/verifier/` — check runner and the optional loop / timeout / repeated-tool pre-pass
+- `src/injector/` — fault catalog. Labels are copied onto the trace; the plan stays on the run
+- `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`
+- `src/agent/` — scripted driver and the HTTP client for the agent under test
+- `src/persistence/` — in-memory Run and Trace store. Saves are validated with `@mesa/shared/validate`
+- `src/mock/` — HTTP client for the shop, including `GET /internal/state`
+
+## Tests
+
+```bash
+pnpm --filter @mesa/backend test
+```
+
+Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch.
