@@ -1,6 +1,6 @@
 # Deploy
 
-Four public web processes, one Postgres instance for agent records, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`. Runs and traces are not in Postgres yet.
+Four public web processes, one Postgres instance for agents, runs, and traces, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`. The same `DATABASE_URL` selects both stores. Backup, jury reset, cutover, and rollback are in [persistence.md](persistence.md). `render.yaml` is not changed by that work. Applying the database is still [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72).
 
 | Service | Image | Port | Health |
 | --- | --- | --- | --- |
@@ -72,7 +72,7 @@ Service DNS names on that network:
 
 Compose forces `HOST=0.0.0.0` and those DNS URLs for server-side calls, even if a copied `.env` still says `127.0.0.1`. That includes `MOCK_SHOP_URL=http://mesa-mock-shop:8787` on the backend. The frontend build args stay on `http://127.0.0.1:3001` and `:3002` so links in the browser hit the published ports. `apps/agentservice/.env` and `apps/backend/.env` are optional (`required: false`). When the agent service file exists, Compose loads it and does not override `XAI_API_KEY`.
 
-`mesa-postgres` is Postgres 16. Compose sets the backend `DATABASE_URL` to `postgres://mesa:mesa@mesa-postgres:5432/mesa`, which wins over a copied `apps/backend/.env`. The published port is `127.0.0.1:5432`. User, password, and database name are `mesa`. That password is a local default. The data volume is `mesa-pgdata`. The backend waits until `pg_isready` succeeds, then applies `apps/backend/migrations` (`001_agents.sql`, `002_runs.sql`, `003_traces.sql`) and seeds `reference-shop` if that id is missing. Runs and traces are not seeded. They stay in that volume across a backend restart.
+`mesa-postgres` is Postgres 16. Compose sets the backend `DATABASE_URL` to `postgres://mesa:mesa@mesa-postgres:5432/mesa`, which wins over a copied `apps/backend/.env`. The published port is `127.0.0.1:5432`. User, password, and database name are `mesa`. That password is a local default. The data volume is `mesa-pgdata`. The backend waits until `pg_isready` succeeds, then applies `apps/backend/migrations` (`001_agents.sql`, `002_runs.sql`, `003_traces.sql`) and seeds `reference-shop` if that id is missing. Runs and traces are not seeded. They stay in that volume across a backend restart. `docker compose down -v` deletes the volume. `pnpm --filter @mesa/backend db:reset -- --yes` deletes runs, traces, and non-seed agents and keeps the volume and the `reference-shop` row. Export and import use the same published URL. The procedure is in [persistence.md](persistence.md).
 
 `pnpm dev:mock-shop` is still the loopback shop on port 8787. Compose does not use that address. `GET /health` does not call the shop. `GET /health` on the backend reports `agent_store` and `run_store` as `postgres` under Compose and `memory` when `DATABASE_URL` is unset.
 
@@ -118,6 +118,20 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 `mesa-frontend`, `mesa-backend`, and `mesa-agentservice` are the hosts Render already assigned in workspace `tea-dblh716417fc738hr7vg`. `mesa-mock-shop` is the public URL for the service name. That hostname was not bound to a service when this file was written. Frontend and backend received a suffix; the agent service kept its name. After apply, if the shop slug differs, replace `MOCK_SHOP_URL` with the assigned `https://…onrender.com` URL. That is the same update [PR #39](https://github.com/mesagroup/MESA-AgentFailureLab/pull/39) made for the other hosts.
 
 A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` from this file onto the services. It also refreshes `DATABASE_URL` from `mesa-postgres`. The password stays on the Render database, not in git. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
+
+### Free Postgres, backups, and cutover
+
+Free Render Postgres expires 30 days after creation. You then have 14 days to upgrade it to a paid plan. After that grace period Render deletes the database and its data. The free plan has no backups, and storage is 1 GB. There is one free Postgres per workspace. The limits and the export that covers the missing backups are in [persistence.md](persistence.md#render-free-postgres-limits) ([Deploy for Free](https://render.com/docs/free)).
+
+`db:export` and `db:import` run on a laptop, not in the free web service (no shell). Before `DATABASE_URL` is set, export the running backend with `--base-url` and the public `mesa-backend` URL. After [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72) is applied, `GET /health` should show `agent_store` and `run_store` as `postgres`. Import with the external connection string from the Dashboard. That string is a secret. The private `connectionString` is what the backend uses inside Render. It is not reachable from a laptop. This file does not change `render.yaml`. Yuri (diamanti-sg) still applies the Blueprint.
+
+```bash
+curl -fsS https://mesa-backend-itm4.onrender.com/health
+```
+
+```powershell
+Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
+```
 
 After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` are read at runtime; a restart picks them up. The backend uses `FRONTEND_URL` as its browser CORS allowlist. See [Browser CORS](#browser-cors). Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
 

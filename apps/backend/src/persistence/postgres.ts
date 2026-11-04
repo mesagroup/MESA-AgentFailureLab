@@ -1,7 +1,22 @@
 import type { Run, Trace } from "@mesa/shared";
 import pg from "pg";
 import { applyMigrations, postgresPoolConfig, quoteIdent } from "../agents/postgres.js";
-import { assertRun, assertTrace, readStoredRun, readStoredTrace, type RunStore } from "./store.js";
+import {
+  assertRun,
+  assertTrace,
+  assertUtcTimestamp,
+  prepareImportedRun,
+  prepareImportedTrace,
+  readStoredRun,
+  readStoredTrace,
+  type RunStore,
+  type StoredDocument,
+} from "./store.js";
+
+function timestampToIso(value: Date | string, label: string): string {
+  if (value instanceof Date) return value.toISOString();
+  return assertUtcTimestamp(value, label);
+}
 
 export interface PostgresRunStoreOptions {
   /**
@@ -63,6 +78,16 @@ export class PostgresRunStore implements RunStore {
     return result.rows.map((row) => readStoredRun(row.document));
   }
 
+  async listRunRecords(): Promise<Array<StoredDocument<Run>>> {
+    const result = await this.pool.query<{ document: unknown; created_at: Date | string }>(
+      "SELECT document, created_at FROM runs ORDER BY created_at ASC, run_id ASC",
+    );
+    return result.rows.map((row) => ({
+      created_at: timestampToIso(row.created_at, "runs.created_at"),
+      document: readStoredRun(row.document),
+    }));
+  }
+
   async listRunsByAgent(agentId: string): Promise<Run[]> {
     const result = await this.pool.query<{ document: unknown }>(
       `SELECT document FROM runs
@@ -104,6 +129,16 @@ export class PostgresRunStore implements RunStore {
     return result.rows.map((row) => readStoredTrace(row.document));
   }
 
+  async listTraceRecords(): Promise<Array<StoredDocument<Trace>>> {
+    const result = await this.pool.query<{ document: unknown; created_at: Date | string }>(
+      "SELECT document, created_at FROM traces ORDER BY created_at ASC, trace_id ASC",
+    );
+    return result.rows.map((row) => ({
+      created_at: timestampToIso(row.created_at, "traces.created_at"),
+      document: readStoredTrace(row.document),
+    }));
+  }
+
   async listTracesByRun(runId: string): Promise<Trace[]> {
     const result = await this.pool.query<{ document: unknown }>(
       `SELECT document FROM traces
@@ -124,10 +159,53 @@ export class PostgresRunStore implements RunStore {
     return row ? row.created_at.toISOString() : undefined;
   }
 
+  async upsertImportedRun(run: Run, createdAt: string): Promise<"inserted" | "updated"> {
+    const prepared = prepareImportedRun(run, createdAt);
+    const existing = await this.getRun(prepared.run.run_id);
+    await this.pool.query(
+      `INSERT INTO runs (run_id, agent_id, document, created_at)
+       VALUES ($1, $2, $3::jsonb, $4::timestamptz)
+       ON CONFLICT (run_id) DO UPDATE
+       SET agent_id = EXCLUDED.agent_id,
+           document = EXCLUDED.document`,
+      [prepared.run.run_id, prepared.run.agent_id, JSON.stringify(prepared.run), prepared.createdAt],
+    );
+    return existing ? "updated" : "inserted";
+  }
+
+  async upsertImportedTrace(trace: Trace, createdAt: string): Promise<"inserted" | "updated"> {
+    const prepared = prepareImportedTrace(trace, createdAt);
+    const existing = await this.getTrace(prepared.trace.trace_id);
+    await this.pool.query(
+      `INSERT INTO traces (trace_id, run_id, agent_id, document, started_at, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, $6::timestamptz)
+       ON CONFLICT (trace_id) DO UPDATE
+       SET run_id = EXCLUDED.run_id,
+           agent_id = EXCLUDED.agent_id,
+           document = EXCLUDED.document,
+           started_at = EXCLUDED.started_at`,
+      [
+        prepared.trace.trace_id,
+        prepared.trace.run_id,
+        prepared.trace.agent_id,
+        JSON.stringify(prepared.trace),
+        prepared.trace.started_at,
+        prepared.createdAt,
+      ],
+    );
+    return existing ? "updated" : "inserted";
+  }
+
+  /** Deletes every trace, then every run, in the current search_path. Not an HTTP route. */
+  async deleteAllRunsAndTraces(): Promise<{ runs: number; traces: number }> {
+    const traces = await this.pool.query("DELETE FROM traces");
+    const runs = await this.pool.query("DELETE FROM runs");
+    return { traces: traces.rowCount ?? 0, runs: runs.rowCount ?? 0 };
+  }
+
   /** Deletes every run and trace in the current search_path. Tests only. Not an HTTP route. */
   async deleteAllRowsForTests(): Promise<void> {
-    await this.pool.query("DELETE FROM traces");
-    await this.pool.query("DELETE FROM runs");
+    await this.deleteAllRunsAndTraces();
   }
 
   async close(): Promise<void> {
