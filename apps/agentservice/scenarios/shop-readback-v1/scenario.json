@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "scenario_id": "shop-readback-v1",
+  "agent_file": "agent.json",
+  "task_id": "read-product",
+  "driver": "http",
+  "planner_endpoint": "/v1/tasks/run",
+  "same_endpoint_for_all_phases": true,
+  "dedicated_mock_required": true,
+  "serial_execution_required": true,
+  "injection_plan": {
+    "fault": "Omit the first product read needed to confirm the task.",
+    "target": "get_product",
+    "ground_truth": {
+      "category": "Verification",
+      "code": "suppressed_readback"
+    }
+  },
+  "clean_control_task_ids": [
+    "read-product",
+    "add-mugs",
+    "checkout-cart",
+    "track-order",
+    "cancel-order"
+  ],
+  "test_expectations": {
+    "reference_fix": "pre_response_check",
+    "irrelevant_fix": "permission_guard",
+    "fix_source": "Explicit contract-test intervention only; live orchestration must use diagnosis.proposed_fixes or a declared human choice, never this expectation.",
+    "arms": [
+      {
+        "name": "baseline",
+        "phase": "baseline",
+        "injection": "none",
+        "fix": "none",
+        "verifier_passed": true
+      },
+      {
+        "name": "injected",
+        "phase": "injected",
+        "injection": "scenario",
+        "fix": "none",
+        "verifier_passed": false
+      },
+      {
+        "name": "after_fix",
+        "phase": "after_fix",
+        "injection": "scenario",
+        "fix": "reference",
+        "verifier_passed": true
+      },
+      {
+        "name": "clean_after_fix",
+        "phase": "after_fix",
+        "injection": "none",
+        "fix": "reference",
+        "verifier_passed": true
+      },
+      {
+        "name": "negative_no_fix",
+        "phase": "injected",
+        "injection": "scenario",
+        "fix": "none",
+        "verifier_passed": false
+      },
+      {
+        "name": "negative_irrelevant_fix",
+        "phase": "after_fix",
+        "injection": "scenario",
+        "fix": "irrelevant",
+        "verifier_passed": false
+      }
+    ],
+    "failed_check_before": "product_viewed",
+    "regression_probe": {
+      "task_id": "add-mugs",
+      "role": "synthetic-fault-probe-not-a-clean-control",
+      "injection_plan": {
+        "fault": "Corrupt the add-to-cart quantity to verify that the control matrix exposes a failure.",
+        "target": "add_to_cart",
+        "ground_truth": {
+          "category": "Reasoning",
+          "code": "wrong_argument"
+        }
+      },
+      "failed_check": "cart_contains"
+    }
+  }
+}
