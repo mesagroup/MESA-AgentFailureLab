@@ -34,9 +34,8 @@ Container image, from the repo root: `docker build -f apps/frontend/Dockerfile -
 
 Keep product docs in `docs/` and architecture decisions in `adr/`. See [ADR-001](../../adr/001-mock-verifier-grok.md): the timeline is the trace; before/after is the run plus the verifier.
 
-## Wiring still owned by this UI
+## Agents form
 
-The backend contract for these two is in place. This app does not edit them yet.
+Create and edit store `tasks[].evalset` and optional `Agent.otel` through `POST /agents` and `PUT /agents/:agent_id`. Evalset cases are judge input for a later Grok read of that task's Trace or Run. They do not replace the verifier. There is no generate-evalset control (#121).
 
-- `Agent.tasks[].evalset` — optional judge input. `GET`/`PUT /agents/:agent_id` already round-trip it when the form keeps the cloned task. There is no generate-evalset call (#121).
-- `Agent.otel` and `POST /agents/:agentId/otel/import` — source config and span import. The response traces are ordinary `GET /traces/:traceId` documents. Mapping rules are in [docs/otel.md](../../docs/otel.md). The UI does not upload a batch yet.
+The Agents page pastes or uploads a version 1 span batch for a saved agent to `POST /agents/:agentId/otel/import` and opens the stored Trace. The form stores `auth.token_env` as an environment variable name and never sends a bearer token. Import does not call the source endpoint and does not invent `fault.labels` or `outcome.verifier`. See [docs/otel.md](../../docs/otel.md).
