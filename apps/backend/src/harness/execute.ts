@@ -8,6 +8,7 @@ import {
   staleOutput,
   type FaultEffect,
 } from "../injector/catalog.js";
+import { scrubSpoilers } from "../injector/spoilers.js";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "../agent/scripted.js";
 
@@ -54,6 +55,9 @@ function statusFromOutput(body: unknown): string | undefined {
  * Run the planned tool calls against the mock.
  * When `plan` is set, the matching call is rewritten here and the resulting step is labeled.
  * `at_step` matches the trace index of the tool_call or of the tool_result that shows the fault.
+ * A skipped call is omitted. The label is attached to the next step, where the omission shows.
+ * A plan whose target never runs is labeled on the closing assistant message.
+ * Step text does not name the injector. Ground truth stays on the labels returned to the harness.
  */
 export async function executeAttempt(args: {
   prompt: string;
@@ -71,6 +75,7 @@ export async function executeAttempt(args: {
   const labels: FaultLabel[] = [];
   const seenResults: unknown[] = [];
   let injectionUsed = false;
+  let labelNext = false;
   let timedOut = false;
 
   const definition = args.plan ? faultByCode(args.plan.ground_truth.code) : undefined;
@@ -89,11 +94,15 @@ export async function executeAttempt(args: {
       token_usage: { input: 0, output: 0 },
       cost_usd: 0,
     };
-    if (partial.content !== undefined) step.content = partial.content;
+    if (partial.content !== undefined) step.content = scrubSpoilers(partial.content);
     if (partial.tool_name !== undefined) step.tool_name = partial.tool_name;
-    if (partial.tool_input !== undefined) step.tool_input = partial.tool_input;
-    if (partial.tool_output !== undefined) step.tool_output = partial.tool_output;
+    if (partial.tool_input !== undefined) step.tool_input = scrubSpoilers(partial.tool_input);
+    if (partial.tool_output !== undefined) step.tool_output = scrubSpoilers(partial.tool_output);
     steps.push(step);
+    if (labelNext) {
+      label(step.step_id);
+      labelNext = false;
+    }
     return step;
   }
 
@@ -126,12 +135,7 @@ export async function executeAttempt(args: {
 
     if (hit && effect === "skip") {
       injectionUsed = true;
-      const step = push({
-        type: "system",
-        role: "system",
-        content: `Injector skipped ${action.tool_name}.`,
-      });
-      label(step.step_id);
+      labelNext = true;
       continue;
     }
 
@@ -188,22 +192,16 @@ export async function executeAttempt(args: {
     timedOut = true;
   }
 
-  if (args.plan && !injectionUsed) {
-    const step = push({
-      type: "system",
-      role: "system",
-      content: `Injector target ${args.plan.target} was not called.`,
-    });
-    label(step.step_id);
-  }
-
   const claimed = claimedFrom(args, seenResults, timedOut);
   const closing = timedOut
     ? "Stopped: harness timeout."
     : claimed
       ? `Success. ${args.taskId} is done.`
       : `I could not complete ${args.taskId}.`;
-  push({ type: "message", role: "assistant", content: closing });
+  const closingStep = push({ type: "message", role: "assistant", content: closing });
+  if (args.plan && labels.length === 0) {
+    label(closingStep.step_id);
+  }
 
   const reported = lastReportedStatus(steps);
   return {
