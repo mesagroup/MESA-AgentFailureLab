@@ -84,8 +84,8 @@ interface AttemptRef {
   order_id: string;
 }
 
-function lastStoredBaseline(store: RunStore, taskId: string, agentId: string): AttemptRef | null {
-  const runs = store.listRuns().filter(
+async function lastStoredBaseline(store: RunStore, taskId: string, agentId: string): Promise<AttemptRef | null> {
+  const runs = (await store.listRuns()).filter(
     (run) => run.phase === "baseline" && run.task_id === taskId && run.agent_id === agentId && run.trace_ids.length > 0,
   );
   for (let index = runs.length - 1; index >= 0; index -= 1) {
@@ -93,7 +93,7 @@ function lastStoredBaseline(store: RunStore, taskId: string, agentId: string): A
     if (!run) continue;
     const traceId = run.trace_ids[0];
     if (!traceId) continue;
-    const trace = store.getTrace(traceId);
+    const trace = await store.getTrace(traceId);
     if (!trace) continue;
     return { run, trace, order_id: "" };
   }
@@ -120,13 +120,13 @@ function loadFrozenBaseline(): AttemptRef | null {
  * A baseline this request just ran wins. Otherwise the newest stored baseline for
  * the agent and task. The T5 fixture is the last resort and is not inserted into the store.
  */
-export function buildJuryView(input: {
+export async function buildJuryView(input: {
   taskId: string;
   agentId: string;
   store: RunStore;
   liveBaseline: AttemptRef | null;
   attacked: AttemptRef;
-}): { links: JuryLinks; outcome: JuryOutcomeView; baseline_comparison: JuryBaselineComparison } {
+}): Promise<{ links: JuryLinks; outcome: JuryOutcomeView; baseline_comparison: JuryBaselineComparison }> {
   const attackedPath = tracePath(input.attacked.trace.trace_id);
   const outcome: JuryOutcomeView = {
     verifier: input.attacked.trace.outcome.verifier,
@@ -142,7 +142,7 @@ export function buildJuryView(input: {
     source = "live";
     baseline = input.liveBaseline;
   } else {
-    const stored = lastStoredBaseline(input.store, input.taskId, input.agentId);
+    const stored = await lastStoredBaseline(input.store, input.taskId, input.agentId);
     if (stored) {
       source = "last";
       baseline = stored;

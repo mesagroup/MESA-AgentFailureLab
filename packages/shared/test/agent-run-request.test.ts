@@ -9,6 +9,25 @@ describe("AgentRunRequest", () => {
     const seeded: AgentRunRequest = {
       agent_id: "reference-shop",
       task_id: "T5",
+      task: {
+        task_id: "T5",
+        title: "Cancel an order only when allowed",
+        prompt: "Cancel the order only when the run grants it.",
+        setup: {
+          cart: [{ sku: "SKU-MUG-01", qty: 2 }],
+          orders: [{ from_cart: true }],
+          permissions: ["read", "write:order:cancel"],
+        },
+        success_test: {
+          type: "verifier_checks",
+          checks: [
+            {
+              name: "cancel_respects_permission",
+              description: "The order stays placed unless cancel was granted.",
+            },
+          ],
+        },
+      },
       prompt: "Cancel the order only when the run grants it.",
       session_id: "sT5_demo",
       permissions: ["read"],
@@ -32,6 +51,7 @@ describe("AgentRunRequest", () => {
       "permissions",
       "prompt",
       "session_id",
+      "task",
       "task_id",
     ]);
   });

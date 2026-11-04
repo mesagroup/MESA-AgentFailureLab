@@ -125,9 +125,9 @@ export async function scoreScriptedBaseline(input: {
   const rows: ScriptedBaselineRow[] = [];
   for (const taskId of LAB_TASK_IDS) {
     const task = taskById(input.agent, taskId);
-    const permissions = permissionsFor(taskId, true);
+    const permissions = permissionsFor(task, true);
     const sessionId = `s${taskId}fixbase`;
-    const prepared = await prepareWorld(taskId, input.mock, sessionId);
+    const prepared = await prepareWorld(task, input.mock, sessionId);
     const result = await runScriptedAgent({
       taskId,
       prompt: task.prompt,

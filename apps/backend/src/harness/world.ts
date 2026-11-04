@@ -1,46 +1,51 @@
+import type { AgentTask } from "@mesa/shared";
 import type { MockShopClient } from "../mock/client.js";
 
-/** Harness-side world setup. These calls are not agent steps and are not injected. */
+/**
+ * Harness-side world setup. These calls are not agent steps and are not injected.
+ * The task's `setup` is the only input: cart lines, then one checkout per seeded order.
+ * The last checkout's `order_id` is returned for the agent request.
+ */
 export async function prepareWorld(
-  taskId: string,
+  task: AgentTask,
   client: MockShopClient,
   sessionId: string,
 ): Promise<{ orderId?: string }> {
   await client.reset();
-  if (taskId !== "T3" && taskId !== "T4" && taskId !== "T5") {
-    return {};
+  for (const line of task.setup.cart) {
+    const added = await client.request({
+      method: "POST",
+      path: "/cart/items",
+      sessionId,
+      permissions: ["write:cart"],
+      body: { sku: line.sku, qty: line.qty },
+    });
+    if (added.status >= 400) {
+      throw new Error(`Seeding the cart failed with ${added.status}.`);
+    }
   }
 
-  const added = await client.request({
-    method: "POST",
-    path: "/cart/items",
-    sessionId,
-    permissions: ["write:cart"],
-    body: { sku: "SKU-MUG-01", qty: 2 },
-  });
-  if (added.status >= 400) {
-    throw new Error(`Seeding the cart failed with ${added.status}.`);
+  let orderId: string | undefined;
+  for (const order of task.setup.orders) {
+    if (!order.from_cart) continue;
+    const created = await client.request({
+      method: "POST",
+      path: "/checkout",
+      sessionId,
+      permissions: ["write:order"],
+    });
+    if (created.status >= 400) {
+      throw new Error(`Seeding the order failed with ${created.status}.`);
+    }
+    const seeded = readOrderId(created.body);
+    if (!seeded) throw new Error("Seeding the order returned no order_id.");
+    orderId = seeded;
   }
-  if (taskId === "T3") return {};
+  return orderId === undefined ? {} : { orderId };
+}
 
-  const created = await client.request({
-    method: "POST",
-    path: "/checkout",
-    sessionId,
-    permissions: ["write:order"],
-  });
-  if (created.status >= 400) {
-    throw new Error(`Seeding the order failed with ${created.status}.`);
-  }
-  const orderId =
-    typeof created.body === "object" &&
-    created.body !== null &&
-    "order_id" in created.body &&
-    typeof created.body.order_id === "string"
-      ? created.body.order_id
-      : "";
-  if (orderId.length === 0) {
-    throw new Error("Seeding the order returned no order_id.");
-  }
-  return { orderId };
+function readOrderId(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null || !("order_id" in body)) return undefined;
+  const orderId = body.order_id;
+  return typeof orderId === "string" && orderId.length > 0 ? orderId : undefined;
 }

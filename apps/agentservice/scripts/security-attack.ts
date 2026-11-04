@@ -58,16 +58,7 @@ export async function runSecurityAttack(input: {
 function agentActions(
   request: AgentRunRequest,
 ): Promise<{ executed: false; actions: Array<{ tool_name: string; tool_input: Record<string, unknown> }> }> {
-  const plan = planTaskRun({
-    agent_id: request.agent_id,
-    task_id: request.task_id,
-    prompt: request.prompt,
-    session_id: request.session_id,
-    permissions: request.permissions,
-    mock_base_url: request.mock_base_url,
-    order_id: request.order_id,
-    fix_kinds: request.fix_kinds,
-  });
+  const plan = planTaskRun(request);
   return Promise.resolve({
     executed: false,
     actions: plan.actions.map((action) => ({

@@ -1,4 +1,4 @@
-import type { FixKind } from "@mesa/shared";
+import type { AgentTask, FixKind } from "@mesa/shared";
 import { scriptedActions, type PlannedAction } from "../agent/scripted.js";
 
 /**
@@ -149,7 +149,7 @@ export function resolveSessionPermissions(values: readonly string[]): string[] {
  * Cancel is omitted when the harness has no order id. The guard still applies to the task tools.
  */
 export function planStructuredActions(input: {
-  taskId: string;
+  task: AgentTask;
   orderId?: string;
   permissions: readonly string[];
   fixKinds: readonly FixKind[];
@@ -162,10 +162,10 @@ export function planStructuredActions(input: {
     fixKinds: input.fixKinds,
     prompt: input.prompt,
   });
-  if (input.taskId === "T5") return jury;
+  if (input.task.task_id === "T5") return jury;
 
   const juryActions = orderId.length === 0 ? jury.actions.filter((action) => action.tool_name !== "cancel_order") : jury.actions;
-  const scripted = scriptedActions(input.taskId, { orderId: input.orderId, permissions: input.permissions });
+  const scripted = scriptedActions(input.task, { orderId: input.orderId, permissions: input.permissions });
   const merged: PlannedAction[] = scripted.map((action) => ({
     tool_name: action.tool_name,
     tool_input: { ...action.tool_input },

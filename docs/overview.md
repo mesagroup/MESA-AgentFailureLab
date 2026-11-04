@@ -27,7 +27,8 @@ On `main` today:
 
 - Contracts for Agent, Task, Run, and Trace, plus the shopping reference stub.
 - The demo shop (`services/mock-shop`, port 8787) and the reference agent (`POST /v1/tasks/run` on port 3002). The agent returns actions with `executed: false`. The harness executes them.
-- Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker for one security case on demo task T5. Runs and traces stay in memory. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
+- Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker for one security case on demo task T5. Runs and traces persist in Postgres when `DATABASE_URL` is set, and stay in memory otherwise. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
+- Lab dashboard snapshot. `GET /agents` lists registered agents (`agent_id`, `instance.kind`, task count = `tasks.length`). `GET /runs` lists stored runs, newest start first, with `trace_ids`, the first trace id, and `outcome.verifier` from each linked trace. `counts.scope` is `harness_session`: agents and run statuses in the store this process has open. With Postgres those rows survive a restart. See the [backend README](../apps/backend/README.md#dashboard-snapshot).
 - A deterministic verifier. It is the only writer of `outcome.verifier`. On the demo it reads mock state (`GET /internal/state`) and the task checks. It does not call Grok.
 - Grok diagnosis (`POST /diagnose`) and the three MVP fix policies in the agent service. A replay in that service scores the demo tasks with the backend verifier (`apps/agentservice/replay/latest.md`). A live `after_fix` run records `fix_kinds` and does not yet send them on the agent run request ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)).
 - `pnpm eval`: labeled traces scored against a rules baseline, with an optional Grok column. The numbers in the README are that command's output. CI runs `pnpm eval:gate`, which compares that rules column with `apps/agentservice/eval/baseline.json` and does not need `XAI_API_KEY`.
@@ -38,8 +39,9 @@ The web UI is a scaffold. It does not call the backend.
 
 | Surface | Status |
 | --- | --- |
-| Agent CRUD in the UI, with an in-memory Agent API and the shopping demo preloaded | Planned ([#49](https://github.com/mesagroup/MESA-AgentFailureLab/issues/49), [#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)). The schema and the stub exist. There is no Agent persistence API. |
-| **Testa agente** — start a test, list runs, toggle faults | Planned ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` already starts a batch. |
+| **Dashboard** — registered agents, recent runs, verifier outcome, in-session counts | UI still uses mocks ([#77](https://github.com/mesagroup/MESA-AgentFailureLab/issues/77)). The harness snapshot is `GET /agents` and `GET /runs` ([#76](https://github.com/mesagroup/MESA-AgentFailureLab/issues/76)). `counts.scope` is `harness_session` (records in the store this process has open; Postgres keeps runs and traces across a restart). Multi-day series, uptime percentages, and agent ranking stay out, per ADR-001. |
+| Agent CRUD in the UI, with the shopping demo preloaded | Planned ([#49](https://github.com/mesagroup/MESA-AgentFailureLab/issues/49)). The API is `GET/POST/PUT/DELETE /agents` ([#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)), and `reference-shop` is seeded. The registration screen is still open. |
+| **Testa agente** — start a test, list runs, toggle faults | Planned ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` starts a batch for the required `agent_id`. The UI that picks the agent is still open. |
 | **Ispeziona traccia** — timeline, culprit step, diagnosis when present | Planned ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)). `GET /traces` already returns stored traces. Hand-written traces are in `packages/shared/examples`. |
 | Open the fix as a GitHub issue | Planned ([#52](https://github.com/mesagroup/MESA-AgentFailureLab/issues/52)). Agent has no destination repository field yet. |
 | **Fix → replay → before/after** — choose a proposed fix, replay `after_fix`, compare `outcome.verifier` | Planned ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). `POST /runs` with `phase: after_fix` and `fix_kinds` exists; the fix is recorded, not yet sent to the agent ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). |
@@ -70,7 +72,7 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 | Path | Team | Owns |
 | --- | --- | --- |
 | `apps/frontend` | Frontend | Scaffold today. Planned screens: Agent CRUD, Testa agente, Ispeziona traccia. The timeline will render `Trace`. Before/after will use `Run` plus `outcome.verifier`. |
-| `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and in-memory Run/Trace persistence. The shop process is separate. |
+| `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and Agent/Run/Trace persistence (Postgres or memory). The shop process is separate. |
 | `services/mock-shop` | Backend | Demo example: stand-alone HTTP shop for T1–T5. The harness and the agent service call it by URL. |
 | `apps/agentservice` | AI Engineer | Grok diagnosis, the MVP fix applicator, and the reference shopping agent. Writes `Trace.diagnosis` only. The verifier still owns `outcome.verifier`. |
 | `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`, plus the `AgentRunRequest` type for `POST /v1/tasks/run`. |
@@ -85,4 +87,4 @@ JSON Schema under `packages/shared/schemas/` is the source of truth for Trace an
 - `fault.labels` and `attacker` are ground truth from the injector or the attacker on chaos runs. The jury case is the attacker's path: [demo-jury.md](demo-jury.md).
 - `Run` is harness metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`). It is a separate type. It is not nested inside `Trace`.
 
-Out of scope for the MVP, per ADR-001: auth, multi-run aggregation, and using an LLM as the judge of success. Heavy infrastructure is out as well: there is no database, and Run and Trace persistence stays in memory.
+Out of scope for the MVP, per ADR-001: auth, multi-run aggregation, and using an LLM as the judge of success. Agent, Run, and Trace rows persist in Postgres when `DATABASE_URL` is set, and stay in memory when it is not. The shop catalog stays in memory. See [persistence.md](persistence.md).

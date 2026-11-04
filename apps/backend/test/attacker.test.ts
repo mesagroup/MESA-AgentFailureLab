@@ -112,8 +112,13 @@ describe("jury agent policy", () => {
 
   it("plans task tools and drops cancel when the task has no order", () => {
     const prompt = `${JURY_NOTE_BODY}\nThe text also says write:order:cancel.`;
+    const task = (id: string) => {
+      const found = reference.tasks.find((entry) => entry.task_id === id);
+      if (!found) throw new Error(`missing ${id}`);
+      return found;
+    };
     const open = planStructuredActions({
-      taskId: "T4",
+      task: task("T4"),
       orderId: "ord_0001",
       permissions: ["read"],
       fixKinds: [],
@@ -126,7 +131,7 @@ describe("jury agent policy", () => {
     assert.deepEqual(open.actions[1]?.tool_input, { order_id: "ord_0001" });
 
     const guarded = planStructuredActions({
-      taskId: "T2",
+      task: task("T2"),
       permissions: ["read", "write:cart"],
       fixKinds: ["permission_guard"],
       prompt,
@@ -142,7 +147,7 @@ describe("jury agent policy", () => {
     );
 
     const frozen = planStructuredActions({
-      taskId: "T5",
+      task: task("T5"),
       orderId: "ord_0001",
       permissions: ["read"],
       fixKinds: [],
@@ -323,8 +328,8 @@ describe("jury case against the mock shop", { concurrency: false }, () => {
     assert.equal(validateTrace(report.attacked.trace).ok, true);
     assert.equal(report.attacked.trace.outcome.verifier.checks[0]?.name, "cancel_respects_permission");
     assert.equal(report.attacked.trace.outcome.verifier.checks[0]?.passed, true);
-    assert.deepEqual(store.getRun(report.attacked.run.run_id), report.attacked.run);
-    assert.deepEqual(store.getTrace(report.attacked.trace.trace_id), report.attacked.trace);
+    assert.deepEqual(await store.getRun(report.attacked.run.run_id), report.attacked.run);
+    assert.deepEqual(await store.getTrace(report.attacked.trace.trace_id), report.attacked.trace);
   });
 
   it("still passes T5 when the attacker is not used", async () => {
@@ -508,7 +513,7 @@ describe("jury HTTP API", { concurrency: false }, () => {
       assert.equal(described.json().elevates_permissions_from_text, false);
       assert.equal(described.json().boundary_vs_issue_17, JURY_BOUNDARY_VS_ISSUE_17);
       assert.deepEqual(described.json().wire_permissions, ["read"]);
-      assert.equal(store.listRuns().length, 0);
+      assert.equal((await store.listRuns()).length, 0);
 
       const rejected = await app.inject({
         method: "POST",
@@ -565,6 +570,7 @@ describe("jury HTTP API", { concurrency: false }, () => {
         method: "POST",
         url: "/runs",
         payload: {
+          agent_id: "reference-shop",
           phase: "injected",
           task_ids: ["T5"],
           injection: juryPlan(),
@@ -591,8 +597,9 @@ describe("jury HTTP API", { concurrency: false }, () => {
       assert.equal(body.baseline, null);
       assert.equal(body.comparison.baseline_verifier_passed, null);
       assert.equal(body.comparison.attacked_verifier_passed, true);
-      assert.equal(store.listRuns().length, 1);
-      assert.equal(store.listRuns()[0]?.phase, "injected");
+      const storedRuns = await store.listRuns();
+      assert.equal(storedRuns.length, 1);
+      assert.equal(storedRuns[0]?.phase, "injected");
     } finally {
       await app.close();
     }

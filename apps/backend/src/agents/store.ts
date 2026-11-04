@@ -53,6 +53,18 @@ export interface AgentStore {
   delete(agentId: string): Promise<void>;
   /** Insert the reference-shop fixture when that id is absent. Does not overwrite. */
   seedIfMissing(): Promise<void>;
+  /**
+   * Insert or replace one agent from a backup file.
+   * The document must already include `agent_id`, `created_at`, and `updated_at`.
+   * When the id exists, the stored `created_at` stays and the rest of the document is replaced.
+   * Not an HTTP route.
+   */
+  upsertImported(agent: Agent): Promise<"inserted" | "updated">;
+  /**
+   * Delete every agent except `reference-shop`. The seed row is never removed.
+   * Not an HTTP route. `DELETE /agents/reference-shop` stays 409.
+   */
+  deleteAgentsExceptSeed(): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -82,6 +94,17 @@ export function agentFromReplace(existing: Agent, agentId: string, body: unknown
   };
   if (!Object.hasOwn(body, "created_at")) next.created_at = existing.created_at;
   return parseAgent(next);
+}
+
+/** Backup import. Requires the server fields. Does not assign a new id or a new timestamp. */
+export function importedAgent(body: unknown): Agent {
+  if (!isRecord(body)) {
+    throw new AgentValidationError(["Body must be a JSON object."]);
+  }
+  if (typeof body.agent_id !== "string" || body.agent_id.trim() === "") {
+    throw new AgentValidationError(["agent_id is required on import."]);
+  }
+  return parseAgent(body);
 }
 
 export function referenceSeed(): Agent {
@@ -148,6 +171,28 @@ export class MemoryAgentStore implements AgentStore {
 
   async seedIfMissing(): Promise<void> {
     this.insertSeed();
+  }
+
+  async upsertImported(agent: Agent): Promise<"inserted" | "updated"> {
+    const valid = importedAgent(agent);
+    const existing = this.agents.get(valid.agent_id);
+    if (!existing) {
+      this.agents.set(valid.agent_id, valid);
+      return "inserted";
+    }
+    const next = importedAgent({ ...valid, created_at: existing.created_at });
+    this.agents.set(valid.agent_id, next);
+    return "updated";
+  }
+
+  async deleteAgentsExceptSeed(): Promise<number> {
+    let removed = 0;
+    for (const agentId of [...this.agents.keys()]) {
+      if (agentId === REFERENCE_AGENT_ID) continue;
+      this.agents.delete(agentId);
+      removed += 1;
+    }
+    return removed;
   }
 
   async close(): Promise<void> {}
