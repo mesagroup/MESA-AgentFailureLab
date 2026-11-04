@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mesa:agent-failure-lab:run",
+  "title": "Run",
+  "description": "Harness metadata for one execution phase. Not embedded in Trace. Join on trace_id (and Trace.run_id). Grouping several phases into one experiment is out of scope for this freeze. fix_* is written by the harness when a fix is applied, not by Grok.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "phase", "trace_id"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identity of this harness record. Trace.run_id points here."
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["baseline", "injected", "after_fix"]
+    },
+    "injection_plan_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Set for injected chaos runs. Omitted for baseline and for after_fix replays that are not themselves injections."
+    },
+    "fix_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the fix the harness applied. Typically matches Diagnosis.proposed_fixes[].fix_id."
+    },
+    "fix_summary": {
+      "type": "string",
+      "description": "Harness record of what was applied."
+    },
+    "fix_applied_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Trace produced by this phase."
+    }
+  }
+}
