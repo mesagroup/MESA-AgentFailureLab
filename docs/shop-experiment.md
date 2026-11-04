@@ -146,6 +146,10 @@ Use a dedicated mock with a single controlling harness. The new library world
 (#109 / PR #114) is deliberately rejected by this shop-specific command; its
 runtime, schemas and checks are left intact.
 
-#101 remains responsible for the deployed live end-to-end jury rehearsal and
-runbook/ADR clarification. The frontend diagnosis/detail/regression/scoreboard
-issues remain separate. No live provider execution is included in offline CI.
+The jury runbook (prerequisites, which agent to register, presentation
+procedure, Render cold start, real offline results, ADR status) is in
+[demo-script.md](demo-script.md#runbook-giuria).
+This page remains the command contract (flags, exit codes, evidence formula).
+Do not keep a second contradictory manual. The frontend diagnosis/detail/
+regression/scoreboard issues remain separate. No live provider execution is
+included in offline CI. Live Grok evidence is a later authorized run.

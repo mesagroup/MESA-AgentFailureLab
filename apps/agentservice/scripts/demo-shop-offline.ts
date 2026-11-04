@@ -1,4 +1,4 @@
-import { buildApp as buildHarness } from "../../backend/src/app.js";
+import { buildApp as buildHarness, type BuildAppOptions } from "../../backend/src/app.js";
 import { MemoryStore } from "../../backend/src/persistence/memory.js";
 import { MemoryAgentStore } from "../../backend/src/agents/store.js";
 import { buildApp as buildShop } from "../../../services/mock-shop/src/app.js";
@@ -7,7 +7,11 @@ import type { Agent, Trace } from "@mesa/shared";
 import type { DiagnosisModel } from "../src/diagnosis/diagnose.js";
 
 /** Only loaded by explicit offline mode. Never reads XAI_API_KEY or DATABASE_URL. */
-export async function startOfflineShop(fixture: Agent, modelOverride?: DiagnosisModel | null) {
+export async function startOfflineShop(
+  fixture: Agent,
+  modelOverride?: DiagnosisModel | null,
+  harness?: Pick<BuildAppOptions, "afterWorldSetup">,
+) {
   const shop = buildShop({ logger: false });
   const service = buildService({ logger: false,
     config: { apiKey: null, baseUrl: "http://unused.invalid", modelName: "offline-demo-model", timeoutMs: 1000 },
@@ -28,7 +32,10 @@ export async function startOfflineShop(fixture: Agent, modelOverride?: Diagnosis
     const agent = structuredClone(fixture);
     agent.instance.base_url = serviceUrl;
     agent.test_instance.base_url = serviceUrl;
-    backend = buildHarness({ logger: false, agent, store, agents, mockBaseUrl: mockUrl, diagnosis: { baseUrl: serviceUrl } });
+    backend = buildHarness({
+      logger: false, agent, store, agents, mockBaseUrl: mockUrl, diagnosis: { baseUrl: serviceUrl },
+      afterWorldSetup: harness?.afterWorldSetup,
+    });
     const backendUrl = await backend.listen({ host: "127.0.0.1", port: 0 });
     const registration = await fetch(`${backendUrl}/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(agent) });
     if (registration.status !== 201) throw new Error("offline_fixture_registration_failed");
