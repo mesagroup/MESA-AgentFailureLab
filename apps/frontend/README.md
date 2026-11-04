@@ -33,3 +33,10 @@ Container image, from the repo root: `docker build -f apps/frontend/Dockerfile -
 - `src/api/` — clients for `@mesa/backend` and `@mesa/agentservice`
 
 Keep product docs in `docs/` and architecture decisions in `adr/`. See [ADR-001](../../adr/001-mock-verifier-grok.md): the timeline is the trace; before/after is the run plus the verifier.
+
+## Wiring still owned by this UI
+
+The backend contract for these two is in place. This app does not edit them yet.
+
+- `Agent.tasks[].evalset` — optional judge input. `GET`/`PUT /agents/:agent_id` already round-trip it when the form keeps the cloned task. There is no generate-evalset call (#121).
+- `Agent.otel` and `POST /agents/:agentId/otel/import` — source config and span import. The response traces are ordinary `GET /traces/:traceId` documents. Mapping rules are in [docs/otel.md](../../docs/otel.md). The UI does not upload a batch yet.

@@ -51,6 +51,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 | `fault.labels` | Injector or attacker only. They also write `fault.injected` and `fault.attacker`. |
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
 | `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. Material a later Grok judgment may read for that task's Run or Trace. It is not a Trace field and it is not a writer of `outcome.verifier`. |
+| `Agent.otel` and `POST /agents/:agentId/otel/import` | User-registered source, plus a span batch mapped onto a Trace. The importer copies a supplied `outcome` and writes the empty production `fault`. It does not invent `fault.labels` or `outcome.verifier`, and it does not dial the endpoint. See [otel.md](otel.md). |
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 

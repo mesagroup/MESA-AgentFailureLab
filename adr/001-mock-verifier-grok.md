@@ -34,6 +34,13 @@ Tre componenti con responsabilità esclusive.
 - L’esito resta `success_test.checks` sullo stato del mondo nel mock.
 - Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. Non esiste un endpoint che genera l’evalset.
 
+### Import OpenTelemetry
+
+- `Agent.otel` registra endpoint e meta. L’import non chiama quell’endpoint.
+- Il mapper copia `outcome` solo se il batch lo porta già. Non ricava `outcome.verifier` dallo status dello span.
+- `fault.labels` non si inventano. La trace importata ha la marca di produzione: `injected: false`, `labels` vuote, attaccante non usato.
+- È un percorso diverso da #51, che incolla una Trace già valida. Dopo il remap vale lo stesso `validateTrace`.
+
 ## Ground truth
 - `fault.labels` e `attacker`: solo iniettore / attaccante in run di caos.
 - Eval classificazione: confronto `diagnosis.category` (+ step) vs `fault.labels`.
