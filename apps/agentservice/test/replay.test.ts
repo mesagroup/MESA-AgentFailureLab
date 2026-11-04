@@ -96,7 +96,7 @@ describe("harness replay", () => {
     assert.match(markdown, /\| T1 \| Verification \| pre_response_check \|/);
     assert.match(markdown, /Fix verified/);
     assert.match(markdown, /latency_ms equals step_count/);
-    const committed = readFileSync(new URL("../replay/latest.md", import.meta.url), "utf8");
+    const committed = readFileSync(new URL("../replay/latest.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     assert.equal(committed.startsWith(markdown), true);
     assert.match(committed, /T1: verifier pass/);
     assert.match(committed, /T5: verifier pass/);

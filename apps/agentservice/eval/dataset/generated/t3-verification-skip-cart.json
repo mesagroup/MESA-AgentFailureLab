@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T3-injected-afb77046-7ded-4b45-8f86-7b7619880cd3",
+  "trace_id": "trace-T3-injected-1ac3f7bb-21ab-47b6-a803-5cc4e53a0257",
   "agent_id": "reference-shop",
-  "run_id": "run-T3-injected-7ab3eb07-6f18-4c44-abf5-14b3d9de519e",
+  "run_id": "run-T3-injected-a9403b5c-6c8f-4241-a775-745854c8167f",
   "task_id": "T3",
-  "started_at": "2026-11-04T12:34:13.442Z",
-  "ended_at": "2026-11-04T12:34:13.448Z",
+  "started_at": "2026-11-04T13:35:20.785Z",
+  "ended_at": "2026-11-04T13:35:20.790Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.443Z",
+      "timestamp": "2026-11-04T13:35:20.786Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -24,22 +24,8 @@
     {
       "step_id": "step-1",
       "index": 1,
-      "type": "system",
-      "timestamp": "2026-11-04T12:34:13.444Z",
-      "role": "system",
-      "latency_ms": 1,
-      "token_usage": {
-        "input": 0,
-        "output": 0
-      },
-      "cost_usd": 0,
-      "content": "Injector skipped get_cart."
-    },
-    {
-      "step_id": "step-2",
-      "index": 2,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.445Z",
+      "timestamp": "2026-11-04T13:35:20.787Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -51,10 +37,10 @@
       "tool_input": {}
     },
     {
-      "step_id": "step-3",
-      "index": 3,
+      "step_id": "step-2",
+      "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.446Z",
+      "timestamp": "2026-11-04T13:35:20.788Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -65,7 +51,7 @@
       "tool_name": "checkout",
       "tool_output": {
         "order_id": "ord_0001",
-        "session_id": "sT3_a52daae9a466405f",
+        "session_id": "sT3_f8dcbfb1a66d4233",
         "status": "placed",
         "items": [
           {
@@ -77,15 +63,15 @@
           }
         ],
         "total_usd": 24,
-        "created_at": "2026-11-04T12:34:13.444Z",
+        "created_at": "2026-11-04T13:35:20.787Z",
         "cancelled_at": null
       }
     },
     {
-      "step_id": "step-4",
-      "index": 4,
+      "step_id": "step-3",
+      "index": 3,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.447Z",
+      "timestamp": "2026-11-04T13:35:20.789Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -120,7 +106,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT3_a52daae9a466405f",
+            "session_id": "sT3_f8dcbfb1a66d4233",
             "items": [],
             "total_usd": 0
           }
@@ -128,7 +114,7 @@
         "orders": [
           {
             "order_id": "ord_0001",
-            "session_id": "sT3_a52daae9a466405f",
+            "session_id": "sT3_f8dcbfb1a66d4233",
             "status": "placed",
             "items": [
               {
@@ -140,7 +126,7 @@
               }
             ],
             "total_usd": 24,
-            "created_at": "2026-11-04T12:34:13.444Z",
+            "created_at": "2026-11-04T13:35:20.787Z",
             "cancelled_at": null
           }
         ],
@@ -192,7 +178,7 @@
     "agent_claimed_success": true
   },
   "totals": {
-    "latency_ms": 5,
+    "latency_ms": 4,
     "tokens_in": 0,
     "tokens_out": 0,
     "cost_usd": 0

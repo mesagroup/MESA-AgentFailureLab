@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T1-injected-87dd106e-7469-4e42-86d8-cbe137045691",
+  "trace_id": "trace-T1-injected-2848d3f2-83d3-44f6-8fc4-2aeb588522de",
   "agent_id": "reference-shop",
-  "run_id": "run-T1-injected-b63acd20-17de-4dea-b59e-4e8886a6e6e1",
+  "run_id": "run-T1-injected-dd927e7b-c7f6-4661-b742-270b8569d7e8",
   "task_id": "T1",
-  "started_at": "2026-11-04T12:34:13.409Z",
-  "ended_at": "2026-11-04T12:34:13.416Z",
+  "started_at": "2026-11-04T13:35:20.752Z",
+  "ended_at": "2026-11-04T13:35:20.759Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.410Z",
+      "timestamp": "2026-11-04T13:35:20.753Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.411Z",
+      "timestamp": "2026-11-04T13:35:20.754Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -42,7 +42,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.412Z",
+      "timestamp": "2026-11-04T13:35:20.755Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -68,7 +68,7 @@
       "step_id": "step-3",
       "index": 3,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.413Z",
+      "timestamp": "2026-11-04T13:35:20.756Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -85,7 +85,7 @@
       "step_id": "step-4",
       "index": 4,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.414Z",
+      "timestamp": "2026-11-04T13:35:20.757Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -95,15 +95,19 @@
       "cost_usd": 0,
       "tool_name": "get_product",
       "tool_output": {
-        "stale": true,
-        "tool": "get_product"
+        "product_id": "SKU-MUG-01",
+        "sku": "SKU-MUG-01",
+        "name": "Ceramic Mug",
+        "description": "12oz stoneware mug, speckled glaze.",
+        "price_usd": 12,
+        "stock": 19
       }
     },
     {
       "step_id": "step-5",
       "index": 5,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.415Z",
+      "timestamp": "2026-11-04T13:35:20.758Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -177,17 +181,17 @@
         ],
         "observations": [
           {
-            "session_id": "sT1_54bf8e4efa58427b",
+            "session_id": "sT1_4ee770618b624e7d",
             "catalog_reads": [
               {
                 "query": "mug",
-                "at": "2026-11-04T12:34:13.410Z"
+                "at": "2026-11-04T13:35:20.753Z"
               }
             ],
             "product_views": [
               {
                 "product_id": "SKU-MUG-01",
-                "at": "2026-11-04T12:34:13.411Z"
+                "at": "2026-11-04T13:35:20.754Z"
               }
             ],
             "order_reads": []

@@ -1,17 +1,17 @@
 {
-  "trace_id": "trace-T2-injected-7273bb83-40d5-4502-8ed0-a1f63141e486",
+  "trace_id": "trace-T2-injected-1373fc27-5898-49b5-8395-6bde2cfd1c0a",
   "agent_id": "reference-shop",
-  "run_id": "run-T2-injected-7badf53a-0177-40a4-9c78-334c704a70ed",
+  "run_id": "run-T2-injected-068a5892-45a7-4ea3-a769-18b00de6d67d",
   "task_id": "T2",
-  "started_at": "2026-11-04T12:34:13.413Z",
-  "ended_at": "2026-11-04T12:34:13.420Z",
+  "started_at": "2026-11-04T13:35:20.755Z",
+  "ended_at": "2026-11-04T13:35:20.762Z",
   "status": "completed",
   "steps": [
     {
       "step_id": "step-0",
       "index": 0,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.414Z",
+      "timestamp": "2026-11-04T13:35:20.756Z",
       "role": "user",
       "latency_ms": 1,
       "token_usage": {
@@ -25,7 +25,7 @@
       "step_id": "step-1",
       "index": 1,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.415Z",
+      "timestamp": "2026-11-04T13:35:20.757Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -43,7 +43,7 @@
       "step_id": "step-2",
       "index": 2,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.416Z",
+      "timestamp": "2026-11-04T13:35:20.758Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -53,7 +53,7 @@
       "cost_usd": 0,
       "tool_name": "add_to_cart",
       "tool_output": {
-        "session_id": "sT2_be0002e885734c65",
+        "session_id": "sT2_053f58715a95412b",
         "items": [
           {
             "product_id": "SKU-MUG-01",
@@ -70,7 +70,7 @@
       "step_id": "step-3",
       "index": 3,
       "type": "tool_call",
-      "timestamp": "2026-11-04T12:34:13.417Z",
+      "timestamp": "2026-11-04T13:35:20.759Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -85,7 +85,7 @@
       "step_id": "step-4",
       "index": 4,
       "type": "tool_result",
-      "timestamp": "2026-11-04T12:34:13.418Z",
+      "timestamp": "2026-11-04T13:35:20.760Z",
       "role": "tool",
       "latency_ms": 1,
       "token_usage": {
@@ -95,15 +95,24 @@
       "cost_usd": 0,
       "tool_name": "get_cart",
       "tool_output": {
-        "stale": true,
-        "tool": "get_cart"
+        "session_id": "sT2_053f58715a95412b",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 25
       }
     },
     {
       "step_id": "step-5",
       "index": 5,
       "type": "message",
-      "timestamp": "2026-11-04T12:34:13.419Z",
+      "timestamp": "2026-11-04T13:35:20.761Z",
       "role": "assistant",
       "latency_ms": 1,
       "token_usage": {
@@ -128,7 +137,7 @@
       "mock_state_snapshot": {
         "carts": [
           {
-            "session_id": "sT2_be0002e885734c65",
+            "session_id": "sT2_053f58715a95412b",
             "items": [
               {
                 "product_id": "SKU-MUG-01",
