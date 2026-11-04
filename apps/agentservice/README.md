@@ -169,7 +169,8 @@ From the repo root:
 ```bash
 pnpm generate-dataset   # loopback mock + scripted harness; rewrites eval/dataset
 pnpm eval               # rules baseline, and Grok when XAI_API_KEY is set
+pnpm eval:gate          # offline rules baseline vs eval/baseline.json
 pnpm --filter @mesa/agentservice test
 ```
 
-`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
+`pnpm eval -- --fake` runs a labelled fake model and does not call xAI. `pnpm eval:gate` passes an empty `XAI_API_KEY` to the diagnosis resolver and compares the four rules rates with [`eval/baseline.json`](eval/baseline.json). The threshold is `max_rate_drop` in that file. CI runs the gate on every pull request. Tests use `node --import tsx --test` and do not use the network. The Italian jury sections (`Dataset e risultati`, `Limiti noti`) are rewritten in the root [README](../../README.md) by `pnpm eval`. The runner is this package because the rules baseline is `diagnosisFindings` in `src/diagnosis/diagnose.ts`.
