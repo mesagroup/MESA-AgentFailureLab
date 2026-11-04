@@ -352,6 +352,14 @@ describe("world gate around runs and jury", { concurrency: false }, () => {
       assert.equal(one.json().status, "running");
       const missingTrace = await app.inject({ method: "GET", url: "/traces/trace-not-saved" });
       assert.equal(missingTrace.statusCode, 404);
+      const diagnose = await app.inject({
+        method: "POST",
+        url: "/traces/trace-not-saved/diagnose",
+        payload: {},
+      });
+      assert.equal(diagnose.statusCode, 404);
+      assert.equal(diagnose.json().error, "not_found");
+      assert.equal(mock.resets, 1);
 
       hold.resolve();
       const done = await first;

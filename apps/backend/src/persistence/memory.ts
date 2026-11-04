@@ -1,4 +1,5 @@
-import type { Run, Trace } from "@mesa/shared";
+import { isDeepStrictEqual } from "node:util";
+import type { Diagnosis, Run, Trace } from "@mesa/shared";
 import {
   assertRun,
   assertTrace,
@@ -64,6 +65,14 @@ export class MemoryStore implements RunStore {
   async getTrace(traceId: string): Promise<Trace | undefined> {
     const found = this.traces.get(traceId);
     return found ? clone(found) : undefined;
+  }
+
+  async saveDiagnosis(expected: Trace, diagnosis: Diagnosis): Promise<Trace | undefined> {
+    const updated = assertTrace(clone({ ...expected, diagnosis }));
+    // No await between compare and set: this is atomic in this process.
+    if (!isDeepStrictEqual(this.traces.get(expected.trace_id), expected)) return undefined;
+    this.traces.set(expected.trace_id, updated);
+    return clone(updated);
   }
 
   async listTraces(): Promise<Trace[]> {
