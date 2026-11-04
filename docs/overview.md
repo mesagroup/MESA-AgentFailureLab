@@ -16,7 +16,7 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 | `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and persistence. Not the shop process. |
 | `services/mock-shop` | Backend | Stand-alone HTTP shop for T1–T5. The harness and the agent service call it by URL. |
 | `apps/agentservice` | AI Engineer | Grok diagnosis and the fix applicator. Writes `Trace.diagnosis` only. The verifier still owns `outcome.verifier`. |
-| `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`. |
+| `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`, plus the `AgentRunRequest` type for `POST /v1/tasks/run`. |
 
 JSON Schema under `packages/shared/schemas/` is the source of truth for Trace and Agent. OpenAPI may `$ref` those files later. OpenAPI is not the source of truth.
 

@@ -18,8 +18,9 @@ import type { AttemptScore, ReplayPort } from "../src/replay/types.js";
  * Injected and after_fix arms use `injection: "preset"`, so the backend injector
  * is the only writer of fault labels. `passed` is copied from the trace the
  * verifier already wrote.
- * When fixes are non-empty, the policy runs inside the `callAgent` hook because
- * `AgentRunRequest` still has no `fix_kinds`. Production HTTP does not use this hook.
+ * When fixes are non-empty, the policy runs inside the `callAgent` hook.
+ * The shared `AgentRunRequest` has optional `fix_kinds`, and `loadActions` still
+ * omits that field. Production HTTP does not use this hook.
  */
 export function createHarnessReplayPort(input: {
   agent: Agent;

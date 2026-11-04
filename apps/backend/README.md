@@ -13,7 +13,7 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
 | `diagnosis` | Nobody here. It stays `null` until Grok, which must not write the rows above |
 
-`outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. A fix kind recorded on an `after_fix` run is harness metadata; this MVP replays the task and scores it, and does not yet patch the agent.
+`outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. A fix kind recorded on an `after_fix` run is harness metadata. The reference agent applies `AgentRunRequest.fix_kinds` when that field is on the body. This runner stores the list on the Run and does not yet copy it onto the request.
 
 ## Run from the monorepo root
 
@@ -46,7 +46,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/runs`, `/runs/:runId` | Stored runs |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
 
-`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` and expects `{ "executed": false, "actions": [...] }`. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
+`driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` with an `AgentRunRequest` from `@mesa/shared` and expects `{ "executed": false, "actions": [...] }`. Optional `fix_kinds` on that type is not filled by `loadActions` yet. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
 Injected runs with `injection` omitted use the preset for that task (Verification, Reasoning, ToolUse, Context, Security for T1–T5). Plan and Execution are in the catalog and can be requested by code. The T5 preset is `forged_permission_success` (a forged tool result). The jury attacker is a different Security path and is not in that catalog. See [the jury demo](../../docs/demo-jury.md).
 

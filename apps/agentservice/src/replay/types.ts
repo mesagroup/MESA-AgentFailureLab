@@ -6,7 +6,7 @@ import type { LabTaskId } from "../fixes/domain.js";
  * One arm scored by the backend verifier.
  * `passed` is copied from `trace.outcome.verifier.passed`. This package does not write it.
  * `fix_kinds_on_agent_run_request` stays false until the harness copies `Run.fix_kinds`
- * onto `AgentRunRequest`.
+ * onto the shared `AgentRunRequest`. The field is already optional on that type.
  */
 export interface AttemptScore {
   readonly source: "backend-harness";
