@@ -40,6 +40,8 @@ buildApp({ agents, store })
 
 Both openers read the same variable. A blank or missing `DATABASE_URL` is memory for both. A URL is Postgres for both. `src/index.ts` opens the agent store first (migrate, then seed), then the run store (migrate). The second migrate sees the files already recorded and does not run them again. On shutdown the process closes the run store, then the agent store.
 
+Backup, restore, and jury reset are command-line scripts in `src/persistence/cli.ts` (`db:export`, `db:import`, `db:reset`). They are not HTTP routes. See [Backup and restore](#backup-and-restore), [Jury reset](#jury-reset), and [Cutover](#cutover).
+
 `src/agents/store.ts` defines `AgentStore`. Both agent implementations honor it.
 
 | Method | Behavior |
@@ -50,6 +52,8 @@ Both openers read the same variable. A blank or missing `DATABASE_URL` is memory
 | `replace(agentId, body)` | 404 if absent. Server sets `updated_at`. Validate, then replace the document |
 | `delete(agentId)` | 409 for `reference-shop`. 404 if another id is absent |
 | `seedIfMissing()` | Insert the reference fixture only when `reference-shop` is absent |
+| `upsertImported(agent)` | Backup import. Insert the document, or replace it and keep the stored `created_at`. Not an HTTP route |
+| `deleteAgentsExceptSeed()` | Delete every agent except `reference-shop`. Not an HTTP route |
 | `close()` | End the pool, or a no-op for memory |
 
 `src/agents/open.ts` reads `DATABASE_URL`. A blank or missing value returns `MemoryAgentStore`, which seeds in its constructor. A URL returns `PostgresAgentStore`, applies migrations, then seeds. `src/persistence/open.ts` does the same selection for runs and traces and does not seed. `src/index.ts` does both before `listen`, and closes both stores when the process closes the Fastify app.
@@ -72,13 +76,16 @@ Writes that fail `validateAgent` throw `AgentValidationError` (HTTP 400). A dupl
 | `getTrace(traceId)` | One trace, or absent |
 | `listTraces()` | First-save order, then `trace_id` |
 | `listTracesByRun(runId)` | Traces for that run, oldest first. This is the `traces (run_id)` lookup. It is not a separate HTTP route |
+| `listRunRecords()` / `listTraceRecords()` | Same order as the lists above, plus the first-insert time. That time is not a Run or Trace field |
+| `upsertImportedRun` / `upsertImportedTrace` | Backup import. The first insert stores the file's `created_at`. A later import keeps that time and replaces the document. Not an HTTP route |
+| `deleteAllRunsAndTraces()` | Delete every trace, then every run. Agents stay. Not an HTTP route. `db:reset` calls this |
 | `close()` | End the pool, or a no-op for memory |
 
 `MemoryStore` is two `Map`s. Records are cloned on the way in and out. Saving an id that is already present replaces the value and does not move it in the map. `PostgresRunStore` uses the same pool settings as agents (at most 5 connections, 10 second connect timeout, TLS rules above).
 
 A write that fails `validateRun` or `validateTrace` throws `ContractError` and stores nothing. The harness turns that into HTTP 500 on `POST /runs` and `POST /attacker/jury-case`, which is the same status the in-memory store already produced. `GET` of a missing id is still 404 `{ "error": "not_found", "message": "No run …" }` or `"No trace …"`.
 
-There is no delete method and no foreign key. Deleting an agent does not delete runs or traces that name it. Saving a trace does not require the run row to exist. That matches the memory maps.
+There is no delete of one run or one trace, and no foreign key. Deleting an agent does not delete runs or traces that name it. Saving a trace does not require the run row to exist. That matches the memory maps. `deleteAllRunsAndTraces()` clears both tables together and is only used by backup reset.
 
 The store does not interpret the documents. `outcome.verifier` is still written only by the deterministic verifier. `fault.labels` are still written only by the injector or the attacker. `diagnosis` stays null until Grok, and Grok still does not write the verifier or the labels. ADR-001 is unchanged.
 
@@ -183,11 +190,11 @@ The fixture is `packages/shared/examples/agent-reference-stub.json`. Its `agent_
 | Process restart | New empty map, then seed. Other agents are gone | Rows stay, including agents other than the seed |
 | `seedIfMissing()` again in the same process | No overwrite | No overwrite |
 
-There is no `POST /internal/agents/reset`. The architect note on #50 marked that route optional, and that route is still absent. Runs and traces are not seeded. A fresh memory store is empty. A fresh Postgres database has the tables and no run or trace rows.
+There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Runs and traces are not seeded. A fresh memory store is empty. A fresh Postgres database has the tables and no run or trace rows.
 
-A local wipe of Postgres data is `docker compose down -v`, which deletes the `mesa-pgdata` volume. The next start runs migrations on an empty database and seeds `reference-shop` because that id is missing.
+A local wipe of the whole Postgres volume is still `docker compose down -v`, which deletes `mesa-pgdata`. The next start runs migrations on an empty database and seeds `reference-shop` because that id is missing. `db:reset` does not delete the volume. It deletes runs, traces, and agents other than the seed, and it leaves an edited `reference-shop` row as it is.
 
-`deleteAllRowsForTests` exists on `PostgresAgentStore` (agents) and on `PostgresRunStore` (runs, then traces) for the test suites. Neither is an HTTP route.
+`deleteAllRowsForTests` exists on `PostgresAgentStore` (agents, including the seed) and on `PostgresRunStore` (traces, then runs) for the test suites. Neither is an HTTP route. The backup tests use schema `mesa_transfer_test` and do not write `public`.
 
 ## Retention
 
@@ -200,8 +207,9 @@ Nothing in this store expires. There is no TTL, no row cap, and no purge job.
 | Save the same `run_id` or `trace_id` again | Document replaced. List position unchanged | Document replaced. `created_at` unchanged, so list position stays |
 | `docker compose down` | The process is gone | The `mesa-pgdata` volume keeps agents, runs, and traces |
 | `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds `reference-shop` only |
+| `db:reset -- --yes` | Not used. Stop the process instead. The next start has the seed and no runs | Runs, traces, and agents other than `reference-shop` are deleted. The seed row stays. The volume stays |
 
-There is no `DELETE /runs` or `DELETE /traces`. A jury reset of run history is a volume wipe, or a manual `DELETE` against `runs` and `traces`. Backup and a written reset procedure are [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75), not this store.
+There is no `DELETE /runs` or `DELETE /traces`. A jury reset that keeps the volume and the seed is [Jury reset](#jury-reset). A copy of the rows is [Backup and restore](#backup-and-restore).
 
 `created_at` on `runs` and `traces` is an order column. It is not a retention clock. Rows are not deleted because they are old.
 
@@ -417,8 +425,10 @@ The path is the id. The server sets `updated_at` and ignores a client `updated_a
 
 | Variable | Who reads it | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | backend, at startup | Postgres URL for agents, runs, and traces. Empty or unset means both stores stay in memory. Compose sets `postgres://mesa:mesa@mesa-postgres:5432/mesa`. Render sets it from `fromDatabase.connectionString`. Do not commit a real URL. Turbo passes this variable into `pnpm dev` |
-| `TEST_DATABASE_URL` | `apps/backend` tests only | Disposable database for `test/agents-postgres.test.ts` and `test/runs-postgres.test.ts`. Unset skips those files. CI leaves it unset. The agent file uses schema `mesa_agent_test` and does not write `public.agents`. The run file drops and recreates schema `mesa_run_test` only, then deletes rows there. It does not write `public.runs` or `public.traces`. A host containing `.render.com` is refused before connect. Turbo passes this variable into `pnpm test` |
+| `DATABASE_URL` | backend, at startup; `db:export`, `db:import`, `db:reset` | Postgres URL for agents, runs, and traces. Empty or unset means both stores stay in memory. Compose sets `postgres://mesa:mesa@mesa-postgres:5432/mesa`. Render sets it from `fromDatabase.connectionString`. Do not commit a real URL. Turbo passes this variable into `pnpm dev`. The CLI also reads `apps/backend/.env` when that file exists and this variable is blank in the shell. A non-blank shell value wins. The CLI never prints the URL |
+| `TEST_DATABASE_URL` | `apps/backend` tests only | Disposable database for `test/agents-postgres.test.ts`, `test/runs-postgres.test.ts`, and `test/transfer-postgres.test.ts`. Unset skips those files. CI leaves it unset. The agent file uses schema `mesa_agent_test`. The run file uses `mesa_run_test`. The backup file uses `mesa_transfer_test`. None of them write `public.agents`, `public.runs`, or `public.traces`. A host containing `.render.com` is refused before connect. Turbo passes this variable into `pnpm test` |
+
+There is no env var that turns on an HTTP wipe. Reset is the CLI, and it still requires `--yes`.
 
 `apps/backend/.env.example` documents `DATABASE_URL` and leaves it commented out. Compose's `environment` block wins over a copied `.env`.
 
@@ -458,7 +468,7 @@ User, password, and database name are `mesa`. That password is a local default, 
 
 `GET /health` on the backend reports `agent_store` and `run_store` as `postgres`.
 
-Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 1 because the seed is back.
+Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 1 because the seed is back. To drop runs, traces, and non-seed agents without deleting the volume, use [Jury reset](#jury-reset). To copy the rows first, use [Backup and restore](#backup-and-restore).
 
 Windows PowerShell, from the repo root:
 
@@ -537,6 +547,8 @@ In-memory coverage always runs: `apps/backend/test/agents.test.ts` for agents, `
 
 The Postgres tests use the same `pg` driver as production, against a real server, instead of an embedded engine. They stay out of CI so `pnpm test` does not need a database.
 
+`test/transfer.test.ts` always runs. It covers the export file (a UTF-8 BOM and CR LF still parse; the writer emits LF only), an in-memory round trip, a second import that keeps `created_at`, a file that fails `validateTrace` and writes nothing, reset that keeps an edited seed, and HTTP export of a running process. `test/transfer-postgres.test.ts` is the gated file. It exports the SQL `created_at` column, imports that file, imports it again without moving `created_at`, and resets while keeping the seed. The schema is `mesa_transfer_test`.
+
 ## Render (review before apply)
 
 `render.yaml` adds one database and one env var. Yuri reviews this before the next Blueprint sync. Do not apply it until that review is done.
@@ -544,24 +556,274 @@ The Postgres tests use the same `pg` driver as production, against a real server
 | Piece | Value | Why it is here |
 | --- | --- | --- |
 | Database name | `mesa-postgres` | Same environment as the demo web services (`mesa-agent-failure-lab` / `demo`) |
-| Plan | `free` (0.1 CPU / 256 MB) | Matches the free web services. If the workspace rejects free Postgres, change the plan to `0.1c-256mb` before applying. Free Postgres may also expire |
+| Plan | `free` (0.1 CPU / 256 MB) | Matches the free web services. If the workspace rejects free Postgres, change the plan to `0.1c-256mb` before applying. Free Postgres expires. See [Render free Postgres limits](#render-free-postgres-limits) |
 | Region | `frankfurt` | Same region as the web services |
 | `postgresMajorVersion` | `"16"` | Matches the Compose image `postgres:16-alpine`. This cannot be changed after create |
 | `databaseName` / `user` | `mesa` / `mesa` | Render may suffix the database name. The connection string carries the real name. These cannot be changed after create |
 | `DATABASE_URL` | `fromDatabase` / `connectionString` | Private-network URL. The password is not in git |
 
-Confirm the free `mesa-backend` service can open that private-network host. `connectionString` is not a public URL. If the free instance cannot use the private network, the backend plan has to change. This file does not change the web service plan.
+`connectionString` is the private-network URL. It is not a public URL, and it is not in git. Render's current free-web docs say a free web service can send private-network requests to data stores in the same region, which is how this URL is meant to work. It cannot receive private-network traffic. If a deploy shows that the free backend cannot open the host, the backend plan has to change. This file does not change the web service plan. Yuri confirms that when [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72) is applied.
 
 A Blueprint sync refreshes `DATABASE_URL` from the database. `XAI_API_KEY` stays `sync: false`.
 
 The same database holds agents, runs, and traces once the backend from this tree is deployed and `DATABASE_URL` is set. `render.yaml` is not changed further here. Provisioning and the Blueprint review stay in [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72), with Yuri (diamanti-sg). Do not apply the Blueprint until that review is done.
 
-## Left for #75 (cutover, seed, backup)
+## Backup and restore
 
-[#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75) is still open. This store does not do that work.
+Part of [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75) (epic [#64](https://github.com/mesagroup/MESA-AgentFailureLab/issues/64)). The scripts live in `apps/backend`:
 
-- Cutover from a memory process to Postgres does not import runs or traces that existed only in that process. They are already gone when the process stops. After `DATABASE_URL` is set, new runs are written to Postgres. Old memory rows are not copied.
-- The `reference-shop` seed is unchanged: insert on boot when the id is missing, never overwrite, 409 on delete. Runs and traces have no seed.
-- There is no backup command, no restore command, and no jury reset route. `docker compose down -v` is the local wipe. A hosted backup note still has to be written.
+| Script | What it does |
+| --- | --- |
+| `pnpm --filter @mesa/backend db:export -- --out <file>` | Read Postgres (`DATABASE_URL`) and write one JSON file. Applies pending migrations. Does not insert `reference-shop` |
+| `pnpm --filter @mesa/backend db:export -- --base-url <url> --out <file>` | Read a running backend over HTTP. Use this for an in-memory process. Do not set `DATABASE_URL` at the same time |
+| `pnpm --filter @mesa/backend db:import -- --file <file>` | Validate every document, upsert into Postgres, then insert `reference-shop` only if that id is still missing |
+| `pnpm --filter @mesa/backend db:reset -- --yes` | Delete runs, traces, and agents other than `reference-shop`. See [Jury reset](#jury-reset) |
 
-Not in this work: auth, multi-tenant isolation, a dedicated store service, edits to the JSON Schemas, or moving agent execution into the backend. The shop catalog is still in memory. `POST /internal/reset` on the shop is unchanged. The frontend Runs and Trace pages are still placeholders and do not call these routes yet. `POST /diagnose` is still the agent service, and it still does not write `outcome.verifier` or `fault.labels`.
+The extra `--` is required so pnpm forwards the flags. A relative `--out` or `--file` is resolved from the directory where you started pnpm (`INIT_CWD`), which is the repo root in the examples below. The commands run with cwd `apps/backend`. They read `apps/backend/.env` when that file exists and `DATABASE_URL` is blank. A value already exported in the shell wins. The URL is not printed. The summary prints the host, port, and database name.
+
+The file is UTF-8 JSON, LF newlines, no BOM. `format` is `mesa-persistence-v1`. Agents are Agent documents. Each run and each trace is `{ "created_at", "document" }` because that timestamp is not a field on the Run or Trace schema. `created_at_source` is `column` when the file was read from Postgres, and `order` when it was read from memory or HTTP. A second copy of the same id in one file is rejected. A document that fails `validateAgent`, `validateRun`, or `validateTrace` is rejected, and nothing is written.
+
+Import is an upsert. A missing id is inserted with the `created_at` from the file. An id that is already stored keeps the `created_at` already in the database (the agent document field and the SQL column) and takes the rest of the document from the file, including `updated_at` on an agent. Importing the same file twice does not duplicate rows and does not move them. Rows that are not in the file are left in place. An empty file does not wipe the database. To make the file the whole database, run `db:reset -- --yes` and then import.
+
+`db:export` against Postgres does not insert the seed. A database that has never booted can export zero agents. `db:import` inserts the fixture afterwards when the file does not already contain `reference-shop`. When the file does contain it, that document is upserted and the stored `created_at` stays.
+
+### In-memory process
+
+A new `db:export` process does not see rows that live in another process. With no `DATABASE_URL` and no `--base-url`, the command refuses to run. Those rows are already gone once that process stops. Export while it is still up:
+
+```bash
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+```
+
+Windows PowerShell, from the repo root, with the backend already listening:
+
+```powershell
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+```
+
+HTTP export calls `GET /health`, `GET /agents`, `GET /traces`, and `GET /runs`. `GET /runs` is newest first; the file stores oldest first, which is the store order. `GET /traces` is already oldest first. Every document is validated before the file is written.
+
+That API does not return the SQL `created_at` column. The file uses order-preserving timestamps (`2000-01-01T00:00:00.000Z`, then one millisecond later, and so on) so a later import keeps list order. Those timestamps are the first-insert time once they land in Postgres. If `GET /health` already says `postgres`, export again with `DATABASE_URL` and without `--base-url` when you need the original column values. The command prints that on stderr.
+
+There is no HTTP import. `POST /runs` starts a batch. It does not restore a saved Run. `POST /agents` cannot restore `created_at` the way the upsert does, and there is no route that writes a Trace document. Import always uses `DATABASE_URL`.
+
+### Postgres file
+
+From the repo root, with Compose Postgres published on `127.0.0.1:5432`:
+
+```bash
+export DATABASE_URL=postgres://mesa:mesa@127.0.0.1:5432/mesa
+pnpm --filter @mesa/backend db:export -- --out mesa-backup.json
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"
+pnpm --filter @mesa/backend db:export -- --out mesa-backup.json
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+```
+
+Do not commit the JSON file. It is a copy of the lab data. The local password `mesa` is the Compose default, not a production secret. A Render URL is a secret. Put it in the shell or in `apps/backend/.env` for the command, and do not commit that file either.
+
+Passing both `DATABASE_URL` and `--base-url` is an error. Unset `DATABASE_URL` to read a running memory backend.
+
+## Jury reset
+
+`db:reset` deletes every run, every trace, and every agent whose id is not `reference-shop`. The seed row stays, including a name or other field changed with `PUT /agents/reference-shop`. If that id is missing, the fixture is inserted. `DELETE /agents/reference-shop` is still 409. Reset does not call that route, and it does not rewrite an edited seed back to the fixture.
+
+To get the fixture body back, `PUT` the example document, or delete the volume with `docker compose down -v`. The next boot inserts the fixture because the row is gone. Reset is the step that keeps the volume.
+
+The command requires `--yes`. Without it, nothing is deleted. There is no HTTP route for this, and no env var that enables one. The backend has no auth. A route on port 3001 would let any caller wipe the jury database.
+
+Export first if you might want the rows back.
+
+Bash, from the repo root, against Compose Postgres:
+
+```bash
+export DATABASE_URL=postgres://mesa:mesa@127.0.0.1:5432/mesa
+pnpm --filter @mesa/backend db:export -- --out jury-before-reset.json
+pnpm --filter @mesa/backend db:reset -- --yes
+curl -fsS http://127.0.0.1:3001/health
+curl -fsS http://127.0.0.1:3001/agents
+curl -fsS http://127.0.0.1:3001/runs
+```
+
+`GET /health` still reports `agent_store` and `run_store` as `postgres` when that URL is set on the running backend. `GET /agents` is the seed only. `GET /runs` has empty `runs` and `trace_links`. `counts.agents` is 1 because the seed remains. `counts.runs` is 0.
+
+Windows PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"
+pnpm --filter @mesa/backend db:export -- --out jury-before-reset.json
+pnpm --filter @mesa/backend db:reset -- --yes
+Invoke-RestMethod http://127.0.0.1:3001/health | Select-Object status, agent_store, run_store
+Invoke-RestMethod http://127.0.0.1:3001/agents
+Invoke-RestMethod http://127.0.0.1:3001/runs
+```
+
+An in-memory backend has nothing for this command to delete. Stop that process. The next start has the seed and no runs. `db:reset` without `DATABASE_URL` exits with that explanation and does not pretend to wipe the other process.
+
+A URL whose host contains `.render.com` still runs when you pass `--yes`. The command prints the host (not the password) and tells you the hosted rows will be deleted. Export first. Render's free plan has no backups of its own. See [Render free Postgres limits](#render-free-postgres-limits).
+
+## Cutover
+
+The seed rules do not change in a cutover. On boot, `reference-shop` is inserted when the id is missing and is not overwritten when it is present. `DELETE /agents/reference-shop` stays 409. Runs and traces are not seeded. After `DATABASE_URL` is set, `GET /health` reports `agent_store` and `run_store` as `postgres`.
+
+Memory rows exist only in the process that has them. Export before you stop it. A restart with no `DATABASE_URL` drops them. Setting `DATABASE_URL` on a new process does not copy them. The copy is the JSON file, then `db:import`.
+
+### Local: memory process to Compose Postgres
+
+1. Start the in-memory backend and use it until you want to keep the rows. `GET /health` shows `memory` for both stores.
+
+```bash
+pnpm dev:backend
+curl -fsS http://127.0.0.1:3001/health
+```
+
+```powershell
+pnpm dev:backend
+Invoke-RestMethod http://127.0.0.1:3001/health | Select-Object agent_store, run_store
+```
+
+2. Export while that process is still running. Leave `DATABASE_URL` unset for this command.
+
+```bash
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+```
+
+```powershell
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+```
+
+3. Stop the in-memory backend so port 3001 is free.
+
+4. Start Compose. The backend waits for Postgres, migrates, and seeds `reference-shop` if that id is missing. `GET /health` on port 3001 now shows `postgres` for both stores.
+
+```bash
+docker compose up --build
+curl -fsS http://127.0.0.1:3001/health
+```
+
+```powershell
+docker compose up --build
+Invoke-RestMethod http://127.0.0.1:3001/health | Select-Object agent_store, run_store
+```
+
+5. Import into the published database. The Compose backend reads the same database, so the next `GET` sees the rows. You do not restart it for the import to show up.
+
+```bash
+export DATABASE_URL=postgres://mesa:mesa@127.0.0.1:5432/mesa
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+curl -fsS http://127.0.0.1:3001/agents
+curl -fsS http://127.0.0.1:3001/runs
+curl -fsS http://127.0.0.1:3001/traces
+```
+
+```powershell
+$env:DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+Invoke-RestMethod http://127.0.0.1:3001/agents
+Invoke-RestMethod http://127.0.0.1:3001/runs
+Invoke-RestMethod http://127.0.0.1:3001/traces
+```
+
+`GET /runs` is the dashboard snapshot (newest start first). The SQL `created_at` from an HTTP export is the order-preserving timestamp, so the order matches the memory list. Agent `created_at` values come from the documents `GET /agents` returned.
+
+To run Postgres only, and the backend on the host: `docker compose up -d mesa-postgres`, stop any backend already on 3001, then `pnpm dev:backend` with `DATABASE_URL=postgres://mesa:mesa@127.0.0.1:5432/mesa`. Check `/health`, then import the same way. Do not run the host backend and the Compose backend on port 3001 at the same time.
+
+### Render, after #72 is applied
+
+[#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72) is still Yuri's (diamanti-sg). This tree does not change `render.yaml`. Do not apply the Blueprint from this work. The steps below are what to do once that database exists and `DATABASE_URL` is on `mesa-backend`.
+
+1. Before the backend is switched, export the running memory process from a laptop. The public URL is the one in [deploy.md](deploy.md).
+
+```bash
+pnpm --filter @mesa/backend db:export -- --base-url https://mesa-backend-itm4.onrender.com --out mesa-backup.json
+```
+
+```powershell
+pnpm --filter @mesa/backend db:export -- --base-url https://mesa-backend-itm4.onrender.com --out mesa-backup.json
+```
+
+If that process was already restarted, the memory rows are gone. The file only contains what `GET /agents`, `GET /runs`, and `GET /traces` return at this moment. The seed is included. Runs are included only if they are still in that process.
+
+2. After Yuri applies the Blueprint, Render sets `DATABASE_URL` from `fromDatabase.connectionString` and redeploys `mesa-backend`. The free web service can send private-network requests to a database in the same region. The first request after idle can take about a minute while the free web service wakes.
+
+3. Confirm the stores:
+
+```bash
+curl -fsS https://mesa-backend-itm4.onrender.com/health
+```
+
+```powershell
+Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store
+```
+
+Both `agent_store` and `run_store` should be `postgres`. If they are still `memory`, `DATABASE_URL` is not set on that service. That is [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72), not this import.
+
+4. Import from a laptop. The private `connectionString` is not reachable from your machine. In the Render Dashboard, open `mesa-postgres` and copy the external connection string. It is a secret. It uses TLS (`sslmode=require` or a `.render.com` host). The backend pool already turns those URLs into TLS with `rejectUnauthorized: false`. Do not commit the URL. Do not put it in `render.yaml`.
+
+```bash
+export DATABASE_URL='postgresql://USER:PASSWORD@HOST.render.com:5432/DATABASE?sslmode=require'
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+```
+
+```powershell
+$env:DATABASE_URL = "postgresql://USER:PASSWORD@HOST.render.com:5432/DATABASE?sslmode=require"
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+```
+
+The command prints the host and database name, not the user or password. A `.render.com` host also prints a warning to export a copy first.
+
+5. Read the public API again. `GET /health` stays `postgres`. `GET /agents/reference-shop` returns the seed (the imported document when the file had one). `GET /runs` lists the imported runs. `counts.agents` is at least 1.
+
+Free web services have no shell, so these commands stay on your laptop. They are not run inside the Render container.
+
+## Rollback
+
+Keep the JSON file from before the cutover. It is the copy you can import again.
+
+**Bad import.** Import upserts. It does not delete rows that are missing from the file. Import the previous file to put those documents back. `created_at` stays at whatever the database already stored for that id, so list order does not jump. Rows that exist only because of the bad import are still there. To drop them, `db:reset -- --yes` and then import the good file. Reset removes non-seed agents and every run and trace. The following import writes the good file. The seed row is kept; its document is updated from the file when the file contains `reference-shop`.
+
+**Process back to memory.** Unset `DATABASE_URL` and start the backend again. `GET /health` shows `memory` for both stores. That process has the seed and no runs. The Postgres rows are still in the database or the `mesa-pgdata` volume. They are not visible until you point a process at that URL again. You do not need to import a second time if the database is still there. There is no way to push the JSON file into a memory process over HTTP.
+
+Bash:
+
+```bash
+unset DATABASE_URL
+pnpm dev:backend
+curl -fsS http://127.0.0.1:3001/health
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:DATABASE_URL
+pnpm dev:backend
+Invoke-RestMethod http://127.0.0.1:3001/health | Select-Object agent_store, run_store
+```
+
+**Volume gone.** `docker compose down -v` deletes `mesa-pgdata`. The next `docker compose up` migrates an empty database and seeds `reference-shop`. Import `mesa-backup.json` if you still want the exported rows.
+
+**Render.** To run the hosted backend in memory again, clear `DATABASE_URL` on `mesa-backend` in the Dashboard and redeploy. Do not edit `render.yaml` for that experiment. `GET /health` then shows `memory`. The Postgres data remains until the database is deleted or the free plan expires. Export before you drop it. Putting `DATABASE_URL` back is another Dashboard change, or the next Blueprint sync from [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72). This repository does not apply that sync.
+
+## Render free Postgres limits
+
+Source: [Deploy for Free](https://render.com/docs/free). These limits are why the JSON export exists. Render's free Postgres does not keep a backup you can restore.
+
+| Limit | What Render does | What you do |
+| --- | --- | --- |
+| 30-day expiry | A free database expires 30 days after creation and becomes inaccessible unless you upgrade it to a paid plan | Export before the expiry. Render emails as the date gets close |
+| 14-day grace | After expiry you have 14 days to upgrade. Then Render deletes the database and all of its data | The JSON file is the copy that survives that delete. Create a new database (or upgrade in time) and `db:import` |
+| No backups | Free Render Postgres does not support any form of backups | `db:export` is the backup. Keep the file off Render (your laptop, or other storage you control). Do not commit it |
+| 1 GB | Free Postgres storage is fixed at 1 GB | This lab's agent, run, and trace documents are small. Export still works as a copy if you approach the cap. It does not raise the cap |
+| One free database | A workspace can have one active free Postgres | `mesa-postgres` is that database. A second free instance is not available |
+| Restarts and maintenance | Render may restart the database or run maintenance at any time. It is briefly unavailable | Rows are not documented as wiped on restart. The expiry delete is the wipe. Export anyway, because there is no Render backup to fall back on |
+
+Free Key Value is a different product. Its data is lost on restart. This lab does not use it. Agents, runs, and traces are Postgres rows.
+
+The export does not stop the 30-day clock and it does not upgrade the plan. It is the file you still have after Render deletes the database. Upgrade, or create a new database and import, before the grace period ends if the demo still needs those rows.
+
+Not in this work: auth, multi-tenant isolation, a dedicated store service, edits to the JSON Schemas, or moving agent execution into the backend. The shop catalog is still in memory. `POST /internal/reset` on the shop is unchanged. The frontend Runs and Trace pages are still placeholders and do not call these routes yet. `POST /diagnose` is still the agent service, and it still does not write `outcome.verifier` or `fault.labels`. `render.yaml` is unchanged. [#72](https://github.com/mesagroup/MESA-AgentFailureLab/issues/72) remains the Blueprint apply, with Yuri (diamanti-sg).

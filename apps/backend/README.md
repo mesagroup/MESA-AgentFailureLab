@@ -28,7 +28,7 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, `FRONTEND_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
 
 Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
@@ -59,6 +59,17 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 The server loads that agent and runs its `tasks`, in document order, when `task_ids` is omitted. `phase` defaults to `baseline`. A `task_ids` entry that is not on that agent is 400, including a demo task id that only another agent has. An edited `reference-shop` is the document in the store, not a fresh read of the fixture.
 
 Success is 200 `{ "results": [ { "run", "trace", ... } ] }`. `run.agent_id` and `trace.agent_id` are the requested id. `trace` stays the shared Trace schema: no `phase`, `injection_plan`, or `fix_kinds`. `outcome.success` is still `outcome.verifier.passed`. The verifier is unchanged.
+### CORS
+
+Browser calls from the UI send `Content-Type: application/json`, so the browser preflights with `OPTIONS` before GET, POST, PUT, and DELETE. This app registers `@fastify/cors`. There is no `*` origin.
+
+`FRONTEND_URL` is a comma-separated allowlist of `http` and `https` origins, read at startup. A trailing slash is ignored. `*` and any token that is not an `http` or `https` URL are ignored. Two local origins are always allowed, including when `FRONTEND_URL` is unset: `http://127.0.0.1:3000` and `http://localhost:3000`. Those are the frontend's real ports. `apps/frontend/vite.config.ts` sets `server.port` and `preview.port` to 3000 with `strictPort`. `apps/frontend/package.json` passes `--port 3000 --strictPort` to `dev` and `preview`. Compose publishes `3000:3000`. The frontend README documents `http://127.0.0.1:3000`. A browser opened at `http://localhost:3000` sends that host.
+
+Compose sets `FRONTEND_URL` to `http://mesa-frontend:3000`. That name is only on the Compose network. The browser Origin for the published UI is one of the two port-3000 origins above. On Render, `render.yaml` already sets `FRONTEND_URL` to `https://mesa-frontend-rleq.onrender.com` for `mesa-backend`. A change is picked up on restart.
+
+Allowed methods are `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS`. The allowed request header is `content-type`. A preflight from an allowed origin returns 204 with `Access-Control-Allow-Origin` set to that origin. Any other origin gets no `Access-Control-Allow-Origin` header. `GET /health` still returns 200 for a client that does not send an `Origin` header.
+
+The post-deploy check, including `curl` and `Invoke-WebRequest -Method Options`, is in [docs/deploy.md](../../docs/deploy.md#browser-cors).
 
 `driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` with an `AgentRunRequest` from `@mesa/shared` and expects `{ "executed": false, "actions": [...] }`. The body includes `fix_kinds` when the Run has a non-empty list (`after_fix`). Baseline and injected omit it. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. When `fix_kinds` contains `controlled_retry`, `executeAttempt` re-issues a transient tool on that same path, at most twice, with backoff. Reads retry any transient result (`error: "timeout"`, or status 0, 408, 429, 500, 502, 503, 504). `add_to_cart`, `update_cart`, `checkout`, and `cancel_order` retry only when the attempt was not dispatched. A dispatched 5xx on those tools is not retried. A catalog `drop` fires again on the new attempt, so a deterministic drop still fails. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 
@@ -70,6 +81,19 @@ pnpm --filter @mesa/backend jury-demo -- --run
 ```
 
 `--run` needs the shop and this server already up. `--export` rewrites `fixtures/jury/*.json` and starts a shop itself.
+
+## Backup and reset
+
+These are CLI scripts, not HTTP routes. From the repo root, the extra `--` is required so pnpm forwards the flags. `DATABASE_URL` selects Postgres. A copied `apps/backend/.env` is read when that variable is blank in the shell. A shell value wins. Details, PowerShell, cutover, and rollback are in [docs/persistence.md](../../docs/persistence.md).
+
+```bash
+pnpm --filter @mesa/backend db:export -- --out mesa-backup.json
+pnpm --filter @mesa/backend db:export -- --base-url http://127.0.0.1:3001 --out mesa-backup.json
+pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
+pnpm --filter @mesa/backend db:reset -- --yes
+```
+
+`db:export` with `--base-url` reads a running process (the way to copy in-memory rows). Without it, the command reads Postgres and refuses to run when `DATABASE_URL` is unset. `db:import` validates every agent, run, and trace, upserts, and keeps the `created_at` already stored for that id. It cannot write through HTTP. `db:reset` deletes runs, traces, and agents other than `reference-shop`. The seed row stays, including an edited one. `--yes` is required. There is no reset route.
 
 ## Dashboard snapshot
 
@@ -133,13 +157,13 @@ The reference seed is `reference-shop` (`instance.kind` `reference`, five tasks)
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`. `session.ts` builds the dashboard snapshot from runs, traces, and the agent count
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
 - `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
-- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged
-- `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`
+- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged. Backup does not add a migration
+- `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`. `cli.ts` is `db:export`, `db:import`, and `db:reset`
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
 
 ## Persistence
 
-Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those stores, the `AgentStore` and `RunStore` interfaces, `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, seed and 409 behavior, retention, every `/agents` status code with request and response examples, the dashboard `GET /runs` snapshot, env vars, the Compose and Windows PowerShell runbook, and the Postgres-only tests. Cutover, backup, and a jury reset procedure are still [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75).
+Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those stores, the `AgentStore` and `RunStore` interfaces, `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, seed and 409 behavior, retention, every `/agents` status code with request and response examples, the dashboard `GET /runs` snapshot, env vars, the Compose and Windows PowerShell runbook, the Postgres-only tests, and the backup, jury reset, cutover, rollback, and Render free-plan limits ([#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75)).
 
 `GET /runs` reads that run store and builds the dashboard snapshot above. The store lists oldest first. `sessionView` reverses that list so the snapshot is newest start first.
 
@@ -149,4 +173,4 @@ Agent, Run, and Trace records use Postgres when `DATABASE_URL` is set and an in-
 pnpm --filter @mesa/backend test
 ```
 
-Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Run and trace store tests in `test/runs.test.ts` always run. Postgres tests in `test/agents-postgres.test.ts` and `test/runs-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI. Point that variable at a local Postgres 16. Do not point it at Render. PowerShell: `$env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"`.
+Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch, then read that pair back from `GET /runs` (`outcome.verifier` on `trace_links`, no `result` field). Session tests cover an empty harness, mixed statuses, a missing trace id, and the agent list fields. Agent CRUD tests use the in-memory store. Run and trace store tests in `test/runs.test.ts` always run. Backup tests in `test/transfer.test.ts` always run (in-memory round trip, idempotent re-import, reset keeping the seed, HTTP export). Postgres tests in `test/agents-postgres.test.ts`, `test/runs-postgres.test.ts`, and `test/transfer-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI. Point that variable at a local Postgres 16. Do not point it at Render. The backup file uses schema `mesa_transfer_test` and does not write `public`. PowerShell: `$env:TEST_DATABASE_URL = "postgres://mesa:mesa@127.0.0.1:5432/mesa"`.

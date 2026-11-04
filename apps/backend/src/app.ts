@@ -10,6 +10,7 @@ import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.
 import { loadReferenceAgent } from "./reference-agent.js";
 import { runTasks, type DriverMode, type InjectionRequest } from "./harness/runner.js";
 import { sessionView } from "./harness/session.js";
+import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 
 export interface BuildAppOptions {
@@ -30,6 +31,7 @@ export interface BuildAppOptions {
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
+  registerFrontendCors(app);
   const store = options.store ?? new MemoryStore();
   const agents = options.agents ?? new MemoryAgentStore();
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";
