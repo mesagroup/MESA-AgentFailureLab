@@ -16,7 +16,7 @@ docker build -f apps/backend/Dockerfile -t mesa-backend .
 docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .
 ```
 
-The frontend image is nginx serving the Vite build. The other two run `node dist/index.js` as the `node` user and listen on `0.0.0.0` (`HOST` in the image). Local `pnpm dev` still defaults to `127.0.0.1`.
+The frontend image is nginx serving the Vite build. The backend image runs `node dist/index.js`. The agent service runs `node --env-file-if-exists=.env dist/index.js`, so a missing file is fine and platform env vars still win. Both listen on `0.0.0.0` (`HOST` in the image) as the `node` user. Local `pnpm dev` still defaults to `127.0.0.1`.
 
 ## Environment variables
 

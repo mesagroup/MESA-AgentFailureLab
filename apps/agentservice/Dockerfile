@@ -52,4 +52,6 @@ EXPOSE 3002
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "dist/index.js"]
+# Render and Compose inject env into the process. A missing .env must not
+# stop the process; when the file exists it fills only unset variables.
+CMD ["node", "--env-file-if-exists=.env", "dist/index.js"]

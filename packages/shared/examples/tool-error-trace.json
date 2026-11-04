@@ -1,0 +1,90 @@
+{
+  "trace_id": "trace-tool-error",
+  "agent_id": "reference-shop",
+  "run_id": "run-tool-error-001",
+  "task_id": "T3",
+  "started_at": "2026-11-04T11:05:00.000Z",
+  "ended_at": "2026-11-04T11:05:00.120Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T11:05:00.010Z",
+      "role": "user",
+      "content": "Check out the current cart.",
+      "latency_ms": 10,
+      "token_usage": { "input": 8, "output": 0 },
+      "cost_usd": 0.0001
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T11:05:00.040Z",
+      "role": "assistant",
+      "tool_name": "checkout",
+      "tool_input": {},
+      "latency_ms": 30,
+      "token_usage": { "input": 10, "output": 5 },
+      "cost_usd": 0.0002
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T11:05:00.070Z",
+      "role": "tool",
+      "tool_name": "checkout",
+      "tool_output": { "error": "payment declined", "status": "error" },
+      "latency_ms": 20,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "message",
+      "timestamp": "2026-11-04T11:05:00.100Z",
+      "role": "assistant",
+      "content": "Checkout failed.",
+      "latency_ms": 25,
+      "token_usage": { "input": 8, "output": 6 },
+      "cost_usd": 0.0002
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "order_created",
+          "passed": false,
+          "detail": "CANARY_VERIFIER_DETAIL_tool"
+        }
+      ],
+      "mock_state_snapshot": {
+        "orders": [],
+        "note": "CANARY_SNAPSHOT_tool"
+      }
+    },
+    "agent_claimed_success": false
+  },
+  "totals": {
+    "latency_ms": 85,
+    "tokens_in": 26,
+    "tokens_out": 11,
+    "cost_usd": 0.0005
+  },
+  "fault": {
+    "injected": false,
+    "labels": [],
+    "attacker": {
+      "used": false,
+      "payload_id": null
+    }
+  },
+  "diagnosis": null
+}
