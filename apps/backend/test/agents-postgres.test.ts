@@ -4,9 +4,9 @@ import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
 import pg from "pg";
 import { PostgresAgentStore, postgresPoolConfig } from "../src/agents/postgres.js";
-import { GIFT_DESK_AGENT_ID, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
+import { LIBRARY_AGENT_ID, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
-import { loadGiftDeskAgent, loadReferenceAgent } from "../src/reference-agent.js";
+import { loadLibraryAgent, loadReferenceAgent } from "../src/reference-agent.js";
 
 /**
  * Postgres checks run only when TEST_DATABASE_URL points at a disposable database.
@@ -94,7 +94,7 @@ describe("Postgres agent store", { skip: databaseUrl === "" ? "TEST_DATABASE_URL
       const durable = await restarted.get(again.agent_id);
       assert.equal(durable?.name, "External pg-durable");
       assert.equal((await restarted.get(REFERENCE_AGENT_ID))?.name, "Edited in postgres");
-      assert.equal((await restarted.get(GIFT_DESK_AGENT_ID))?.name, "Gift desk assistant");
+      assert.equal((await restarted.get(LIBRARY_AGENT_ID))?.name, "Library desk");
       const ids = (await restarted.list()).map((agent) => agent.agent_id);
       assert.equal(ids.includes("pg-durable"), true);
     } finally {
@@ -196,7 +196,7 @@ describe(
       });
       const healed = await agents.seedIfMissing();
       assert.equal(healed[REFERENCE_AGENT_ID], "refreshed");
-      assert.equal(healed[GIFT_DESK_AGENT_ID], "inserted");
+      assert.equal(healed[LIBRARY_AGENT_ID], "inserted");
 
       const app = buildApp({ logger: false, agents });
       try {
@@ -216,7 +216,7 @@ describe(
         assert.equal(list.statusCode, 200);
         assert.deepEqual(
           (list.json().agents as Agent[]).map((agent) => agent.agent_id),
-          [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+          [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
         );
 
         const runs = await app.inject({ method: "GET", url: "/runs" });
@@ -256,7 +256,7 @@ describe(
       });
       const kept = await agents.seedIfMissing();
       assert.equal(kept[REFERENCE_AGENT_ID], "kept");
-      assert.equal(kept[GIFT_DESK_AGENT_ID], "kept");
+      assert.equal(kept[LIBRARY_AGENT_ID], "kept");
       assert.equal((await agents.get(REFERENCE_AGENT_ID))?.name, "Edited after heal");
     });
 
@@ -269,10 +269,10 @@ describe(
       await agents.putRawForTests(older);
       const rewritten = await agents.seedIfMissing();
       assert.equal(rewritten[REFERENCE_AGENT_ID], "refreshed");
-      assert.equal(rewritten[GIFT_DESK_AGENT_ID], "kept");
+      assert.equal(rewritten[LIBRARY_AGENT_ID], "kept");
       assert.equal((await agents.get(REFERENCE_AGENT_ID))?.name, "Reference shop assistant");
       assert.equal((await agents.get(REFERENCE_AGENT_ID))?.updated_at, loadReferenceAgent().updated_at);
-      assert.equal((await agents.get(GIFT_DESK_AGENT_ID))?.name, loadGiftDeskAgent().name);
+      assert.equal((await agents.get(LIBRARY_AGENT_ID))?.name, loadLibraryAgent().name);
     });
   },
 );

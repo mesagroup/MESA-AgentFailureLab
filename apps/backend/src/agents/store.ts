@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { isSeededAgentId, SEEDED_AGENT_IDS, type Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { loadGiftDeskAgent, loadReferenceAgent, loadSeedAgents } from "../reference-agent.js";
+import { loadLibraryAgent, loadReferenceAgent, loadSeedAgents } from "../reference-agent.js";
 import { isRecord } from "../util.js";
 
 /** Shopping demo seed. DELETE of this id is rejected. */
 export const REFERENCE_AGENT_ID = SEEDED_AGENT_IDS[0];
 
-/** Gift desk demo seed. DELETE of this id is rejected. */
-export const GIFT_DESK_AGENT_ID = SEEDED_AGENT_IDS[1];
+/** Library desk demo seed. DELETE of this id is rejected. */
+export const LIBRARY_AGENT_ID = SEEDED_AGENT_IDS[1];
 
 export { isSeededAgentId, SEEDED_AGENT_IDS };
 
@@ -149,8 +149,8 @@ export function referenceSeed(): Agent {
   return seedFixture(loadReferenceAgent(), REFERENCE_AGENT_ID);
 }
 
-export function giftDeskSeed(): Agent {
-  return seedFixture(loadGiftDeskAgent(), GIFT_DESK_AGENT_ID);
+export function librarySeed(): Agent {
+  return seedFixture(loadLibraryAgent(), LIBRARY_AGENT_ID);
 }
 
 export function seedFixtures(): Agent[] {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { GIFT_DESK_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
+import { LIBRARY_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID, StoredAgentSchemaError } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { exportStores, importPersistence, resetKeepingSeed } from "../src/persistence/transfer.js";
@@ -75,7 +75,7 @@ describe("stale reference-shop", () => {
       const agents = new MemoryAgentStore([stale, other]);
       const seeded = await agents.seedIfMissing();
       assert.equal(seeded[REFERENCE_AGENT_ID], "kept");
-      assert.equal(seeded[GIFT_DESK_AGENT_ID], "kept");
+      assert.equal(seeded[LIBRARY_AGENT_ID], "kept");
       assert.ok(warnings.some((line) => line.includes("Rewrote stored agent reference-shop")));
       assert.ok(warnings.some((line) => line.includes("stored document failed schema")));
 
@@ -101,7 +101,7 @@ describe("stale reference-shop", () => {
         assert.equal(list.statusCode, 200);
         assert.deepEqual(
           (list.json().agents as Agent[]).map((agent) => agent.agent_id),
-          [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+          [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
         );
 
         const runs = await app.inject({ method: "GET", url: "/runs" });
@@ -126,7 +126,7 @@ describe("stale reference-shop", () => {
         assert.equal(after.statusCode, 200);
         assert.deepEqual(
           (after.json().agents as Agent[]).map((agent) => agent.agent_id),
-          ["legacy-shop", REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+          ["legacy-shop", REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
         );
       } finally {
         await app.close();
@@ -147,13 +147,13 @@ describe("stale reference-shop", () => {
     });
     const refreshed = await agents.seedIfMissing();
     assert.equal(refreshed[REFERENCE_AGENT_ID], "refreshed");
-    assert.equal(refreshed[GIFT_DESK_AGENT_ID], "kept");
+    assert.equal(refreshed[LIBRARY_AGENT_ID], "kept");
     const seed = await agents.get(REFERENCE_AGENT_ID);
     assert.equal(seed?.tasks.length, 5);
     assert.ok(seed?.tasks.every((task) => task.setup));
     const again = await agents.seedIfMissing();
     assert.equal(again[REFERENCE_AGENT_ID], "kept");
-    assert.equal(again[GIFT_DESK_AGENT_ID], "kept");
+    assert.equal(again[LIBRARY_AGENT_ID], "kept");
     await agents.close();
   });
 
@@ -212,7 +212,7 @@ describe("stale reference-shop", () => {
     const runs = new MemoryStore();
     const counts = await resetKeepingSeed(agents, runs);
     assert.equal(counts.seed[REFERENCE_AGENT_ID], "refreshed");
-    assert.equal(counts.seed[GIFT_DESK_AGENT_ID], "kept");
+    assert.equal(counts.seed[LIBRARY_AGENT_ID], "kept");
     assert.equal(counts.agents_deleted, 1);
     const seed = await agents.get(REFERENCE_AGENT_ID);
     assert.equal(seed?.name, "Reference shop assistant");

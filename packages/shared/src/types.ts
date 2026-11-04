@@ -179,10 +179,23 @@ export interface AgentTaskSeedOrder {
  * Seeding the cart and checking out use the harness's own shop permissions.
  * `permissions` is the grant on the agent request, not that seed call.
  */
+/** One loan the harness creates on the library mock before the agent runs. */
+export interface LibrarySeedLoan {
+  loan_id: string;
+  book_id: string;
+  patron_id: string;
+  /** Renewals already on the loan. A new loan uses 0. */
+  renewals: number;
+}
+
 export interface AgentTaskSetup {
   cart: AgentTaskCartLine[];
   orders: AgentTaskSeedOrder[];
   permissions: string[];
+  /** Present only on library tasks. Shop tasks omit it. */
+  library?: {
+    loans: LibrarySeedLoan[];
+  };
 }
 
 export interface AgentTask {
@@ -220,6 +233,14 @@ export interface Agent {
     tools: AgentToolDoc[];
     constraints: string[];
     config_notes: string;
+  };
+  /**
+   * Mock world for this agent. The shop seed omits it and the harness uses MOCK_SHOP_URL.
+   * `base_url` is the mock, not `instance.base_url`.
+   */
+  world?: {
+    kind: "library";
+    base_url: string;
   };
   tasks: AgentTask[];
 }

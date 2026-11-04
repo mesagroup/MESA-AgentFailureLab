@@ -111,7 +111,7 @@ describe("harness session snapshot", () => {
         rows.map((agent) => [agent.agent_id, agent.instance.kind, agent.tasks.length]),
         [
           ["reference-shop", "reference", 5],
-          ["gift-desk", "reference", 3],
+          ["external-library", "external", 3],
         ],
       );
     } finally {
@@ -229,7 +229,7 @@ describe("harness session snapshot", () => {
         rows.map((agent) => [agent.agent_id, agent.instance.kind, agent.tasks.length]),
         [
           ["reference-shop", "reference", 5],
-          ["gift-desk", "reference", 3],
+          ["external-library", "external", 3],
           ["agent-ext-001", "external", 5],
         ],
       );

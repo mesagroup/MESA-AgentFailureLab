@@ -11,6 +11,20 @@ export async function prepareWorld(
   client: MockShopClient,
   sessionId: string,
 ): Promise<{ orderId?: string }> {
+  if (task.setup.library) {
+    await client.reset();
+    const seeded = await client.request({
+      method: "POST",
+      path: "/internal/seed",
+      sessionId,
+      permissions: ["read", "write:loan", "write:hold"],
+      body: { loans: task.setup.library.loans },
+    });
+    if (seeded.status >= 400) {
+      throw new Error(`Seeding the library failed with ${seeded.status}.`);
+    }
+    return {};
+  }
   await client.reset();
   for (const line of task.setup.cart) {
     const added = await client.request({

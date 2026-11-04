@@ -3,7 +3,7 @@ import test from "node:test";
 import { canDeleteAgent, canEditAgent } from "./agents-page.ts";
 
 test("demo seeds are edited like any other agent and are not deleted", () => {
-  for (const agentId of ["reference-shop", "gift-desk"]) {
+  for (const agentId of ["reference-shop", "external-library"]) {
     assert.equal(canEditAgent(agentId), true);
     assert.equal(canDeleteAgent(agentId), false);
   }

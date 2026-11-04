@@ -24,7 +24,6 @@ function task(agent: Agent, taskId: string): AgentTask {
 }
 
 const reference = loadAgent("agent-reference-stub.json");
-const gift = loadAgent("agent-gift-desk.json");
 const grant = ["read", "write:cart", "write:order", "write:order:cancel"];
 
 describe("planShopTask", () => {
@@ -64,40 +63,11 @@ describe("planShopTask", () => {
     });
   });
 
-  it("plans the gift desk tasks as comparison, quantity correction, and a clear without checkout", () => {
-    assert.equal(gift.tasks.length, 3);
-    assert.deepEqual(planShopTask(task(gift, "compare-products"), { permissions: ["read"] }), {
-      ok: true,
-      actions: [
-        { tool_name: "search_products", tool_input: { q: "notebook" } },
-        { tool_name: "get_product", tool_input: { product_id: "SKU-NOTE-05" } },
-        { tool_name: "get_product", tool_input: { product_id: "SKU-BAG-04" } },
-      ],
-    });
-    assert.deepEqual(planShopTask(task(gift, "correct-quantity"), { permissions: ["read", "write:cart"] }), {
-      ok: true,
-      actions: [
-        { tool_name: "update_cart", tool_input: { sku: "SKU-NOTE-05", qty: 1 } },
-        { tool_name: "get_cart", tool_input: {} },
-      ],
-    });
-    assert.deepEqual(planShopTask(task(gift, "clear-cart"), { permissions: ["read", "write:cart"] }), {
-      ok: true,
-      actions: [
-        { tool_name: "update_cart", tool_input: { sku: "SKU-TEE-02", qty: 0 } },
-        { tool_name: "update_cart", tool_input: { sku: "SKU-MUG-01", qty: 0 } },
-        { tool_name: "get_cart", tool_input: {} },
-      ],
-    });
-  });
-
   it("refuses a check pattern it does not know how to run", () => {
-    const onlyOrder = structuredClone(task(gift, "clear-cart"));
-    onlyOrder.success_test.checks = [
-      { name: "order_created", description: "An order exists." },
-    ];
-    const planned = planShopTask(onlyOrder, { permissions: grant });
+    const onlyEmpty = structuredClone(task(reference, "T2"));
+    onlyEmpty.success_test.checks = [{ name: "cart_empty", description: "The cart is empty." }];
+    const planned = planShopTask(onlyEmpty, { permissions: grant });
     assert.equal(planned.ok, false);
-    if (!planned.ok) assert.match(planned.message, /order_created/);
+    if (!planned.ok) assert.match(planned.message, /cart_empty/);
   });
 });

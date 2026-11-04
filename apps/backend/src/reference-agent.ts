@@ -8,14 +8,14 @@ export function loadReferenceAgent(): Agent {
   return loadAgentFixture("@mesa/shared/examples/agent-reference-stub.json");
 }
 
-/** Gift desk fixture. Three tasks that are not the T1–T5 purchase flow. */
-export function loadGiftDeskAgent(): Agent {
-  return loadAgentFixture("@mesa/shared/examples/agent-gift-desk.json");
+/** Library desk fixture. Three loan tasks on the external runtime. */
+export function loadLibraryAgent(): Agent {
+  return loadAgentFixture("@mesa/shared/examples/agent-library-desk.json");
 }
 
 /** Demo agents, in seed order. Each one is inserted or rewritten on its own. */
 export function loadSeedAgents(): Agent[] {
-  return [loadReferenceAgent(), loadGiftDeskAgent()];
+  return [loadReferenceAgent(), loadLibraryAgent()];
 }
 
 function loadAgentFixture(specifier: string): Agent {

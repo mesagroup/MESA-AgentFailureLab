@@ -18,7 +18,7 @@ These files are not edited by the store. SQL stores the document as `jsonb`. It 
 
 Agents, runs, and traces have to survive a process restart and a redeploy. The lab's hosted target is one Postgres database on Render, selected with `DATABASE_URL`. The backend talks to it with `pg` (node-postgres). There is no Prisma and no second service. Runs and traces are not a second database.
 
-CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. `AgentStore` and `RunStore` each have an in-memory implementation. `DATABASE_URL` empty means both implementations. `GET /health` then reports `agent_store: "memory"` and `run_store: "memory"`. A restart drops those rows. The agent store seeds `reference-shop` and `gift-desk` again. The run store does not seed anything.
+CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. `AgentStore` and `RunStore` each have an in-memory implementation. `DATABASE_URL` empty means both implementations. `GET /health` then reports `agent_store: "memory"` and `run_store: "memory"`. A restart drops those rows. The agent store seeds `reference-shop` and `external-library` again. The run store does not seed anything.
 
 `instance.base_url` and `test_instance.base_url` are the agent runtime (port 3002 for the reference agent). They are not the mock shop.
 
@@ -50,17 +50,17 @@ Backup, restore, and jury reset are command-line scripts in `src/persistence/cli
 | `get(agentId)` | One agent, or absent. A present document that fails `validateAgent` throws |
 | `create(body)` | Fill missing server fields, `validateAgent`, insert. Conflict if the id exists |
 | `replace(agentId, body)` | 404 if the id is absent. Server sets `updated_at`. Validate, then replace the document. An invalid stored document is still replaced. `created_at` is kept when the body omits it and the stored value is a date-time |
-| `delete(agentId)` | 409 for `reference-shop` and `gift-desk`. 404 if another id is absent |
+| `delete(agentId)` | 409 for `reference-shop` and `external-library`. 404 if another id is absent |
 | `seedIfMissing()` | Insert each demo fixture when that id is absent. Rewrite a row when its document fails `validateAgent` or its `updated_at` is earlier than that fixture. A valid row at the same age or newer stays |
 | `upsertImported(agent)` | Backup import. Insert the document, or replace it and keep the stored `created_at`. An invalid stored document is still replaced. Not an HTTP route |
-| `deleteAgentsExceptSeed()` | Delete every agent except `reference-shop` and `gift-desk`. Not an HTTP route |
+| `deleteAgentsExceptSeed()` | Delete every agent except `reference-shop` and `external-library`. Not an HTTP route |
 | `close()` | End the pool, or a no-op for memory |
 
 `src/agents/open.ts` reads `DATABASE_URL`. A blank or missing value returns `MemoryAgentStore`, which seeds in its constructor. A URL returns `PostgresAgentStore`, applies migrations, then seeds. `src/persistence/open.ts` does the same selection for runs and traces and does not seed. `src/index.ts` does both before `listen`, and closes both stores when the process closes the Fastify app.
 
 `MemoryAgentStore` is a `Map`. Records are cloned on the way in and out. `PostgresAgentStore` uses a pool of at most 5 connections and a 10 second connect timeout. Render's internal URL (`fromDatabase` property `connectionString`) has no `.render.com` host and no `sslmode`. TLS is not required on that private network, so the pool leaves the string alone. Compose (`postgres://mesa:mesa@mesa-postgres:5432/mesa`) is the same. The external URL requires TLS. A host containing `.render.com`, or any URL with `sslmode=require`, uses TLS with `rejectUnauthorized: false`. `sslmode` is removed so node-postgres does not verify the CA. Internal certificates are self-signed, so `verify-ca` and `verify-full` are not used. Laptop `db:import` uses the external URL. The running service on Render uses the internal one.
 
-Writes that fail `validateAgent` throw `AgentValidationError` (HTTP 400). A duplicate id throws `AgentConflictError` (HTTP 409). A missing id throws `AgentNotFoundError` (HTTP 404). Deleting `reference-shop` or `gift-desk` throws `ProtectedAgentError` (HTTP 409).
+Writes that fail `validateAgent` throw `AgentValidationError` (HTTP 400). A duplicate id throws `AgentConflictError` (HTTP 409). A missing id throws `AgentNotFoundError` (HTTP 404). Deleting `reference-shop` or `external-library` throws `ProtectedAgentError` (HTTP 409).
 
 `list()` does not throw when a stored document fails the Agent schema. It skips that row and writes a warning. `GET /agents` and `GET /runs` stay up when one agent is stale. `GET /agents/:agent_id` for that id still fails until the row is replaced. `db:export` uses `list()`, so an invalid agent is left out of the file. A later import that contains a valid copy of that id overwrites the row.
 
@@ -174,7 +174,7 @@ The runner is `applyMigrations` in `src/agents/postgres.ts`. `PostgresAgentStore
 3. Skips a file whose name is already in `schema_migrations`.
 4. Runs the file in a transaction, then records the file name. A UTF-8 BOM is stripped and CRLF is normalized to LF before the script runs, so a Windows checkout applies the same statements.
 
-The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `gift-desk` only when that document fails the Agent schema or its `updated_at` is earlier than that fixture. It does not duplicate run or trace rows. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
+The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `external-library` only when that document fails the Agent schema or its `updated_at` is earlier than that fixture. It does not duplicate run or trace rows. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
 
 Do not edit a file after it has been applied in a shared database. The runner will not apply it again. Add the next numbered file instead.
 
@@ -182,20 +182,20 @@ If Postgres is unreachable, startup throws and the process exits. The message sa
 
 ## Seed lifecycle
 
-The fixtures are `packages/shared/examples/agent-reference-stub.json` (`reference-shop`) and `packages/shared/examples/agent-gift-desk.json` (`gift-desk`). Each id is inserted, kept, or rewritten on its own.
+The fixtures are `packages/shared/examples/agent-reference-stub.json` (`reference-shop`) and `packages/shared/examples/agent-library-desk.json` (`external-library`). Each id is inserted, kept, or rewritten on its own.
 
 | Event | Memory | Postgres |
 | --- | --- | --- |
 | Boot, id absent | Insert the fixture | `INSERT … ON CONFLICT DO NOTHING` |
 | Boot, id present, document valid, `updated_at` >= fixture | Leave the row, including a `PUT` that renamed it | Same |
 | Boot, document fails `validateAgent`, or `updated_at` is earlier than the fixture | Replace the row with the fixture | `UPDATE` the row from the fixture |
-| `DELETE /agents/reference-shop` or `DELETE /agents/gift-desk` | 409, row kept | 409, row kept |
+| `DELETE /agents/reference-shop` or `DELETE /agents/external-library` | 409, row kept | 409, row kept |
 | Process restart | New empty map, then seed. Other agents are gone | Rows stay. The seed is inserted or rewritten by the rules above. Other agents stay |
 | `seedIfMissing()` again on a valid row that is not older than the fixture | No overwrite | No overwrite |
 
 There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Runs and traces are not seeded. A fresh memory store is empty. A fresh Postgres database has the tables and no run or trace rows.
 
-A local wipe of the whole Postgres volume is still `docker compose down -v`, which deletes `mesa-pgdata`. The next start runs migrations on an empty database and seeds `reference-shop` and `gift-desk` because those ids are missing. `db:reset` does not delete the volume. It deletes runs, traces, and agents other than those seeds. A valid seed that is not older than its fixture is left as it is, including a name changed with PUT. An invalid or older seed is rewritten from its fixture. Reset does not read a seed through `get`, so a document that fails the schema does not abort the command.
+A local wipe of the whole Postgres volume is still `docker compose down -v`, which deletes `mesa-pgdata`. The next start runs migrations on an empty database and seeds `reference-shop` and `external-library` because those ids are missing. `db:reset` does not delete the volume. It deletes runs, traces, and agents other than those seeds. A valid seed that is not older than its fixture is left as it is, including a name changed with PUT. An invalid or older seed is rewritten from its fixture. Reset does not read a seed through `get`, so a document that fails the schema does not abort the command.
 
 `deleteAllRowsForTests` exists on `PostgresAgentStore` (agents, including the seed) and on `PostgresRunStore` (traces, then runs) for the test suites. Neither is an HTTP route. The backup tests use schema `mesa_transfer_test` and do not write `public`.
 
@@ -205,12 +205,12 @@ Nothing in this store expires. There is no TTL, no row cap, and no purge job.
 
 | Event | Memory | Postgres |
 | --- | --- | --- |
-| Process restart | Runs and traces are gone. Agents other than the reseeded `reference-shop` and `gift-desk` are gone | Every run, trace, and agent row stays |
+| Process restart | Runs and traces are gone. Agents other than the reseeded `reference-shop` and `external-library` are gone | Every run, trace, and agent row stays |
 | `DELETE /agents/:id` (not the seed) | That agent row is gone. Runs and traces that name it stay | Same |
 | Save the same `run_id` or `trace_id` again | Document replaced. List position unchanged | Document replaced. `created_at` unchanged, so list position stays |
 | `docker compose down` | The process is gone | The `mesa-pgdata` volume keeps agents, runs, and traces |
-| `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds `reference-shop` and `gift-desk` |
-| `db:reset -- --yes` | Not used. Stop the process instead. The next start has the seeds and no runs | Runs, traces, and agents other than `reference-shop` and `gift-desk` are deleted. A valid seed that is not older than its fixture stays. An invalid or older seed is rewritten. The volume stays |
+| `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds `reference-shop` and `external-library` |
+| `db:reset -- --yes` | Not used. Stop the process instead. The next start has the seeds and no runs | Runs, traces, and agents other than `reference-shop` and `external-library` are deleted. A valid seed that is not older than its fixture stays. An invalid or older seed is rewritten. The volume stays |
 
 There is no `DELETE /runs` or `DELETE /traces`. A jury reset that keeps the volume and the seed is [Jury reset](#jury-reset). A copy of the rows is [Backup and restore](#backup-and-restore).
 
@@ -471,7 +471,7 @@ User, password, and database name are `mesa`. That password is a local default, 
 
 `GET /health` on the backend reports `agent_store` and `run_store` as `postgres`.
 
-Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` and `gift-desk` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 2 because both seeds are back. To drop runs, traces, and non-seed agents without deleting the volume, use [Jury reset](#jury-reset). To copy the rows first, use [Backup and restore](#backup-and-restore).
+Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` and `external-library` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 2 because both seeds are back. To drop runs, traces, and non-seed agents without deleting the volume, use [Jury reset](#jury-reset). To copy the rows first, use [Backup and restore](#backup-and-restore).
 
 Windows PowerShell, from the repo root:
 
@@ -572,7 +572,7 @@ The external URL is for a laptop. It uses TLS (`sslmode=require` or a `.render.c
 
 A Blueprint sync refreshes `DATABASE_URL` from the database. That sync runs on a push to `main` only when auto-sync is on for the Blueprint. Auto-sync off means the merge updates the file and does not create the database. Yuri then uses Manual Sync in the Dashboard. `autoDeployTrigger: commit` still redeploys `mesa-backend` on that push, which restarts the in-memory process. Export before that restart. `XAI_API_KEY` stays `sync: false`.
 
-The same database holds agents, runs, and traces once `DATABASE_URL` is set and the backend has booted. Startup applies `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, then seeds `reference-shop` and `gift-desk` when either id is missing.
+The same database holds agents, runs, and traces once `DATABASE_URL` is set and the backend has booted. Startup applies `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, then seeds `reference-shop` and `external-library` when either id is missing.
 
 ## Backup and restore
 
@@ -582,8 +582,8 @@ Part of [#75](https://github.com/mesagroup/MESA-AgentFailureLab/issues/75) (epic
 | --- | --- |
 | `pnpm --filter @mesa/backend db:export -- --out <file>` | Read Postgres (`DATABASE_URL`) and write one JSON file. Applies pending migrations. Does not insert the demo seeds |
 | `pnpm --filter @mesa/backend db:export -- --base-url <url> --out <file>` | Read a running backend over HTTP. Use this for an in-memory process. Do not set `DATABASE_URL` at the same time |
-| `pnpm --filter @mesa/backend db:import -- --file <file>` | Validate every document, upsert into Postgres, then insert `reference-shop` and `gift-desk` if either id is missing. Rewrite a seed when the stored row fails validation or is older than its fixture |
-| `pnpm --filter @mesa/backend db:reset -- --yes` | Delete runs, traces, and agents other than `reference-shop` and `gift-desk`. See [Jury reset](#jury-reset) |
+| `pnpm --filter @mesa/backend db:import -- --file <file>` | Validate every document, upsert into Postgres, then insert `reference-shop` and `external-library` if either id is missing. Rewrite a seed when the stored row fails validation or is older than its fixture |
+| `pnpm --filter @mesa/backend db:reset -- --yes` | Delete runs, traces, and agents other than `reference-shop` and `external-library`. See [Jury reset](#jury-reset) |
 
 The extra `--` is required so pnpm forwards the flags. A relative `--out` or `--file` is resolved from the directory where you started pnpm (`INIT_CWD`), which is the repo root in the examples below. The commands run with cwd `apps/backend`. They read `apps/backend/.env` when that file exists and `DATABASE_URL` is blank. A value already exported in the shell wins. The URL is not printed. The summary prints the host, port, and database name.
 
@@ -637,7 +637,7 @@ Passing both `DATABASE_URL` and `--base-url` is an error. Unset `DATABASE_URL` t
 
 ## Jury reset
 
-`db:reset` deletes every run, every trace, and every agent whose id is not `reference-shop` or `gift-desk`. A valid seed that is not older than its fixture stays, including a name or other field changed with `PUT`. If an id is missing, that fixture is inserted. If the stored seed fails validation or is older than its fixture, it is rewritten. `DELETE` of either seed is still 409. Reset does not call that route.
+`db:reset` deletes every run, every trace, and every agent whose id is not `reference-shop` or `external-library`. A valid seed that is not older than its fixture stays, including a name or other field changed with `PUT`. If an id is missing, that fixture is inserted. If the stored seed fails validation or is older than its fixture, it is rewritten. `DELETE` of either seed is still 409. Reset does not call that route.
 
 To get the fixture body back after a valid edit, `PUT` the example document, or delete the volume with `docker compose down -v`. The next boot inserts the fixture because the row is gone. Reset is the step that keeps the volume. Boot already rewrites a seed that fails validation or is older than the fixture.
 
@@ -675,7 +675,7 @@ A URL whose host contains `.render.com` still runs when you pass `--yes`. The co
 
 ## Cutover
 
-The seed rules do not change in a cutover. On boot, `reference-shop` and `gift-desk` are inserted when that id is missing. A valid row that is not older than its fixture is not overwritten. An invalid or older row is rewritten from its fixture. `DELETE` of either seed stays 409. Runs and traces are not seeded. After `DATABASE_URL` is set, `GET /health` reports `agent_store` and `run_store` as `postgres`.
+The seed rules do not change in a cutover. On boot, `reference-shop` and `external-library` are inserted when that id is missing. A valid row that is not older than its fixture is not overwritten. An invalid or older row is rewritten from its fixture. `DELETE` of either seed stays 409. Runs and traces are not seeded. After `DATABASE_URL` is set, `GET /health` reports `agent_store` and `run_store` as `postgres`.
 
 Memory rows exist only in the process that has them. Export before you stop it. A restart with no `DATABASE_URL` drops them. Setting `DATABASE_URL` on a new process does not copy them. The copy is the JSON file, then `db:import`.
 
@@ -784,7 +784,7 @@ pnpm --filter @mesa/backend db:import -- --file mesa-backup.json
 
 The command prints the host and database name, not the user or password. A `.render.com` host also prints a warning to export a copy first.
 
-5. Read the public API again. `GET /health` stays `postgres`. `GET /agents/reference-shop` returns that seed (the imported document when the file had one). `GET /agents/gift-desk` returns the other. `GET /runs` lists the imported runs. `counts.agents` is at least 2.
+5. Read the public API again. `GET /health` stays `postgres`. `GET /agents/reference-shop` returns that seed (the imported document when the file had one). `GET /agents/external-library` returns the other. `GET /runs` lists the imported runs. `counts.agents` is at least 2.
 
 ```powershell
 Invoke-RestMethod https://mesa-backend-itm4.onrender.com/health | Select-Object status, agent_store, run_store

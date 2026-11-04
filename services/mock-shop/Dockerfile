@@ -24,6 +24,8 @@ COPY apps/backend/package.json apps/backend/package.json
 COPY apps/agentservice/package.json apps/agentservice/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY services/mock-shop/package.json services/mock-shop/package.json
+COPY apps/library-agent/package.json apps/library-agent/package.json
+COPY services/mock-library/package.json services/mock-library/package.json
 
 RUN pnpm install --frozen-lockfile
 

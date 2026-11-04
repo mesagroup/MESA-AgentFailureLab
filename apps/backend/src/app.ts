@@ -141,14 +141,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
     }
     try {
+      const worldUrl = registered.world?.base_url?.trim() ?? "";
+      const runMockUrl = worldUrl === "" ? mockBaseUrl : worldUrl;
+      const runMock = worldUrl === "" ? mock : createHttpMockClient(worldUrl);
+      const driver = parsed.value.driver ?? (registered.instance.kind === "external" ? "auto" : undefined);
       const results = await runTasks({
         agent: registered,
         store,
-        mock,
-        mockBaseUrl,
+        mock: runMock,
+        mockBaseUrl: runMockUrl,
         phase: parsed.value.phase,
         taskIds: parsed.value.taskIds,
-        driver: parsed.value.driver,
+        driver,
         injection: parsed.value.injection,
         fixKinds: parsed.value.fixKinds,
         parentRunId: parsed.value.parentRunId,

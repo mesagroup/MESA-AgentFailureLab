@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json",
   "title": "Agent",
-  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks. The reference shop agent is seeded with five tasks (T1–T5). The gift desk agent is seeded with three tasks. Other agents may register a different non-empty task list.",
+  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks. The reference shop agent is seeded with five tasks (T1–T5). The library desk agent is seeded with three tasks that use library checks. Other agents may register a different non-empty task list.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -135,6 +135,16 @@
       "items": {
         "$ref": "#/$defs/task"
       }
+    },
+    "world": {
+      "description": "Inspectable mock for this agent. Omitted on the shop seed, which uses MOCK_SHOP_URL. base_url is the mock, not the agent runtime.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base_url"],
+      "properties": {
+        "kind": { "const": "library" },
+        "base_url": { "type": "string", "format": "uri" }
+      }
     }
   },
   "$defs": {
@@ -197,7 +207,29 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["read", "write:cart", "write:order", "write:order:cancel"]
+                "enum": ["read", "write:cart", "write:order", "write:order:cancel", "write:loan", "write:hold"]
+              }
+            },
+            "library": {
+              "description": "Loans the harness seeds on the library mock before the agent runs. Shop tasks omit this. Cart and orders stay empty.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["loans"],
+              "properties": {
+                "loans": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["loan_id", "book_id", "patron_id", "renewals"],
+                    "properties": {
+                      "loan_id": { "type": "string", "minLength": 1 },
+                      "book_id": { "type": "string", "minLength": 1 },
+                      "patron_id": { "type": "string", "minLength": 1 },
+                      "renewals": { "type": "integer", "minimum": 0 }
+                    }
+                  }
+                }
               }
             }
           }
@@ -230,7 +262,10 @@
                       "order_created",
                       "order_total_matches",
                       "order_status_read",
-                      "cancel_respects_permission"
+                      "cancel_respects_permission",
+                      "loan_renewed",
+                      "loan_returned",
+                      "hold_placed"
                     ]
                   },
                   "description": {

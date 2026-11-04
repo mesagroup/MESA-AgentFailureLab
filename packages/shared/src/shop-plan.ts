@@ -20,7 +20,7 @@ export function planShopTask(
   task: AgentTask,
   ctx: { orderId?: string; permissions: readonly string[] },
 ): ShopPlanResult {
-  if (isCatalogLookup(task)) {
+  if (sameSet(task, ["catalog_read", "product_viewed"])) {
     return planCatalog(task);
   }
   if (task.success_test.checks.length > 0 && task.success_test.checks.every((check) => check.name === "cart_contains")) {
@@ -28,9 +28,6 @@ export function planShopTask(
   }
   if (sameSet(task, ["order_created", "cart_empty", "order_total_matches"])) {
     return planCheckout(task);
-  }
-  if (sameSet(task, ["cart_empty"])) {
-    return planClearCart(task);
   }
   if (sameSet(task, ["order_status_read"])) {
     return planOrderRead(task, ctx.orderId);
@@ -51,42 +48,15 @@ export function taskNeedsOrderId(task: AgentTask): boolean {
   );
 }
 
-/**
- * One catalog search, one or more product opens, and optionally an empty cart.
- * T1 is the one-product case with no cart check. A second product, or `cart_empty`
- * on a cart setup left empty, is a comparison rather than the start of a purchase.
- */
-function isCatalogLookup(task: AgentTask): boolean {
-  let catalog = 0;
-  let viewed = 0;
-  let empty = 0;
-  for (const check of task.success_test.checks) {
-    if (check.name === "catalog_read") catalog += 1;
-    else if (check.name === "product_viewed") viewed += 1;
-    else if (check.name === "cart_empty") empty += 1;
-    else return false;
-  }
-  return catalog === 1 && viewed >= 1 && empty <= 1;
-}
-
 function planCatalog(task: AgentTask): ShopPlanResult {
   const viewed = checksNamed(task, "product_viewed");
   const catalog = checksNamed(task, "catalog_read");
-  if (viewed.length < 1 || catalog.length !== 1) {
-    return refuse(`This agent cannot plan task ${task.task_id}. It expects one catalog read and at least one product view.`);
+  if (viewed.length !== 1 || catalog.length !== 1) {
+    return refuse(`This agent cannot plan task ${task.task_id}. It expects one catalog read and one product view.`);
   }
-  if (checksNamed(task, "cart_empty").length > 0 && task.setup.cart.length > 0) {
-    return refuse(
-      `This agent cannot plan task ${task.task_id}. A catalog lookup cannot empty a cart that setup already filled.`,
-    );
-  }
-  const productIds: string[] = [];
-  for (const check of viewed) {
-    const productId = paramString(check.params, "product_id");
-    if (!productId) return refuse(`Task ${task.task_id} product_viewed requires params.product_id.`);
-    productIds.push(productId);
-  }
-  const query = paramString(catalog[0]?.params, "query") ?? queryFromProductId(productIds[0] ?? "");
+  const productId = paramString(viewed[0]?.params, "product_id");
+  if (!productId) return refuse(`Task ${task.task_id} product_viewed requires params.product_id.`);
+  const query = paramString(catalog[0]?.params, "query") ?? queryFromProductId(productId);
   if (!query) {
     return refuse(
       `This agent cannot plan task ${task.task_id}. Set catalog_read params.query or use a product id with a searchable token.`,
@@ -94,7 +64,7 @@ function planCatalog(task: AgentTask): ShopPlanResult {
   }
   return ok([
     { tool_name: "search_products", tool_input: { q: query } },
-    ...productIds.map((productId) => ({ tool_name: "get_product", tool_input: { product_id: productId } })),
+    { tool_name: "get_product", tool_input: { product_id: productId } },
   ]);
 }
 
@@ -106,28 +76,8 @@ function planCartLines(task: AgentTask): ShopPlanResult {
     if (!sku || qty === undefined) {
       return refuse(`Task ${task.task_id} cart_contains requires params.sku and params.qty.`);
     }
-    const seeded = task.setup.cart.find((line) => line.sku === sku);
-    if (seeded !== undefined && seeded.qty === qty) continue;
-    actions.push({
-      tool_name: seeded === undefined ? "add_to_cart" : "update_cart",
-      tool_input: { sku, qty },
-    });
+    actions.push({ tool_name: "add_to_cart", tool_input: { sku, qty } });
   }
-  actions.push({ tool_name: "get_cart", tool_input: {} });
-  return ok(actions);
-}
-
-/** Remove every seeded line. This does not check out, so no order is created. */
-function planClearCart(task: AgentTask): ShopPlanResult {
-  if (task.setup.cart.length === 0) {
-    return refuse(
-      `This agent cannot plan task ${task.task_id}. Clearing the cart needs lines in setup.cart.`,
-    );
-  }
-  const actions: ShopPlanAction[] = task.setup.cart.map((line) => ({
-    tool_name: "update_cart",
-    tool_input: { sku: line.sku, qty: 0 },
-  }));
   actions.push({ tool_name: "get_cart", tool_input: {} });
   return ok(actions);
 }

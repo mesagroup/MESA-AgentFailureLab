@@ -1,6 +1,6 @@
 # Agent tasks
 
-A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what `POST /agents` and `PUT /agents/:agent_id` store. The reference shop agent is seeded with T1–T5 in that shape. The seed file is [`packages/shared/examples/agent-reference-stub.json`](../packages/shared/examples/agent-reference-stub.json). The gift desk agent is seeded the same way from [`packages/shared/examples/agent-gift-desk.json`](../packages/shared/examples/agent-gift-desk.json).
+A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what `POST /agents` and `PUT /agents/:agent_id` store. The reference shop agent is seeded with T1–T5 in that shape. The seed file is [`packages/shared/examples/agent-reference-stub.json`](../packages/shared/examples/agent-reference-stub.json). The library desk is a second seed, `external-library`, from [`packages/shared/examples/agent-library-desk.json`](../packages/shared/examples/agent-library-desk.json). Its tasks are not shop tasks.
 
 `POST /v1/tasks/run` sends the whole task on `AgentRunRequest.task`. The reference agent plans from that object. A pattern it cannot run is refused with HTTP 400 and `error: "unsupported_task"`.
 
@@ -35,14 +35,15 @@ A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what 
 | `title`, `prompt` | Shown to people and, for `prompt`, sent to the agent. The harness may append a note. `{{order_id}}` in the seed prompts is replaced with the id setup created. |
 | `setup.cart` | Lines the harness adds with `POST /cart/items` before the agent runs. `qty` is an integer ≥ 1. |
 | `setup.orders` | Each `{ "from_cart": true }` checks out the cart just seeded. The shop assigns `order_id`. The last one is sent on the agent request. |
-| `setup.permissions` | Grant on the agent request. One of `read`, `write:cart`, `write:order`, `write:order:cancel`. This is not the header used to seed the shop. |
+| `setup.permissions` | Grant on the agent request. Shop: `read`, `write:cart`, `write:order`, `write:order:cancel`. Library: `read`, `write:loan`, `write:hold`. This is not the header used to seed the world. |
+| `setup.library` | Optional. Loans the harness creates on the library mock. Shop tasks omit it and leave `cart` and `orders` as the shop world. |
 | `success_test.checks` | At least one registered check. The verifier scores shop state. It does not score the agent's prose. |
 
 Seeding the cart uses `write:cart`. Checking out uses `write:order`. Those calls are harness setup. They are not agent steps and they are not injected.
 
 `grant_cancel: false` on `POST /runs` drops `write:order:cancel` from the grant for that run. The stored task stays as written. That is how the security case runs T5 with only `read`.
 
-An existing `reference-shop` or `gift-desk` row is not overwritten on boot when it still validates and its `updated_at` is the same as the fixture or newer. A row that fails `validateAgent`, or whose `updated_at` is earlier than its fixture, is rewritten from that fixture. Delete is rejected for both seeds; edit either one with `PUT`. A process with no `DATABASE_URL` reseeds memory on startup.
+An existing `reference-shop` or `external-library` row is not overwritten on boot when it still validates and its `updated_at` is the same as the fixture or newer. A row that fails `validateAgent`, or whose `updated_at` is earlier than its fixture, is rewritten from that fixture. Delete is rejected for both seeds; edit either one with `PUT`. A process with no `DATABASE_URL` reseeds memory on startup.
 
 ## Checks
 
@@ -58,6 +59,9 @@ An existing `reference-shop` or `gift-desk` row is not overwritten on boot when 
 | `order_total_matches` | none | Each placed order total equals its lines. |
 | `order_status_read` | none | `get_order` was recorded for the seeded order id, and the reported status matches the shop. |
 | `cancel_respects_permission` | none | The seeded order is `cancelled` when `write:order:cancel` was granted, and still `placed` otherwise. |
+| `loan_renewed` | `loan_id`, `renewals` | That library loan is still `on_loan` and its renewal count is `renewals`. |
+| `loan_returned` | `loan_id` | That library loan has status `returned`. |
+| `hold_placed` | `book_id`, `patron_id` | That patron has a hold on that book. |
 
 ## Seeded shop tasks
 
@@ -71,24 +75,16 @@ An existing `reference-shop` or `gift-desk` row is not overwritten on boot when 
 
 The search query is `catalog_read.params.query` when set. The T1 check omits it, so any catalog read passes, and the agent searches the token in the product id (`SKU-MUG-01` → `mug`).
 
-A catalog task may open more than one product. The checks are one `catalog_read`, one or more `product_viewed`, and optionally `cart_empty` when `setup.cart` is empty. The plan is one search, then `get_product` for each product id. T1 is that pattern with a single product and no cart check, so its action list is unchanged.
+A task whose checks are not one of those shop patterns is stored if the check types and params are valid. The shop agent then refuses it instead of returning an empty plan. Example: a task whose only check is `cart_empty`. Library checks are a separate planner.
 
-A task whose checks are only `cart_contains` adds a line that is not already in `setup.cart`. A line that setup already has at a different quantity is set with `update_cart`. A line that already matches is left alone. T2's cart is empty, so it still adds.
+## Seeded library tasks
 
-A task whose only check is `cart_empty`, and whose `setup.cart` has lines, removes each of those lines with `update_cart` quantity 0. It does not call `checkout`. T3 is still the checkout pattern: `order_created`, `cart_empty`, and `order_total_matches` together.
+`external-library` is the library desk. `instance.kind` is `external`. The runtime is `https://mesa-library-agent.onrender.com`. The world is the library mock at `https://mesa-mock-library.onrender.com`, not the shop. It does not use shop tools or shop checks.
 
-A task whose checks are not one of those patterns is stored if the check types and params are valid. The reference agent then refuses it instead of returning an empty plan. Example: a task whose only check is `order_created`.
-
-## Seeded gift desk tasks
-
-`gift-desk` is the gift desk assistant. It uses the same agent service and the same mock shop. Its three tasks are not the purchase flow.
-
-| Task | Setup | Checks | What the reference agent plans |
+| Task | Setup | Checks | Plan |
 | --- | --- | --- | --- |
-| `compare-products` | empty cart, `read` | `catalog_read` query `notebook`, `product_viewed` `SKU-NOTE-05`, `product_viewed` `SKU-BAG-04`, `cart_empty` | `search_products` `q=notebook`, then `get_product` for the notebook and the tote. The cart stays empty. |
-| `correct-quantity` | notebook qty 4 and cap qty 2, `read` + `write:cart` | `cart_contains` notebook qty 1, `cart_contains` cap qty 2 | `update_cart` on the notebook to 1, then `get_cart`. The cap is already 2, so it is not added again. |
-| `clear-cart` | tee qty 1 and mug qty 2, `read` + `write:cart` | `cart_empty` | `update_cart` quantity 0 on each seeded line, then `get_cart`. No checkout and no order. |
+| `renew-loan` | loan-1042 on BK-OWL for patron-ada, `read` + `write:loan` | `loan_renewed` renewals 1 | `renew_loan`, then `get_loan` |
+| `return-loan` | the same loan, `read` + `write:loan` | `loan_returned` | `return_loan`, then `get_loan` |
+| `place-hold` | loan-2001 has the only copy of BK-RARE out with patron-bev, `read` + `write:hold` | `hold_placed` for patron-ada | `place_hold` |
 
-The Agents page edits either document: id, title, prompt, permissions, cart lines, the checkout toggle, and one row per check with the params that check type declares. `reference-shop` and `gift-desk` use that same form. `PUT /agents/:agent_id` stores the edit. A later boot keeps it when the row still validates and is not older than the fixture.
-
-The Agents page edits this document: id, title, prompt, permissions, cart lines, the checkout toggle, and one row per check with the params that check type declares.
+The Agents page edits either seed: name, description, kind, and tasks. `PUT /agents/:agent_id` stores the edit. A later boot keeps it when the row still validates and is not older than the fixture.

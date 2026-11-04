@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
 import { isRenderPostgresUrl } from "../src/agents/postgres.js";
-import { GIFT_DESK_AGENT_ID, MemoryAgentStore, ProtectedAgentError, REFERENCE_AGENT_ID } from "../src/agents/store.js";
+import { LIBRARY_AGENT_ID, MemoryAgentStore, ProtectedAgentError, REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { applyEnvFile, resolveCliPath, runPersistenceCli } from "../src/persistence/cli.js";
 import { MemoryStore } from "../src/persistence/memory.js";
@@ -203,12 +203,12 @@ describe("in-memory backup and reset", () => {
     });
     const counts = await resetKeepingSeed(agents, runs);
     assert.equal(counts.seed[REFERENCE_AGENT_ID], "kept");
-    assert.equal(counts.seed[GIFT_DESK_AGENT_ID], "kept");
+    assert.equal(counts.seed[LIBRARY_AGENT_ID], "kept");
     assert.equal(counts.agents_deleted, 1);
     assert.equal(counts.runs_deleted, 1);
     assert.deepEqual(
       (await agents.list()).map((agent) => agent.agent_id),
-      [REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+      [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
     );
     assert.equal((await agents.get(REFERENCE_AGENT_ID))?.name, "Edited seed");
     assert.equal((await agents.get(REFERENCE_AGENT_ID))?.created_at, edited.created_at);
@@ -256,7 +256,7 @@ describe("HTTP export of a running backend", () => {
       assert.match(exported.advisory, /order-preserving timestamps/);
       assert.deepEqual(
         exported.data.agents.map((agent) => agent.agent_id),
-        ["shop-http", REFERENCE_AGENT_ID, GIFT_DESK_AGENT_ID],
+        ["shop-http", REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
       );
       assert.deepEqual(
         exported.data.runs.map((row) => row.document.run_id),

@@ -1,4 +1,4 @@
-import { planShopTask, type AgentTask } from "@mesa/shared";
+import { planLibraryTask, planShopTask, type AgentTask } from "@mesa/shared";
 
 export interface PlannedAction {
   tool_name: string;
@@ -26,7 +26,7 @@ export function scriptedActions(
   task: AgentTask,
   ctx: { orderId?: string; permissions: readonly string[] },
 ): PlannedAction[] {
-  const planned = planShopTask(task, ctx);
+  const planned = task.setup.library ? planLibraryTask(task, ctx) : planShopTask(task, ctx);
   if (!planned.ok) throw new Error(planned.message);
   return planned.actions;
 }

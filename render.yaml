@@ -1,6 +1,6 @@
 # MESA Agent Failure Lab — Render Blueprint.
 # Applying this file creates or updates project mesa-agent-failure-lab /
-# environment demo, the four web services inside it, and Postgres mesa-postgres
+# environment demo, the web services inside it, and Postgres mesa-postgres
 # for agents, runs, and traces.
 # Do not also declare those resources at the root, or they land loose on the workspace.
 # Preview environments and per-service PR previews stay off.
@@ -186,3 +186,54 @@ projects:
               - fromGroup: mesa-shared
               - key: PORT
                 value: 8787
+
+          - type: web
+            name: mesa-library-agent
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./apps/library-agent/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - apps/library-agent/**
+                - packages/shared/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 3003
+
+          - type: web
+            name: mesa-mock-library
+            runtime: docker
+            plan: free
+            region: frankfurt
+            branch: main
+            autoDeployTrigger: commit
+            dockerfilePath: ./services/mock-library/Dockerfile
+            dockerContext: .
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - services/mock-library/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - turbo.json
+                - tsconfig.base.json
+                - .dockerignore
+              ignoredPaths: []
+            envVars:
+              - fromGroup: mesa-shared
+              - key: PORT
+                value: 8788

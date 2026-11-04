@@ -14,7 +14,7 @@ Package exports:
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-stub.json` — the reference shop fixture (T1–T5). The harness loads this; it is not a second schema.
-- `@mesa/shared/examples/agent-gift-desk.json` — the gift desk fixture (three tasks). Seeded the same way as the reference shop.
+- `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Seeded the same way as the reference shop. `instance.kind` is `external`.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 
