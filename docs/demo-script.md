@@ -112,19 +112,19 @@ Campi non misurati: **n/a**. Nessun numero inventato. **Live Grok non eseguito**
 
 | Campo | Valore |
 | --- | --- |
-| Data (UTC) | 2026-11-04T22:37:50.167Z (`ended_at` 2026-11-04T22:37:50.353Z) |
-| Commit client (campo del report) | `146568a493debac01d1c4f51bb9e1a00d68b4279` |
+| Data (UTC) | 2026-11-04T22:47:19.525Z (`ended_at` 2026-11-04T22:47:19.712Z) |
+| Commit client (campo del report) | `e014a7666004e1b53b8935c18ca1c1000db7e503` (dopo rebase su `main` #125) |
 | Dirty | `false` |
 | Mode | `offline` |
-| Comando | `pnpm demo:shop -- --mode offline` (questa esecuzione ha usato `--output /tmp/a5-demo-results-clean` solo per non scrivere in-tree) |
+| Comando | `pnpm demo:shop -- --mode offline` (questa esecuzione ha usato `--output /tmp/a5-demo-results-rebase` solo per non scrivere in-tree) |
 | Exit code | `0` |
 | `fix_verified` / verdict | `true` / `verified` (13 bracci; contrasto pass → fail → pass; controlli completi, nessuna regressione) |
 | `selection.source` / applied | `offline_model` / `["pre_response_check"]` |
-| `report_id` | `shop-a2b9a371-4b30-429c-916a-4f362badf83e` |
+| `report_id` | `shop-e234b786-d1c4-4cff-87bd-f17466269c96` |
 | Report | JSON/MD gitignored; non committati come “nuova esecuzione” |
-| Baseline | run `run-read-product-baseline-3cbc9875-4003-4169-ac0a-80d04b9cdc18` · trace `trace-read-product-baseline-b4ae4a24-eb72-403f-af84-f2b5b96cc5f6` |
-| Injected | run `run-read-product-injected-18ea8222-1039-4b8e-8168-b6815e9bf52a` · trace `trace-read-product-injected-9d0d95fc-f832-4501-bde3-48b89c9395c0` |
-| After_fix | run `run-read-product-after_fix-3f2e1a6a-c510-45b6-ae1e-9e989e0f96c5` · trace `trace-read-product-after_fix-f2a38047-2e83-4aaf-b304-a47b17192ef4` |
+| Baseline | run `run-read-product-baseline-ccf3cc9d-a8b3-4ca1-b708-0261e49b3836` · trace `trace-read-product-baseline-1ad35c58-644f-44ab-82f0-aff2663403db` |
+| Injected | run `run-read-product-injected-0b53209e-91dc-4ed6-afcb-a74c24462173` · trace `trace-read-product-injected-fc7d912b-d7b6-4529-9752-9406c14df7f4` |
+| After_fix | run `run-read-product-after_fix-70cf39a6-d7a4-4b90-8006-102fb2b0c039` · trace `trace-read-product-after_fix-e9b92660-a3dd-4000-a7fa-6d28d11ab220` |
 | Provider model / tokens / cost | n/a |
 | Backend/planner commit | n/a |
 | Live Grok | non eseguito |
