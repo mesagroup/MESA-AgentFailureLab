@@ -32,7 +32,8 @@ Do not pass both. Import and reset require DATABASE_URL. They do not print the U
 
 import validates every document, upserts, and keeps the created_at already stored for that id.
 A missing id is inserted with the created_at from the file. Rows absent from the file stay.
-reset deletes runs, traces, and agents other than reference-shop. The seed row is kept.
+reset deletes runs, traces, and agents other than reference-shop.
+A valid seed that is not older than the fixture is kept. An invalid or older seed is rewritten from the fixture.
 There is no HTTP reset route.`;
 
 interface ParsedArgs {
@@ -133,8 +134,10 @@ function formatImport(counts: ImportCounts): string {
 function formatReset(counts: ResetCounts, target: string): string {
   const seed =
     counts.seed === "kept"
-      ? "Kept reference-shop. An edited seed is not rewritten to the fixture."
-      : "Inserted reference-shop because that id was missing.";
+      ? "Kept reference-shop. A valid seed that is not older than the fixture is not rewritten."
+      : counts.seed === "refreshed"
+        ? "Rewrote reference-shop from the fixture because the stored row was invalid or older than the fixture."
+        : "Inserted reference-shop because that id was missing.";
   return `Deleted ${counts.agents_deleted} agents, ${counts.runs_deleted} runs, and ${counts.traces_deleted} traces on ${target}.\n${seed}`;
 }
 
@@ -251,7 +254,9 @@ async function runImport(
     await agents.seedIfMissing();
     return imported;
   });
-  io.stdout(`Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop is present (inserted only when that id was missing).`);
+  io.stdout(
+    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop is present (inserted when missing; rewritten when the stored row is invalid or older than the fixture).`,
+  );
   return 0;
 }
 

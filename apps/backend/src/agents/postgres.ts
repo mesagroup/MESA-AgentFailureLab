@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Agent } from "@mesa/shared";
-import { validateAgent } from "@mesa/shared/validate";
 import pg from "pg";
 import {
   AgentConflictError,
@@ -12,8 +11,15 @@ import {
   agentFromCreate,
   agentFromReplace,
   importedAgent,
+  rawAgentId,
+  readableStoredAgents,
+  readStoredAgent,
   referenceSeed,
+  referenceSeedRewriteReason,
+  storedTimestamp,
+  warnReferenceSeedRewritten,
   type AgentStore,
+  type SeedResult,
 } from "./store.js";
 
 const MIGRATION_TABLE = "schema_migrations";
@@ -131,14 +137,6 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
-function readStoredAgent(value: unknown): Agent {
-  const result = validateAgent(value);
-  if (!result.ok) {
-    throw new Error(`Stored agent failed schema: ${result.errors.join("; ")}`);
-  }
-  return structuredClone(result.value);
-}
-
 export interface PostgresAgentStoreOptions {
   /**
    * Libpq search_path for this pool. Tests use a private schema so they do not
@@ -170,16 +168,13 @@ export class PostgresAgentStore implements AgentStore {
     const result = await this.pool.query<{ document: unknown }>(
       "SELECT document FROM agents ORDER BY created_at ASC, agent_id ASC",
     );
-    return result.rows.map((row) => readStoredAgent(row.document));
+    return readableStoredAgents(result.rows.map((row) => row.document));
   }
 
   async get(agentId: string): Promise<Agent | undefined> {
-    const result = await this.pool.query<{ document: unknown }>(
-      "SELECT document FROM agents WHERE agent_id = $1",
-      [agentId],
-    );
-    const row = result.rows[0];
-    return row ? readStoredAgent(row.document) : undefined;
+    const raw = await this.readRaw(agentId);
+    if (raw === undefined) return undefined;
+    return readStoredAgent(raw);
   }
 
   async create(body: unknown): Promise<Agent> {
@@ -198,9 +193,13 @@ export class PostgresAgentStore implements AgentStore {
   }
 
   async replace(agentId: string, body: unknown): Promise<Agent> {
-    const existing = await this.get(agentId);
-    if (!existing) throw new AgentNotFoundError(agentId);
-    const agent = agentFromReplace(existing, agentId, body);
+    const existing = await this.readRaw(agentId);
+    if (existing === undefined) throw new AgentNotFoundError(agentId);
+    const agent = agentFromReplace(
+      { created_at: storedTimestamp(existing, "created_at", new Date().toISOString()) },
+      agentId,
+      body,
+    );
     const result = await this.pool.query(
       `UPDATE agents
        SET document = $2::jsonb,
@@ -219,20 +218,28 @@ export class PostgresAgentStore implements AgentStore {
     if ((result.rowCount ?? 0) === 0) throw new AgentNotFoundError(agentId);
   }
 
-  async seedIfMissing(): Promise<void> {
-    const agent = referenceSeed();
-    await this.pool.query(
-      `INSERT INTO agents (agent_id, document, created_at, updated_at)
-       VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
-       ON CONFLICT (agent_id) DO NOTHING`,
-      [agent.agent_id, JSON.stringify(agent), agent.created_at, agent.updated_at],
-    );
+  async seedIfMissing(): Promise<SeedResult> {
+    const fixture = referenceSeed();
+    const stored = await this.readRaw(REFERENCE_AGENT_ID);
+    if (stored === undefined) {
+      const inserted = await this.pool.query(
+        `INSERT INTO agents (agent_id, document, created_at, updated_at)
+         VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
+         ON CONFLICT (agent_id) DO NOTHING`,
+        [fixture.agent_id, JSON.stringify(fixture), fixture.created_at, fixture.updated_at],
+      );
+      if ((inserted.rowCount ?? 0) > 0) return "inserted";
+      const raced = await this.readRaw(REFERENCE_AGENT_ID);
+      if (raced === undefined) throw new AgentNotFoundError(REFERENCE_AGENT_ID);
+      return this.rewriteReferenceSeedIfNeeded(raced, fixture);
+    }
+    return this.rewriteReferenceSeedIfNeeded(stored, fixture);
   }
 
   async upsertImported(agent: Agent): Promise<"inserted" | "updated"> {
     const valid = importedAgent(agent);
-    const existing = await this.get(valid.agent_id);
-    if (!existing) {
+    const existing = await this.readRaw(valid.agent_id);
+    if (existing === undefined) {
       try {
         await this.pool.query(
           `INSERT INTO agents (agent_id, document, created_at, updated_at)
@@ -244,9 +251,12 @@ export class PostgresAgentStore implements AgentStore {
         if (!isUniqueViolation(error)) throw error;
       }
     }
-    const current = existing ?? (await this.get(valid.agent_id));
-    if (!current) throw new AgentNotFoundError(valid.agent_id);
-    const next = importedAgent({ ...valid, created_at: current.created_at });
+    const current = existing ?? (await this.readRaw(valid.agent_id));
+    if (current === undefined) throw new AgentNotFoundError(valid.agent_id);
+    const next = importedAgent({
+      ...valid,
+      created_at: storedTimestamp(current, "created_at", valid.created_at),
+    });
     const result = await this.pool.query(
       `UPDATE agents
        SET document = $2::jsonb,
@@ -266,6 +276,55 @@ export class PostgresAgentStore implements AgentStore {
   /** Deletes every agent row in the current search_path, including the seed. Tests only. */
   async deleteAllRowsForTests(): Promise<void> {
     await this.pool.query("DELETE FROM agents");
+  }
+
+  /** Insert or replace one document without validation. Tests plant a stale row with this. */
+  async putRawForTests(document: unknown): Promise<void> {
+    const agentId = rawAgentId(document);
+    const createdAt = storedTimestamp(document, "created_at", new Date(0).toISOString());
+    const updatedAt = storedTimestamp(document, "updated_at", createdAt);
+    await this.pool.query(
+      `INSERT INTO agents (agent_id, document, created_at, updated_at)
+       VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
+       ON CONFLICT (agent_id) DO UPDATE
+         SET document = EXCLUDED.document,
+             created_at = EXCLUDED.created_at,
+             updated_at = EXCLUDED.updated_at`,
+      [agentId, JSON.stringify(document), createdAt, updatedAt],
+    );
+  }
+
+  private async readRaw(agentId: string): Promise<unknown | undefined> {
+    const result = await this.pool.query<{ document: unknown }>(
+      "SELECT document FROM agents WHERE agent_id = $1",
+      [agentId],
+    );
+    return result.rows[0]?.document;
+  }
+
+  private async rewriteReferenceSeedIfNeeded(stored: unknown, fixture: Agent): Promise<SeedResult> {
+    const reason = referenceSeedRewriteReason(stored, fixture);
+    if (reason === undefined) return "kept";
+    warnReferenceSeedRewritten(reason);
+    const updated = await this.pool.query(
+      `UPDATE agents
+       SET document = $2::jsonb,
+           created_at = $3::timestamptz,
+           updated_at = $4::timestamptz
+       WHERE agent_id = $1`,
+      [fixture.agent_id, JSON.stringify(fixture), fixture.created_at, fixture.updated_at],
+    );
+    if ((updated.rowCount ?? 0) > 0) return "refreshed";
+    await this.pool.query(
+      `INSERT INTO agents (agent_id, document, created_at, updated_at)
+       VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz)
+       ON CONFLICT (agent_id) DO UPDATE
+         SET document = EXCLUDED.document,
+             created_at = EXCLUDED.created_at,
+             updated_at = EXCLUDED.updated_at`,
+      [fixture.agent_id, JSON.stringify(fixture), fixture.created_at, fixture.updated_at],
+    );
+    return "inserted";
   }
 
   async close(): Promise<void> {
