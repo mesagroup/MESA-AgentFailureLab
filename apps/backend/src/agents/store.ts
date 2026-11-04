@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { isSeededAgentId, SEEDED_AGENT_IDS, type Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { loadLibraryAgent, loadReferenceAgent, loadSeedAgents } from "../reference-agent.js";
+import { bindSeedAgent, resolveSeedUrls, seedEndpointDrift } from "./endpoints.js";
+import { loadSeedAgents } from "../reference-agent.js";
 import { isRecord } from "../util.js";
 
 /** Shopping demo seed. DELETE of this id is rejected. */
@@ -80,9 +81,10 @@ export interface AgentStore {
   delete(agentId: string): Promise<void>;
   /**
    * Insert each demo fixture when that id is absent.
-   * Rewrite a row when its document fails `validateAgent`, or when its
-   * `updated_at` is earlier than that fixture. A valid row at the same age or
-   * newer stays, including one renamed with PUT.
+   * Rewrite a row when its document fails `validateAgent`, when its
+   * `updated_at` is earlier than that fixture, or when it is the same age and
+   * its runtime or world URL differs from the URLs resolved for this process.
+   * A valid newer row stays, including one edited with PUT.
    */
   seedIfMissing(): Promise<SeedReport>;
   /**
@@ -145,29 +147,30 @@ export function importedAgent(body: unknown): Agent {
   return parseAgent(body);
 }
 
-export function referenceSeed(): Agent {
-  return seedFixture(loadReferenceAgent(), REFERENCE_AGENT_ID);
+export function referenceSeed(env: NodeJS.ProcessEnv = process.env): Agent {
+  return requireSeed(seedFixtures(env), REFERENCE_AGENT_ID);
 }
 
-export function librarySeed(): Agent {
-  return seedFixture(loadLibraryAgent(), LIBRARY_AGENT_ID);
+export function librarySeed(env: NodeJS.ProcessEnv = process.env): Agent {
+  return requireSeed(seedFixtures(env), LIBRARY_AGENT_ID);
 }
 
-export function seedFixtures(): Agent[] {
+/** Demo fixtures with runtime and world URLs resolved from `env`. */
+export function seedFixtures(env: NodeJS.ProcessEnv = process.env): Agent[] {
+  const urls = resolveSeedUrls(env);
   return loadSeedAgents().map((agent) => {
-    if (!isSeededAgentId(agent.agent_id)) {
-      throw new Error(`Seed fixture agent_id is ${agent.agent_id}, which is not a demo seed.`);
+    const bound = bindSeedAgent(agent, urls);
+    if (!isSeededAgentId(bound.agent_id)) {
+      throw new Error(`Seed fixture agent_id is ${bound.agent_id}, which is not a demo seed.`);
     }
-    return structuredClone(agent);
+    return bound;
   });
 }
 
-function seedFixture(agent: Agent, expectedId: string): Agent {
-  const copy = structuredClone(agent);
-  if (copy.agent_id !== expectedId) {
-    throw new Error(`Seed fixture agent_id is ${copy.agent_id}, expected ${expectedId}.`);
-  }
-  return copy;
+function requireSeed(agents: readonly Agent[], agentId: string): Agent {
+  const agent = agents.find((entry) => entry.agent_id === agentId);
+  if (!agent) throw new Error(`Seed fixture ${agentId} is missing.`);
+  return agent;
 }
 
 export function rawAgentId(document: unknown): string {
@@ -186,7 +189,8 @@ export function storedTimestamp(value: unknown, key: "created_at" | "updated_at"
 }
 
 /**
- * `undefined` when the stored seed validates and is not older than the fixture.
+ * `undefined` when the stored seed validates, is not older than the fixture,
+ * and either is newer (an edit) or already has this process's endpoints.
  * Otherwise the reason the fixture should replace the row.
  */
 export function seedRewriteReason(stored: unknown, fixture: Agent): string | undefined {
@@ -199,7 +203,8 @@ export function seedRewriteReason(stored: unknown, fixture: Agent): string | und
   if (Number.isNaN(storedMs) || storedMs < fixtureMs) {
     return `stored updated_at ${result.value.updated_at} is older than the fixture ${fixture.updated_at}`;
   }
-  return undefined;
+  if (storedMs > fixtureMs) return undefined;
+  return seedEndpointDrift(result.value, fixture);
 }
 
 export function readStoredAgent(value: unknown): Agent {

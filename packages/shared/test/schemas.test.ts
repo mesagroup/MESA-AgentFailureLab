@@ -54,7 +54,7 @@ describe("schema enums match the TypeScript constants", () => {
 
 describe("examples", () => {
   const trace = readExample("injected-failed-trace.json");
-  const agent = readExample("agent-reference-stub.json");
+  const agent = readExample("agent-reference-shop.json");
   const run = readExample("run-injected.json");
 
   it("accepts the injected failed trace, including verifier and diagnosis", () => {
@@ -120,7 +120,7 @@ describe("examples", () => {
     assertOk(validateTrace(pending), "null diagnosis");
   });
 
-  it("accepts the reference agent stub with five tasks", () => {
+  it("accepts the reference shop agent with five tasks", () => {
     const result = validateAgent(agent);
     assertOk(result, "agent");
     if (!result.ok) return;

@@ -137,12 +137,12 @@
       }
     },
     "world": {
-      "description": "Inspectable mock for this agent. Omitted on the shop seed, which uses MOCK_SHOP_URL. base_url is the mock, not the agent runtime.",
+      "description": "Inspectable mock for this agent. kind shop is the mock shop; kind library is the library mock. base_url is the mock, not the agent runtime. The harness calls MOCK_SHOP_URL for a shop world and world.base_url for a library world.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "base_url"],
       "properties": {
-        "kind": { "const": "library" },
+        "kind": { "enum": ["shop", "library"] },
         "base_url": { "type": "string", "format": "uri" }
       }
     }

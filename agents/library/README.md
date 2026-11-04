@@ -11,12 +11,14 @@ External agent for issue #109. It is not the shop. It renews a loan, accepts a r
 
 `instance.kind` is `external`. `instance.base_url` is the runtime, not the mock. `world.base_url` is the mock.
 
+The fixture file shows the laptop origins (`http://127.0.0.1:3003` and `http://127.0.0.1:8788`). The backend replaces them at seed time. Compose uses `http://mesa-library-agent:3003` and `http://mesa-mock-library:8788`. Render uses the public hosts below. `NODE_ENV=production` does not store a loopback origin. See [docs/seed-endpoints.md](../../docs/seed-endpoints.md).
+
 Public hosts the blueprint asks Render to assign:
 
-- runtime: `https://mesa-library-agent.onrender.com`
-- mock: `https://mesa-mock-library.onrender.com`
+- runtime: `https://mesa-library-agent.onrender.com` (`LIBRARY_AGENT_URL`)
+- mock: `https://mesa-mock-library.onrender.com` (`MOCK_LIBRARY_URL`)
 
-Neither URL is `localhost` or `127.0.0.1`. If Render appends a suffix, change the fixture and `render.yaml` together, then redeploy.
+If Render appends a suffix, change `render.yaml` and `PRODUCTION_SEED_URLS` together, then redeploy `mesa-backend`. Do not put the loopback address in the production environment.
 
 ## Run locally
 
@@ -27,7 +29,7 @@ pnpm --filter @mesa/mock-library dev
 pnpm --filter @mesa/library-agent dev
 ```
 
-The mock listens on `127.0.0.1:8788`. The runtime listens on `127.0.0.1:3003`. Those loopback addresses are for a laptop only. The seeded document keeps the public hosts so a boot of the deployed lab does not register loopback.
+The mock listens on `127.0.0.1:8788`. The runtime listens on `127.0.0.1:3003`. A laptop boot of the backend, with the variables unset, seeds those same origins. A deployed boot seeds the public hosts from `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL`.
 
 Compose service names, when you want the stack instead of the laptop ports:
 
@@ -36,15 +38,7 @@ Compose service names, when you want the stack instead of the laptop ports:
 
 ## Register on the lab
 
-The backend seeds `external-library` on boot. To register the same document by hand against the deployed lab:
-
-```bash
-curl -sS -X POST https://mesa-backend-itm4.onrender.com/agents \
-  -H 'content-type: application/json' \
-  -d @packages/shared/examples/agent-library-desk.json
-```
-
-If the id is already seeded, `POST` returns 409. Edit it with `PUT /agents/external-library`. The Agents page uses that same PUT. A valid edit is not overwritten on the next boot.
+The backend seeds `external-library` on boot and writes `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL` onto that row. The JSON file itself still shows the laptop origins, so posting that file at the deployed lab would register loopback until the next boot rewrites a row that is not newer than the fixture. If the id is already seeded, `POST` returns 409. Edit it with `PUT /agents/external-library`. The Agents page uses that same PUT. A valid edit newer than the fixture is not overwritten on the next boot.
 
 ## Launch the three tasks
 

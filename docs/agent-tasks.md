@@ -1,6 +1,6 @@
 # Agent tasks
 
-A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what `POST /agents` and `PUT /agents/:agent_id` store. The reference shop agent is seeded with T1–T5 in that shape. The seed file is [`packages/shared/examples/agent-reference-stub.json`](../packages/shared/examples/agent-reference-stub.json). The library desk is a second seed, `external-library`, from [`packages/shared/examples/agent-library-desk.json`](../packages/shared/examples/agent-library-desk.json). Its tasks are not shop tasks.
+A task is data on the agent, not a case in the harness. `Agent.tasks[]` is what `POST /agents` and `PUT /agents/:agent_id` store. The reference shop agent is seeded with T1–T5 in that shape. The seed file is [`packages/shared/examples/agent-reference-shop.json`](../packages/shared/examples/agent-reference-shop.json). The library desk is a second seed, `external-library`, from [`packages/shared/examples/agent-library-desk.json`](../packages/shared/examples/agent-library-desk.json). Its tasks are not shop tasks.
 
 `POST /v1/tasks/run` sends the whole task on `AgentRunRequest.task`. The reference agent plans from that object. A pattern it cannot run is refused with HTTP 400 and `error: "unsupported_task"`.
 
@@ -79,7 +79,7 @@ A task whose checks are not one of those shop patterns is stored if the check ty
 
 ## Seeded library tasks
 
-`external-library` is the library desk. `instance.kind` is `external`. The runtime is `https://mesa-library-agent.onrender.com`. The world is the library mock at `https://mesa-mock-library.onrender.com`, not the shop. It does not use shop tools or shop checks.
+`external-library` is the library desk. `instance.kind` is `external`. The runtime and the library mock come from `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL`. On Render those are `https://mesa-library-agent.onrender.com` and `https://mesa-mock-library.onrender.com`. The world is not the shop. It does not use shop tools or shop checks. The full map is [seed-endpoints.md](seed-endpoints.md).
 
 | Task | Setup | Checks | Plan |
 | --- | --- | --- | --- |
@@ -87,4 +87,4 @@ A task whose checks are not one of those shop patterns is stored if the check ty
 | `return-loan` | the same loan, `read` + `write:loan` | `loan_returned` | `return_loan`, then `get_loan` |
 | `place-hold` | loan-2001 has the only copy of BK-RARE out with patron-bev, `read` + `write:hold` | `hold_placed` for patron-ada | `place_hold` |
 
-The Agents page edits either seed: name, description, kind, and tasks. `PUT /agents/:agent_id` stores the edit. A later boot keeps it when the row still validates and is not older than the fixture.
+The Agents page edits either seed: name, description, kind, and tasks. `PUT /agents/:agent_id` stores the edit and sets `updated_at` to that save. A later boot keeps it when the row still validates and is newer than the fixture.

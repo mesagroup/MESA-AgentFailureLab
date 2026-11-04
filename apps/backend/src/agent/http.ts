@@ -63,6 +63,11 @@ function trimBase(baseUrl: string): string {
   return baseUrl.replace(/\/$/, "");
 }
 
+/** `POST /v1/tasks/run` on an agent origin (`instance.base_url` or `test_instance.base_url`). */
+export function tasksRunUrl(baseUrl: string): string {
+  return `${trimBase(baseUrl)}/v1/tasks/run`;
+}
+
 export async function probeAgent(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   try {
     const response = await fetchImpl(`${trimBase(baseUrl)}/health`, {
@@ -79,7 +84,7 @@ export async function runRemoteAgent(
   request: AgentRunRequest,
   fetchImpl: typeof fetch = fetch,
 ): Promise<AgentRunResponse> {
-  const response = await fetchImpl(`${trimBase(baseUrl)}/v1/tasks/run`, {
+  const response = await fetchImpl(tasksRunUrl(baseUrl), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(request),

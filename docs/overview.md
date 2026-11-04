@@ -19,13 +19,13 @@ The product types live in `packages/shared`. JSON Schema is the source of truth.
 | Diagnosis | Written only by Grok: `category`, `cause`, `step_id`, `confidence`, `evidence`, `proposed_fixes`. |
 | Fix | MVP kinds on `Run.fix_kinds` and on `diagnosis.proposed_fixes`: `controlled_retry`, `pre_response_check`, `permission_guard`. |
 
-`test_instance` is separate from `instance` so a fix replay can avoid the production endpoint. The reference stub in `packages/shared/examples/agent-reference-stub.json` is the shopping demo. Its five tasks are T1–T5.
+`test_instance` is separate from `instance` so a fix replay can avoid the production endpoint. The reference shop agent in `packages/shared/examples/agent-reference-shop.json` is the shopping demo. Its five tasks are T1–T5. Seed URLs are resolved per environment ([seed-endpoints.md](seed-endpoints.md)).
 
 ## What is implemented
 
 On `main` today:
 
-- Contracts for Agent, Task, Run, and Trace, plus the shopping reference stub.
+- Contracts for Agent, Task, Run, and Trace, plus the shopping reference agent.
 - The demo shop (`services/mock-shop`, port 8787) and the reference agent (`POST /v1/tasks/run` on port 3002). The agent returns actions with `executed: false`. The harness executes them.
 - Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker. `POST /attacker/jury-case` takes a note, a task (default T5), and a session grant, returns `outcome.verifier` with a baseline comparison and `links.attacked_trace`, and can replay with `permission_guard`. Runs and traces persist in Postgres when `DATABASE_URL` is set, and stay in memory otherwise. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
 - Lab dashboard snapshot. `GET /agents` lists registered agents (`agent_id`, `instance.kind`, task count = `tasks.length`). `GET /runs` lists stored runs, newest start first, with `trace_ids`, the first trace id, and `outcome.verifier` from each linked trace. `counts.scope` is `harness_session`: agents and run statuses in the store this process has open. With Postgres those rows survive a restart. See the [backend README](../apps/backend/README.md#dashboard-snapshot).

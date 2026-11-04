@@ -19,7 +19,8 @@ export interface OpenAgentStoreOptions {
 /**
  * Open the agent store and, for Postgres, apply SQL migrations.
  * Then insert each demo seed when its id is absent, or rewrite it when the stored
- * document fails validation or is older than that fixture.
+ * document fails validation, is older than that fixture, or is the same age with
+ * different runtime or world URLs. A newer valid row is kept.
  * The memory store does the same in its constructor.
  */
 export async function openAgentStore(

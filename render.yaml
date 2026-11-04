@@ -116,6 +116,17 @@ projects:
               # MOCK_SHOP_URL into mock_base_url on POST /v1/tasks/run.
               - key: MOCK_SHOP_URL
                 value: https://mesa-mock-shop.onrender.com
+              # Library desk runtime. The harness POSTs {LIBRARY_AGENT_URL}/v1/tasks/run
+              # for external-library. Intended public host for mesa-library-agent.
+              # If Render appends a suffix, update this value and
+              # PRODUCTION_SEED_URLS in apps/backend/src/agents/endpoints.ts
+              # together. See docs/seed-endpoints.md.
+              - key: LIBRARY_AGENT_URL
+                value: https://mesa-library-agent.onrender.com
+              # Library mock. Seeded onto external-library world.base_url.
+              # Intended public host for mesa-mock-library. Same suffix rule.
+              - key: MOCK_LIBRARY_URL
+                value: https://mesa-mock-library.onrender.com
               # Internal URL (Blueprint property connectionString).
               # Not the external URL. TLS is not required on this private host.
               # A free web service can open a database in the same region.

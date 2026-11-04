@@ -7,8 +7,12 @@
 # Optional: copy .env.example to .env at the repo root to override the
 # frontend build args (VITE_BACKEND_URL, VITE_AGENTSERVICE_URL).
 # The shop is mesa-mock-shop. Compose sets the harness MOCK_SHOP_URL to
-# http://mesa-mock-shop:8787. The library desk is mesa-library-agent and
-# mesa-mock-library. The agent service does not read a shop URL.
+# http://mesa-mock-shop:8787 and AGENTSERVICE_URL to http://mesa-agentservice:3002.
+# The library desk is LIBRARY_AGENT_URL=http://mesa-library-agent:3003 and
+# MOCK_LIBRARY_URL=http://mesa-mock-library:8788. The backend seeds those
+# origins onto reference-shop and external-library. The agent service does
+# not read a shop URL. The image sets NODE_ENV=production; these URLs win
+# over the public Render fallback. See docs/seed-endpoints.md.
 # mesa-postgres persists agent, run, and trace records. The backend receives DATABASE_URL.
 # User and password mesa/mesa are local defaults, not production secrets.
 
@@ -47,6 +51,8 @@ services:
       AGENTSERVICE_URL: http://mesa-agentservice:3002
       FRONTEND_URL: http://mesa-frontend:3000
       MOCK_SHOP_URL: http://mesa-mock-shop:8787
+      LIBRARY_AGENT_URL: http://mesa-library-agent:3003
+      MOCK_LIBRARY_URL: http://mesa-mock-library:8788
       # Wins over DATABASE_URL in a copied apps/backend/.env.
       DATABASE_URL: postgres://mesa:mesa@mesa-postgres:5432/mesa
     depends_on:

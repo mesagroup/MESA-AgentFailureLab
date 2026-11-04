@@ -4,6 +4,7 @@ import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
+import { mockBaseUrlForAgent } from "./agents/endpoints.js";
 import { registerAgentRoutes } from "./agents/routes.js";
 import { MemoryAgentStore, type AgentStore } from "./agents/store.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
@@ -154,9 +155,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(404).send({ error: "not_found", message: `No agent ${parsed.value.agentId}` });
     }
     try {
-      const worldUrl = registered.world?.base_url?.trim() ?? "";
-      const runMockUrl = worldUrl === "" ? mockBaseUrl : worldUrl;
-      const runMock = worldUrl === "" ? mock : createHttpMockClient(worldUrl);
+      const runMockUrl = mockBaseUrlForAgent(registered, mockBaseUrl);
+      const runMock = runMockUrl === mockBaseUrl ? mock : createHttpMockClient(runMockUrl);
       const driver = parsed.value.driver ?? (registered.instance.kind === "external" ? "auto" : undefined);
       const results = await runTasks({
         agent: registered,

@@ -6,11 +6,12 @@
  * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
-export const CONTRACT_VERSION = "0.2.0";
+export const CONTRACT_VERSION = "0.2.1";
 
 /**
  * Demo agents inserted at startup.
- * Both are editable. A valid row that is not older than its fixture is kept.
+ * Both are editable. A valid row newer than its fixture is kept.
+ * A row at the fixture timestamp is rewritten when its runtime or world URL differs.
  * `DELETE` of either id is rejected, and `db:reset` keeps both rows.
  */
 export const SEEDED_AGENT_IDS = ["reference-shop", "external-library"] as const;

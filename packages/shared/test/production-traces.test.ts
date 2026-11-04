@@ -92,7 +92,7 @@ describe("production import traces", () => {
 });
 
 function assertUserPrompt(trace: Trace): void {
-  const stub = JSON.parse(readFileSync(join(root, "examples", "agent-reference-stub.json"), "utf8")) as {
+  const stub = JSON.parse(readFileSync(join(root, "examples", "agent-reference-shop.json"), "utf8")) as {
     tasks: Array<{ task_id: string; prompt: string }>;
   };
   const task = stub.tasks.find((entry) => entry.task_id === trace.task_id);

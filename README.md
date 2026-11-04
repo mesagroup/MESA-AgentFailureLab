@@ -156,7 +156,7 @@ Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publ
 `packages/shared` exports the frozen shapes. `outcome.verifier` is the only pass/fail authority. `diagnosis` stays null until Grok writes it, and Grok must not write `outcome.verifier` or `fault.labels`.
 
 - **Trace** — steps, per-step timings and costs, totals, `outcome.verifier`, fault labels, `diagnosis`
-- **Agent** — instance, test instance, trace store, docs, tasks with `verifier_checks`. Any non-empty task list is valid. The reference stub is the shopping demo and has T1–T5.
+- **Agent** — instance, test instance, trace store, docs, tasks with `verifier_checks`. Any non-empty task list is valid. The reference shop agent is the shopping demo and has T1–T5.
 - **Run** — harness metadata (`phase` is `baseline`, `injected`, or `after_fix`; plus `injection_plan`, `fix_kinds`, `trace_ids`), not nested in Trace
 
 Hand-written T2, T3, and T5 traces are in `packages/shared/examples` and use the injector catalog codes. The reference demo agent is `POST /v1/tasks/run` on port 3002. The harness owns tool execution and `outcome.verifier`.
