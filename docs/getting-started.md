@@ -66,7 +66,7 @@ Containers and the Render project are a separate path. Images listen on `0.0.0.0
 | UI | `apps/frontend` |
 | Mock shop HTTP API (catalog, cart, orders, inspect) | `services/mock-shop` |
 | Verifier, harness, storage | `apps/backend` |
-| Grok client, reference agent, diagnosis, fix proposals | `apps/agentservice` |
+| Grok client, diagnosis, fix applicator, replay | `apps/agentservice` |
 | A field on Trace, Agent, or Run | `packages/shared` — edit the JSON Schema first, then the TypeScript mirror, then bump `CONTRACT_VERSION` |
 | Product or contributor docs | `docs/` |
 | An architecture decision | `adr/NNN-kebab-title.md` (see [`adr/README.md`](../adr/README.md)) |
