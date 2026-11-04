@@ -14,7 +14,7 @@ This repository is [Track 03 — Agent Failure Lab / CHAOS.AI](../adr/001-mock-v
 | --- | --- | --- |
 | `apps/frontend` | Frontend | Registration, runs, and the trace timeline. Renders `Trace`. Before/after uses `Run` plus `outcome.verifier`. |
 | `apps/backend` | Backend | Harness (`baseline` / `injected` / `after_fix`), the deterministic verifier, the labeled injector, and persistence. Not the shop process. |
-| `services/mock-shop` | Backend | Inspectable mock e-commerce for T1–T5. Separate package from the harness. |
+| `services/mock-shop` | Backend | Stand-alone HTTP shop for T1–T5. The harness and the agent service call it by URL. |
 | `apps/agentservice` | AI Engineer | Grok reference agent, diagnosis, and fix proposals. Writes `Trace.diagnosis` only. |
 | `packages/shared` | All three | JSON Schema and TypeScript mirrors for `Trace`, `Agent`, and `Run`. |
 
