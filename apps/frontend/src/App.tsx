@@ -30,7 +30,8 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/runs" element={<RunsPage />} />
-            <Route path="/traces/:runId" element={<TracePage />} />
+            <Route path="/runs/:runId" element={<RunsPage />} />
+            <Route path="/traces/:traceId" element={<TracePage />} />
             <Route path="/traces" element={<TracePage />} />
           </Routes>
         </main>

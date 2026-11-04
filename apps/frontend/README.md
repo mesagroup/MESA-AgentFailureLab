@@ -1,6 +1,8 @@
 # @mesa/frontend
 
-Web UI for agent registration, runs, and the trace timeline. Vite and React. The page you get today is a scaffold: it shows which app owns which surface and which shared contract version is linked. It does not call the backend.
+Web UI for agent registration, runs, and the trace timeline. Vite and React.
+
+The dashboard (`/`) reads the harness session from `GET /agents` and `GET /runs` (`VITE_BACKEND_URL`, default `http://127.0.0.1:3001`). Cards use `counts` with `scope` `harness_session`. Run rows use `Run.status`, `trace_ids`, and `trace_links[].outcome.verifier`. There is no `result` field and no 90-day series. A row with `first_trace_id` opens `/traces/:traceId`. A row without one opens `/runs/:runId`. Agent registration calls the same harness. The run launcher and the trace timeline are still scaffolds.
 
 The timeline will render `Trace`. Before/after comparisons will use harness `Run` records plus `outcome.verifier`. This app does not decide task success.
 

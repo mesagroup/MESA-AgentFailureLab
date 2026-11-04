@@ -1,4 +1,14 @@
-import type { Agent, AgentInstanceKind, AgentTask, Run, RunPhase, FixKind, Trace } from "@mesa/shared";
+import type {
+  Agent,
+  AgentInstanceKind,
+  AgentTask,
+  FixKind,
+  Run,
+  RunPhase,
+  Trace,
+  TraceOutcome,
+  TraceTotals,
+} from "@mesa/shared";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
 
@@ -103,8 +113,53 @@ export interface RunParams {
   parent_run_id?: string | null;
 }
 
+/** One stored trace as `GET /runs` embeds it. Not a full Trace document. */
+export interface HarnessLinkedTrace {
+  trace_id: string;
+  outcome: TraceOutcome;
+  totals: TraceTotals;
+  started_at: string;
+  ended_at: string;
+}
+
+/** `trace_links[i]` describes `runs[i]`. */
+export interface RunTraceLink {
+  run_id: string;
+  /** `trace_ids[0]`, or null when the run has not stored a trace. */
+  first_trace_id: string | null;
+  /** Stored traces in `trace_ids` order. A missing id is omitted. */
+  traces: HarnessLinkedTrace[];
+}
+
+/** In-session tallies. `scope` is always `harness_session`, not a 90-day series. */
+export interface HarnessSessionCounts {
+  scope: "harness_session";
+  agents: number;
+  runs: number;
+  queued: number;
+  running: number;
+  passed: number;
+  failed: number;
+  error: number;
+}
+
+/**
+ * Body of `GET /runs`.
+ * Runs are newest first. There is no `result` field; the row verdict is
+ * `trace_links[].traces[].outcome.verifier`.
+ */
+export interface HarnessSnapshot {
+  runs: Run[];
+  trace_links: RunTraceLink[];
+  counts: HarnessSessionCounts;
+}
+
+export async function getHarnessSnapshot(): Promise<HarnessSnapshot> {
+  return backendFetch<HarnessSnapshot>("/runs");
+}
+
 export async function listRuns(): Promise<Run[]> {
-  const data = await backendFetch<{ runs: Run[] }>("/runs");
+  const data = await getHarnessSnapshot();
   return data.runs;
 }
 
