@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, PlusCircle, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,12 +45,18 @@ function agentToForm(agent: Agent): FormState {
 }
 
 export function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>(() => listAgents());
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  async function reload() {
+    setAgents(await listAgents());
+  }
+
+  useEffect(() => { void reload(); }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,10 +80,10 @@ export function AgentsPage() {
     setSheetOpen(true);
   }
 
-  function handleDelete(agent: Agent) {
+  async function handleDelete(agent: Agent) {
     if (!window.confirm(`Delete "${agent.name}"?`)) return;
-    deleteAgent(agent.agent_id);
-    setAgents(listAgents());
+    await deleteAgent(agent.agent_id);
+    await reload();
   }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -95,7 +101,7 @@ export function AgentsPage() {
     return Object.keys(errs).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
     const draft: AgentDraft = {
       name: form.name.trim(),
@@ -107,11 +113,11 @@ export function AgentsPage() {
     };
     try {
       if (editing) {
-        updateAgent(editing.agent_id, draft);
+        await updateAgent(editing.agent_id, draft);
       } else {
-        saveAgent(draft);
+        await saveAgent(draft);
       }
-      setAgents(listAgents());
+      await reload();
       setSheetOpen(false);
     } catch (e) {
       setErrors((prev) => ({
