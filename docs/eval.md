@@ -9,13 +9,50 @@ Dalla radice del repository:
 ```bash
 pnpm generate-dataset
 pnpm eval
+pnpm eval:gate
 ```
 
 `pnpm generate-dataset` avvia il mock shop in loopback e il driver `scripted` del harness già in main, con i fault del catalogo. Non chiama l'agent di riferimento della [PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21). Una seconda esecuzione cambia gli id e i timestamp, perché l'harness usa `randomUUID` e `Date.now`.
 
 `pnpm eval` legge il manifest `apps/agentservice/eval/dataset/manifest.json`, calcola il baseline solo-regole e, se `XAI_API_KEY` è impostata, chiama Grok. Senza chiave la colonna Grok resta il segnaposto. `pnpm eval -- --fake` usa un modello etichettato `fake-diagnosis` e non è un punteggio di Grok.
 
+`pnpm eval:gate` riesegue solo il baseline deterministico. Passa a `resolveGrok` una chiave vuota: lo skip è quello di `pnpm eval` senza chiave, e una chiave già nel processo non viene usata. Il confronto e la soglia stanno in [Gate CI](#gate-ci).
+
 Il report completo (confusione, hint per tipo, una riga per trace) è [apps/agentservice/eval/results/latest.md](../apps/agentservice/eval/results/latest.md).
+
+## Gate CI
+
+`.github/workflows/ci.yml` lancia `pnpm eval:gate` su ogni pull request e su `main`, dopo build e test. Il job non ha bisogno di `XAI_API_KEY`. Il comando passa a `resolveGrok` una env con la chiave vuota, lo stesso skip di `pnpm eval` senza chiave, e non apre un client live.
+
+Il riferimento committato è [`apps/agentservice/eval/baseline.json`](../apps/agentservice/eval/baseline.json). `pnpm eval` non lo riscrive: quel comando aggiorna la scoreboard (README e `eval/results`), compresa la colonna Grok quando la chiave c'è. Il gate legge i quattro tassi della colonna «Baseline (solo regole)», gli stessi che la schermata [#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57) deve prendere dall'output di `pnpm eval`:
+
+| id | Riga della scoreboard |
+| --- | --- |
+| `category_accuracy` | Accuratezza di categoria |
+| `step_accuracy_exact` | Step esatto |
+| `step_accuracy_tolerance_1` | Step entro ±1 |
+| `proposed_fix_hit_rate` | Hit del fix proposto |
+
+La soglia è `threshold.max_rate_drop`, una frazione `numerator/denominator` nello stesso file. Con `0/1` il tasso fresco deve avere gli stessi `hits` e lo stesso `total` del file. Con una soglia positiva il job fallisce solo se il valore assoluto della differenza fra i due tassi è maggiore della soglia: una differenza uguale passa. Latenza, token, costo e la colonna Grok restano fuori, perché la latenza del baseline solo-regole cambia fra un processo e l'altro e senza chiave Grok non ha un punteggio.
+
+Su main attuale le frazioni del file sono quelle del baseline solo-regole, quindi il job è verde.
+
+Per vedere il rosso si abbassa il baseline. In `category_accuracy`, portare `hits` da 4 a 3 e lanciare `pnpm eval:gate`: il processo esce 1. Ripristinare il file dopo la prova. Senza modificarlo:
+
+```bash
+pnpm eval:gate -- --simulate-drop category_accuracy
+```
+
+Quel flag toglie un hit al tasso fresco e termina con codice 1. Il workflow non lo passa.
+
+Quando il metodo solo-regole cambia e i nuovi tassi sono quelli da tenere, aggiornare scoreboard e file insieme:
+
+```bash
+pnpm eval
+pnpm eval:gate -- --write
+```
+
+`--write` sostituisce i conteggi. Descrizione e `max_rate_drop` restano quelli del file.
 
 ## Conteggio dopo la PR #44
 
