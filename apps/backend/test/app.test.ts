@@ -94,6 +94,32 @@ describe("harness HTTP API", { concurrency: false }, () => {
       const storedRun = await app.inject({ method: "GET", url: `/runs/${passed.run.run_id}` });
       assert.equal(storedRun.statusCode, 200);
       assert.equal(storedRun.json().trace_ids[0], passed.trace.trace_id);
+      assert.equal(Object.hasOwn(storedRun.json(), "trace_links"), false);
+      assert.equal(Object.hasOwn(storedRun.json(), "outcome"), false);
+
+      const listed = await app.inject({ method: "GET", url: "/runs" });
+      assert.equal(listed.statusCode, 200);
+      const body = listed.json();
+      assert.equal(body.runs[0].run_id, failed.run.run_id);
+      assert.equal(body.runs[0].phase, "injected");
+      assert.equal(body.runs[0].status, "failed");
+      assert.deepEqual(body.runs[0].trace_ids, [failed.trace.trace_id]);
+      assert.equal(body.runs[1].run_id, passed.run.run_id);
+      assert.equal(body.runs[1].status, "passed");
+      assert.equal(body.trace_links[0].run_id, failed.run.run_id);
+      assert.equal(body.trace_links[0].first_trace_id, failed.trace.trace_id);
+      assert.deepEqual(body.trace_links[0].traces[0].outcome.verifier, failed.trace.outcome.verifier);
+      assert.equal(body.trace_links[0].traces[0].totals.latency_ms, failed.trace.totals.latency_ms);
+      assert.equal(body.trace_links[1].first_trace_id, passed.trace.trace_id);
+      assert.deepEqual(body.trace_links[1].traces[0].outcome.verifier, passed.trace.outcome.verifier);
+      assert.equal(body.trace_links[1].traces[0].outcome.verifier.passed, true);
+      assert.equal(body.counts.scope, "harness_session");
+      assert.equal(body.counts.agents, 1);
+      assert.equal(body.counts.runs, 2);
+      assert.equal(body.counts.passed, 1);
+      assert.equal(body.counts.failed, 1);
+      assert.equal(Object.hasOwn(body, "result"), false);
+      assert.equal(Object.hasOwn(body.runs[0], "result"), false);
 
       const storedTrace = await app.inject({ method: "GET", url: `/traces/${failed.trace.trace_id}` });
       assert.equal(storedTrace.statusCode, 200);
