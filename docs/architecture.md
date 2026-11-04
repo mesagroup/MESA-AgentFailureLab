@@ -47,7 +47,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 | Field | Writer |
 | --- | --- |
-| `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok. `outcome.success` copies `verifier.passed`. |
+| `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok. `outcome.success` copies `verifier.passed`. The task, including `setup` and check `params`, is data on the agent. See [agent-tasks.md](agent-tasks.md). |
 | `fault.labels` | Injector or attacker only. They also write `fault.injected` and `fault.attacker`. |
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
 

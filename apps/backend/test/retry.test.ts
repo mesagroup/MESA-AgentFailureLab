@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { InjectionPlan } from "@mesa/shared";
-import { scriptedActions } from "../src/agent/scripted.js";
+import { scriptedActions as planFromTask } from "../src/agent/scripted.js";
 import { executeAttempt } from "../src/harness/execute.js";
 import { backoffMs, retryDecision, TRANSIENT_STATUSES } from "../src/harness/retry.js";
 import { droppedOutput } from "../src/injector/catalog.js";
@@ -10,6 +10,12 @@ import { verifyOutcome } from "../src/verifier/verify.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
 
 const reference = loadReferenceAgent();
+
+function scriptedActions(taskId: string, ctx: { permissions: readonly string[]; orderId?: string }) {
+  const task = reference.tasks.find((entry) => entry.task_id === taskId);
+  if (!task) throw new Error(`No seed task ${taskId}.`);
+  return planFromTask(task, ctx);
+}
 
 function emptyState() {
   const raw = { carts: [], orders: [], inventory: [], observations: [] };

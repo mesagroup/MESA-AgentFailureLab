@@ -181,6 +181,44 @@ describe("agent HTTP API", () => {
     }
   });
 
+  it("rejects a check the registry does not define and params that do not match it", async () => {
+    const app = buildApp({ logger: false });
+    try {
+      const unknown = withoutServerFields(externalAgent("ignored"));
+      const tasks = unknown.tasks as Agent["tasks"];
+      tasks[0]!.success_test.checks[0]!.name = "task_complete";
+      const rejected = await app.inject({ method: "POST", url: "/agents", payload: unknown });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(rejected.json().error, "invalid_agent");
+
+      const badParams = withoutServerFields(externalAgent("ignored"));
+      const checks = (badParams.tasks as Agent["tasks"])[1]!.success_test.checks;
+      checks[0]!.params = { sku: "SKU-MUG-01" };
+      const missingQty = await app.inject({ method: "POST", url: "/agents", payload: badParams });
+      assert.equal(missingQty.statusCode, 400);
+      assert.match(missingQty.json().errors.join(" "), /qty/);
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/agents",
+        payload: withoutServerFields(externalAgent("kept")),
+      });
+      assert.equal(created.statusCode, 201);
+      const createdId = created.json().agent_id as string;
+      const replacement = externalAgent(createdId);
+      replacement.tasks[1]!.success_test.checks[0]!.params = { sku: "SKU-MUG-01", qty: 2, extra: true };
+      const updated = await app.inject({
+        method: "PUT",
+        url: `/agents/${createdId}`,
+        payload: replacement,
+      });
+      assert.equal(updated.statusCode, 400);
+      assert.match(updated.json().errors.join(" "), /extra/);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("keeps an edited seed across seedIfMissing and drops other rows on a new memory store", async () => {
     const first = new MemoryAgentStore();
     const created = await first.create(withoutServerFields(externalAgent("ignored")));
