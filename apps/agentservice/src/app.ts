@@ -1,8 +1,8 @@
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS } from "@mesa/shared";
-import { validateTrace } from "@mesa/shared/validate";
 import Fastify from "fastify";
 import { DiagnosisFailed, diagnoseTrace } from "./diagnosis/diagnose.js";
 import type { DiagnosisModel } from "./diagnosis/diagnose.js";
+import { parseDiagnoseRequest } from "./diagnosis/request.js";
 import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
@@ -18,6 +18,8 @@ export interface AppDeps {
 /**
  * Agent service.
  * `POST /diagnose` writes `Trace.diagnosis` only.
+ * A body may be a Trace, or `{ trace, task_evalset }` when the harness resolved one.
+ * `task_evalset` is guidance. It is not copied onto the trace and it is not a verdict.
  * `POST /v1/tasks/run` proposes tool actions with `executed: false`,
  * plus `refused` and `embedded` from the shared plan.
  * The harness executes `actions`, injects faults, and writes `outcome.verifier`.
@@ -68,17 +70,18 @@ export function buildApp(deps: AppDeps = {}) {
   });
 
   app.post("/diagnose", async (request, reply) => {
-    const parsed = validateTrace(request.body);
+    const parsed = parseDiagnoseRequest(request.body);
     if (!parsed.ok) {
-      return reply.code(400).send({ error: "invalid_trace", errors: parsed.errors });
+      return reply.code(400).send({ error: parsed.error, errors: parsed.errors });
     }
     if (model === null) {
       return reply.code(503).send({ error: "grok_not_configured" });
     }
     try {
-      return await diagnoseTrace(parsed.value, {
+      return await diagnoseTrace(parsed.trace, {
         model,
         modelName: config.modelName,
+        ...(parsed.taskEvalset !== undefined ? { taskEvalset: parsed.taskEvalset } : {}),
         onUsage(usage) {
           request.log.info({ diagnosis_usage: usage }, "diagnosis usage");
         },

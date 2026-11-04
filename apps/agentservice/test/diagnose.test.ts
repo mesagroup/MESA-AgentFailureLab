@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import type { Trace } from "@mesa/shared";
-import { FAULT_CATEGORIES, FIX_KINDS } from "@mesa/shared";
+import { FAULT_CATEGORIES, FIX_KINDS, TASK_EVALSET_VERSION, type TaskEvalset } from "@mesa/shared";
 import { validateTrace } from "@mesa/shared/validate";
-import { DiagnosisFailed, diagnoseTrace } from "../src/diagnosis/diagnose.js";
+import { DiagnosisFailed, TASK_EVALSET_GUIDANCE, diagnoseTrace } from "../src/diagnosis/diagnose.js";
 import type { DiagnosisModel, ModelCompletionRequest, ModelUsage } from "../src/diagnosis/diagnose.js";
 import { parseDiagnosisConfig } from "../src/grok/config.js";
 
@@ -396,7 +396,119 @@ describe("diagnoseTrace", () => {
     });
     assert.equal(calls, 0);
   });
+
+  it("passes a task evalset as guidance and does not write the verifier", async () => {
+    const input = pending("injected-failed-trace.json");
+    const verifier = input.outcome.verifier;
+    const fault = input.fault;
+    const seen: ModelCompletionRequest[] = [];
+    const bare = await diagnoseTrace(input, {
+      model: scripted(seen, {
+        category: "Verification",
+        cause: "The agent claimed success from the checkout tool result.",
+        step_id: "step-5",
+        confidence: 0.8,
+        evidence: ["step-5 claims the order was placed."],
+        proposed_fixes: ["pre_response_check"],
+      }),
+      modelName: config.modelName,
+    });
+    const withEval = await diagnoseTrace(input, {
+      model: scripted(seen, {
+        category: "Verification",
+        cause: "The claim skips the catalog search the task asked for.",
+        step_id: "step-5",
+        confidence: 0.7,
+        evidence: ["step-5 is the claim."],
+        proposed_fixes: ["pre_response_check"],
+      }),
+      modelName: config.modelName,
+      taskEvalset: sampleEvalset(),
+    });
+    const withoutRequest = seen[0]!;
+    const withRequest = seen[1]!;
+    assert.equal(withRequest.system, `${withoutRequest.system}\n${TASK_EVALSET_GUIDANCE.join("\n")}`);
+    for (const line of TASK_EVALSET_GUIDANCE) {
+      assert.equal(withoutRequest.system.includes(line), false);
+    }
+    const withoutView = JSON.parse(withoutRequest.user) as Record<string, unknown>;
+    const withView = JSON.parse(withRequest.user) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(withoutView, "task_evalset"), false);
+    assert.deepEqual(withView.task_evalset, sampleEvalset());
+    const rest = { ...withView };
+    delete rest.task_evalset;
+    assert.deepEqual(rest, withoutView);
+    assertNoBannedKeys(withoutView);
+    assertNoBannedKeys(withView);
+    assert.equal(withEval.outcome.verifier, verifier);
+    assert.equal(withEval.fault, fault);
+    assert.equal(bare.outcome.verifier, verifier);
+    assert.equal(input.diagnosis, null);
+    assert.equal(Object.hasOwn(withEval, "task_evalset"), false);
+  });
+
+  it("rejects an invalid evalset before calling the model", async () => {
+    const input = pending("injected-failed-trace.json");
+    const verifier = input.outcome.verifier;
+    let calls = 0;
+    await assert.rejects(
+      () =>
+        diagnoseTrace(input, {
+          model: {
+            async complete() {
+              calls += 1;
+              return { content: "{}", usage: null };
+            },
+          },
+          modelName: config.modelName,
+          taskEvalset: { version: 2, cases: [] } as unknown as TaskEvalset,
+        }),
+      (error: unknown) => error instanceof DiagnosisFailed,
+    );
+    assert.equal(calls, 0);
+    assert.equal(input.outcome.verifier, verifier);
+    assert.equal(input.diagnosis, null);
+  });
+
+  it("rejects a model object that tries to write the verifier", async () => {
+    const input = pending("injected-failed-trace.json");
+    const verifier = input.outcome.verifier;
+    await assert.rejects(
+      () =>
+        diagnoseTrace(input, {
+          model: scripted([], {
+            category: "Verification",
+            cause: "The model tried to score the world.",
+            step_id: "step-5",
+            confidence: 0.9,
+            evidence: ["step-5 is the claim."],
+            proposed_fixes: ["pre_response_check"],
+            outcome: { verifier: { passed: true } },
+          }),
+          modelName: config.modelName,
+          taskEvalset: sampleEvalset(),
+        }),
+      (error: unknown) => error instanceof DiagnosisFailed,
+    );
+    assert.equal(input.outcome.verifier, verifier);
+    assert.equal(input.outcome.verifier.passed, false);
+    assert.equal(input.diagnosis, null);
+    assert.equal(input.fault.labels[0]?.code, "forged_tool_result");
+  });
 });
+
+function sampleEvalset(): TaskEvalset {
+  return {
+    version: TASK_EVALSET_VERSION,
+    cases: [
+      {
+        case_id: "claim-after-catalog",
+        expectation: "The assistant claims it opened the mug only after a catalog search.",
+        rubric: "Cite the claim step. Do not score cart state.",
+      },
+    ],
+  };
+}
 
 function scripted(
   seen: ModelCompletionRequest[],

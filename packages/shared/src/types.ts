@@ -223,9 +223,10 @@ export interface TaskEvalCase {
 }
 
 /**
- * User-supplied material for a later Grok judgment of this task's Run or Trace.
+ * User-supplied material for a Grok judgment of this task's Trace.
  * Optional on the task. Omit it, or send `version` 1 with `cases: []`, when
- * there is nothing for the judge to read. The deterministic verifier does not
+ * there is nothing for the judge to read. Diagnose passes this object as
+ * guidance and writes `diagnosis` only. The deterministic verifier does not
  * read this object and does not write `outcome.verifier` from it.
  */
 export interface TaskEvalset {

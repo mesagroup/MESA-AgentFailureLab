@@ -38,12 +38,27 @@ curl --fail-with-body -X POST \
 curl --fail-with-body http://127.0.0.1:3001/traces/TRACE_ID
 ```
 
-The server calls `AGENTSERVICE_URL/diagnose` using the stored trace. It validates
-the full response with `validateTrace`, requires a non-null Diagnosis with an
-existing culprit step, and checks that **every field except `diagnosis`** is
-semantically identical (object-key order is irrelevant). It constructs the saved
-document from the authoritative original plus that Diagnosis. It never trusts
-remote copies of outcome, fault, steps, totals, IDs or timestamps.
+The server loads the stored trace, then resolves `tasks[].evalset` from the agent
+store: `trace.agent_id`, then the task whose `task_id` equals `trace.task_id`.
+When that task has `evalset`, the upstream body is
+`{ "trace": <stored trace>, "task_evalset": <that evalset> }`, including
+`{ "version": 1, "cases": [] }`. When the agent is missing, the task is missing,
+or the task omits `evalset`, the upstream body is the stored trace alone.
+There is no `POST /runs/:runId/diagnose`. Run `phase` and `injection_plan` are
+not sent. A direct `POST /diagnose` of a Trace, with no envelope, is unchanged.
+
+The evalset is guidance for the model. Assisted judgment is written only on
+`diagnosis` (`category`, `cause`, `step_id`, `confidence`, `evidence`,
+`proposed_fixes`). It is not copied onto the trace and it does not replace
+`outcome.verifier`. The verifier stays the deterministic check of mock state.
+
+The server validates the upstream response with `validateTrace`, requires a
+non-null Diagnosis with an existing culprit step, and checks that **every field
+except `diagnosis`** is semantically identical (object-key order is irrelevant).
+It constructs the saved document from the authoritative original plus that
+Diagnosis. It never trusts remote copies of outcome, fault, steps, totals, IDs
+or timestamps. An upstream body that changes `outcome.verifier` or `fault.*` is
+`502 invalid_diagnosis_response` and the stored trace is left as it was.
 
 The store atomically compares the current trace with the original before saving
 diagnosis. An intervening update/deletion yields `409 trace_changed` instead of
@@ -98,7 +113,11 @@ browser UI or CORS exposed headers. The canonical Trace body is usable by the UI
 Errors return a stable code, not upstream bodies, database URLs or raw exception
 messages. No HTTP route accepts arbitrary full-document uploads for this flow.
 The upstream diagnostic prompt continues to omit ground-truth labels and verifier
-snapshots; that filtering remains in agentservice.
+snapshots; that filtering remains in agentservice. When `task_evalset` is
+present, agentservice appends guidance lines and puts the evalset on the user
+message. Those lines are absent when the evalset is omitted, so that call matches
+the previous prompt. The model is told not to write `outcome.verifier` or
+`fault.*`. The response trace is still checked field by field before save.
 
 ### Verification
 

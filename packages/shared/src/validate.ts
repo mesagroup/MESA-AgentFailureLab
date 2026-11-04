@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
-import { validateAgentTasks, validateTaskChecks } from "./checks.js";
-import type { Agent, AgentTask, Run, Trace } from "./types.js";
+import { evalsetCaseIdErrors, validateAgentTasks, validateTaskChecks } from "./checks.js";
+import type { Agent, AgentTask, Run, TaskEvalset, Trace } from "./types.js";
 
 const schemaDir = join(dirname(fileURLToPath(import.meta.url)), "..", "schemas");
 
@@ -43,6 +43,9 @@ const validateTraceSchema: ValidateFunction = ajv.compile(traceSchema as AnySche
 const validateAgentSchema: ValidateFunction = ajv.compile(agentSchema as AnySchema);
 const validateRunSchema: ValidateFunction = ajv.compile(runSchema as AnySchema);
 const validateTaskSchema: ValidateFunction = ajv.compile({ $ref: `${AGENT_SCHEMA_ID}#/$defs/task` });
+const validateEvalsetSchema: ValidateFunction = ajv.compile({
+  $ref: `${AGENT_SCHEMA_ID}#/$defs/task/properties/evalset`,
+});
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
   return (errors ?? []).map((error) => {
@@ -67,6 +70,18 @@ export function validateAgent(data: unknown): ValidationResult<Agent> {
   if (!structural.ok) return structural;
   const taskErrors = validateAgentTasks(structural.value);
   if (taskErrors.length > 0) return { ok: false, errors: taskErrors };
+  return structural;
+}
+
+/**
+ * One task evalset (`version` 1). Duplicate `case_id` values are rejected.
+ * This is judge input. It is not a verifier result.
+ */
+export function validateTaskEvalset(data: unknown): ValidationResult<TaskEvalset> {
+  const structural = check<TaskEvalset>(validateEvalsetSchema, data);
+  if (!structural.ok) return structural;
+  const errors = evalsetCaseIdErrors(structural.value);
+  if (errors.length > 0) return { ok: false, errors };
   return structural;
 }
 

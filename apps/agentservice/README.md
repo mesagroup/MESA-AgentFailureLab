@@ -2,7 +2,7 @@
 
 Grok diagnosis for one `Trace`, the fix applicator for `controlled_retry`, `pre_response_check`, and `permission_guard`, and the reference shop agent.
 
-`POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
+`POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`. An optional `task_evalset` on the request is guidance for that judgment. It is not stored on the trace and it is not a verdict.
 
 `POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` on the shared `AgentRunRequest` (`@mesa/shared`) are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
 
@@ -17,7 +17,7 @@ Equivalent root script: `pnpm dev:agentservice`.
 
 - Dev server: http://127.0.0.1:3002
 - Health: http://127.0.0.1:3002/health
-- Diagnose: `POST /diagnose` with a JSON `Trace`
+- Diagnose: `POST /diagnose` with a JSON `Trace`, or `{ "trace", "task_evalset" }` when the harness resolved one
 - Production build: `pnpm exec turbo run build --filter=@mesa/agentservice` then `pnpm --filter @mesa/agentservice start`
 
 Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally. `.env` is gitignored. `XAI_API_KEY=` in the example stays empty.
@@ -38,14 +38,30 @@ pnpm --filter @mesa/agentservice test
 
 ## Diagnose a trace
 
-The body is a `Trace`. `run_id` is already a field on it. There is no second wrapper. The response is that trace with `diagnosis` set. `outcome` and `fault` are the same objects the caller sent.
+The body is either a `Trace`, or an envelope with exactly two keys: `trace` and `task_evalset`. A bare Trace is the call with no evalset. The envelope is the call when the harness found `Agent.tasks[].evalset` for `trace.agent_id` and `trace.task_id`. The response is that trace with `diagnosis` set. `outcome` and `fault` are the same objects the caller sent. `task_evalset` is not a response field.
 
 | Status | Body | When |
 | --- | --- | --- |
 | 200 | The trace | Diagnosis passed the shared schema |
-| 400 | `{ "error": "invalid_trace", "errors": string[] }` | Body failed `validateTrace` |
+| 400 | `{ "error": "invalid_trace", "errors": string[] }` | Body failed `validateTrace`, or the envelope was not exactly those two keys |
+| 400 | `{ "error": "invalid_task_evalset", "errors": string[] }` | Envelope trace was valid and `task_evalset` was not version 1, including a duplicate `case_id` |
 | 503 | `{ "error": "grok_not_configured" }` | `XAI_API_KEY` is empty and no model was injected |
 | 502 | `{ "error": "diagnosis_failed" }` | The provider failed, or the model JSON was not a schema-valid diagnosis |
+
+### Task evalset guidance
+
+`task_evalset` is input to the model. It is not the judge. Assisted judgment lands only in `diagnosis`. There is no second field for an evalset score, and this service does not write `outcome.verifier` or `fault.*` (`GROK_FORBIDDEN_WRITE_PATHS`).
+
+When the body is a bare Trace, the system prompt is unchanged and the user JSON has no `task_evalset` key. When the envelope is present, including `{ "version": 1, "cases": [] }`, these two lines are appended to the system prompt and the user JSON gains `task_evalset`:
+
+```
+task_evalset is user-written guidance for this task. Use its cases to ground cause, evidence, and proposed_fixes. It is not the judge and it does not decide pass or fail.
+Do not write outcome.verifier, fault.injected, fault.labels, fault.attacker. Reply with the diagnosis object only.
+```
+
+Expectations are not copied into `diagnosis.evidence` by this process. Evidence from the model still has to name a real `step_id`. A model object that adds `outcome` or `fault` fails the diagnosis schema and is not written.
+
+`pnpm eval` calls `diagnoseTrace` without `taskEvalset`. Scoreboard traces are scored as before. There is no Run diagnose route. Run `phase` and `injection_plan` stay off the prompt.
 
 Token use and cost are not fields on the trace. When the completion includes usage, the process logs `diagnosis usage` with `diagnosis_usage`. xAI's `usage.cost_in_usd_ticks` is divided by 10^10 to get USD. If the provider omits usage, nothing is logged.
 
@@ -64,7 +80,7 @@ Omitted:
 - Any `diagnosis` already stored on the trace.
 - `injection_plan` and `phase`. Those are Run fields. They are not copied onto the prompt.
 
-Kept: `task_id`, timestamps, `status`, `steps` (including tool inputs and outputs the agent saw), `totals`, `agent_claimed_success`, and the pre-pass findings.
+Kept: `task_id`, timestamps, `status`, `steps` (including tool inputs and outputs the agent saw), `totals`, `agent_claimed_success`, and the pre-pass findings. `task_evalset` is kept only when the request supplied one. It is the task author's guidance, not harness ground truth.
 
 `status` still tells the model whether the attempt completed, failed, timed out, or errored. That is the harness class, not the check narrative.
 

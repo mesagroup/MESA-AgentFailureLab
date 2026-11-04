@@ -50,7 +50,7 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 | `outcome.verifier` | Backend verifier only. It reads mock state (`GET /internal/state`) and the task's `success_test.checks`. It does not call Grok and it does not read `tasks[].evalset`. `outcome.success` copies `verifier.passed`. The task, including `setup` and check `params`, is data on the agent. See [agent-tasks.md](agent-tasks.md). |
 | `fault.labels` | Injector or attacker only. They also write `fault.injected` and `fault.attacker`. |
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
-| `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. Material a later Grok judgment may read for that task's Run or Trace. It is not a Trace field and it is not a writer of `outcome.verifier`. |
+| `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. `POST /traces/:traceId/diagnose` resolves it by `agent_id` and `task_id` and passes it to Grok as guidance. The model writes `diagnosis` only. It is not a Trace field and it is not a writer of `outcome.verifier`. |
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 
@@ -67,7 +67,7 @@ ADR-001's recorded status or ADR-002's ownership decisions.
 
 The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
-Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds `reference-shop` on boot, and runs and traces start empty. The shop catalog is still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. `tasks[].evalset` is stored with the agent and is not passed into the diagnose call by this process.
+Agent, Run, and Trace records live in the backend process. With `DATABASE_URL` set they are rows in one Postgres database and survive a restart. Without it they stay in memory: the process reseeds `reference-shop` on boot, and runs and traces start empty. The shop catalog is still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the APIs, env vars, and the local runbook are in [persistence.md](persistence.md). The verifier is still the only writer of `outcome.verifier`. Grok still writes only `diagnosis`. When the trace's task has `evalset`, this process sends it on `POST /diagnose` as `{ "trace", "task_evalset" }`. A task that omits the field sends the trace alone. There is no run diagnose route.
 
 ## One writer for the mock world
 

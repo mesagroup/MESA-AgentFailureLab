@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import type { FastifyInstance } from "fastify";
+import { TASK_EVALSET_VERSION, type TaskEvalset } from "@mesa/shared";
 import { validateTrace } from "@mesa/shared/validate";
 import { buildApp } from "../src/app.js";
 import type { DiagnosisModel } from "../src/diagnosis/diagnose.js";
@@ -104,6 +105,95 @@ describe("POST /diagnose", () => {
       });
       assert.equal(response.statusCode, 502);
       assert.deepEqual(response.json(), { error: "diagnosis_failed" });
+    });
+  });
+
+  it("accepts a task evalset envelope and does not return it or the verifier change", async () => {
+    const trace = pendingTrace();
+    const evalset: TaskEvalset = {
+      version: TASK_EVALSET_VERSION,
+      cases: [{ case_id: "claim-after-catalog", expectation: "Cite the catalog search before the claim." }],
+    };
+    let user = "";
+    const model: DiagnosisModel = {
+      async complete(input) {
+        user = input.user;
+        return {
+          content: JSON.stringify({
+            category: "Verification",
+            cause: "The claim is ahead of the catalog search.",
+            step_id: "step-5",
+            confidence: 0.6,
+            evidence: ["step-5 is the claim."],
+            proposed_fixes: ["pre_response_check"],
+          }),
+          usage: null,
+        };
+      },
+    };
+    await withApp(buildApp({ config, model, logger: false }), async (app) => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/diagnose",
+        payload: { trace, task_evalset: evalset },
+      });
+      assert.equal(response.statusCode, 200);
+      const body: unknown = response.json();
+      const parsed = validateTrace(body);
+      assert.equal(parsed.ok, true);
+      if (!parsed.ok) return;
+      assert.equal(parsed.value.diagnosis?.step_id, "step-5");
+      assert.equal(parsed.value.outcome.verifier.passed, false);
+      assert.equal(parsed.value.fault.labels[0]?.code, "forged_tool_result");
+      assert.equal(Object.hasOwn(parsed.value, "task_evalset"), false);
+      const view = JSON.parse(user) as { task_evalset?: TaskEvalset; fault?: unknown; outcome?: unknown };
+      assert.deepEqual(view.task_evalset, evalset);
+      assert.equal(view.fault, undefined);
+      assert.equal(view.outcome, undefined);
+    });
+  });
+
+  it("rejects a bad evalset and an envelope with extra keys", async () => {
+    let calls = 0;
+    const model: DiagnosisModel = {
+      async complete() {
+        calls += 1;
+        throw new Error("should not be called");
+      },
+    };
+    await withApp(buildApp({ config, model, logger: false }), async (app) => {
+      const trace = pendingTrace();
+      const bad = await app.inject({
+        method: "POST",
+        url: "/diagnose",
+        payload: { trace, task_evalset: { version: 2, cases: [] } },
+      });
+      assert.equal(bad.statusCode, 400);
+      assert.equal(bad.json().error, "invalid_task_evalset");
+      const duplicate = await app.inject({
+        method: "POST",
+        url: "/diagnose",
+        payload: {
+          trace,
+          task_evalset: {
+            version: TASK_EVALSET_VERSION,
+            cases: [
+              { case_id: "same", expectation: "First." },
+              { case_id: "same", expectation: "Second." },
+            ],
+          },
+        },
+      });
+      assert.equal(duplicate.statusCode, 400);
+      assert.equal(duplicate.json().error, "invalid_task_evalset");
+      const extra = await app.inject({
+        method: "POST",
+        url: "/diagnose",
+        payload: { trace, task_evalset: { version: TASK_EVALSET_VERSION, cases: [] }, note: "no" },
+      });
+      assert.equal(extra.statusCode, 400);
+      assert.equal(extra.json().error, "invalid_trace");
+      assert.equal(calls, 0);
     });
   });
 

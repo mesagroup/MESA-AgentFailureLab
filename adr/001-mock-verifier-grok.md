@@ -34,6 +34,8 @@ Tre componenti con responsabilità esclusive.
 - L’esito resta `success_test.checks` sullo stato del mondo nel mock.
 - Il collegamento al prompt di diagnosi non fa parte di questa decisione. Grok non diventa l’autorità sull’esito. Non esiste un endpoint che genera l’evalset.
 
+Aggiornamento (issue #119): `POST /traces/:traceId/diagnose` risolve `tasks[].evalset` da `agent_id` + `task_id` e, se il campo c’è, lo passa a Grok come guidance. Il giudizio assistito resta solo in `diagnosis`. Non c’è un campo dedicato e l’evalset non sostituisce `outcome.verifier`. Non c’è una route di diagnose sulla Run.
+
 ## Ground truth
 - `fault.labels` e `attacker`: solo iniettore / attaccante in run di caos.
 - Eval classificazione: confronto `diagnosis.category` (+ step) vs `fault.labels`.

@@ -50,7 +50,7 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 - Fallimento tipico: codice guasto inesistente → `POST /runs` rifiuta la richiesta. Il codice giuria `unauthorized_cancel_via_juror_note` non è nel catalogo.
 
 **4. Ispeziona traccia: timeline, verifier, diagnosi**
-- OGGI: `GET :3001/traces/:traceId` → `POST :3002/diagnose` con la trace come body → la risposta è la trace con `diagnosis` compilata.
+- OGGI: `GET :3001/traces/:traceId` → `POST :3001/traces/:traceId/diagnose` (niente body). Il backend manda la trace a `POST :3002/diagnose`. Se il task dell'agente ha un `evalset`, il body è `{ "trace", "task_evalset" }`; se non ce l'ha, il body è la trace. La risposta salvata è la trace con `diagnosis` compilata. Il verifier non cambia. Un `POST :3002/diagnose` diretto con la sola trace resta valido e non aggiunge guidance.
 - DOMANI (#12): **Ispeziona traccia** → timeline degli step → step colpevole evidenziato → pannello verifier → pannello diagnosi.
 - Atteso: il tool result di `checkout` mostra un ordine `ord_fake` che il mock non ha creato; `fault.labels[0].step_id` punta a quello step; la diagnosi ha `category`, `cause`, `step_id` (uno step vero della trace), `confidence` 0–1, `evidence` (con il finding `false_success_claim` del pre-pass) e `proposed_fixes`.
 - Fallimento tipico: 503 `grok_not_configured` (manca la chiave), 502 `diagnosis_failed` (errore del provider o JSON non valido), 400 `invalid_trace`.

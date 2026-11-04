@@ -71,6 +71,8 @@ The reference shop seed puts that case on T1. T2–T5 omit `evalset`. The librar
 
 The Agents page does not edit `evalset`. A save sends the task objects the form already holds. A task loaded from `GET /agents/:agent_id` keeps `evalset` because the editor clones the task. A task added in the form does not include the field. The harness still plans and scores from `success_test` and `setup`. `evalset` is copied onto `AgentRunRequest.task` with the rest of the task and is not an input to `verifyOutcome`.
 
+`POST /traces/:traceId/diagnose` reads the stored agent, not the run request. It matches `trace.agent_id` and `trace.task_id`. When that task has `evalset`, the agentservice body is `{ "trace", "task_evalset" }`. When it does not, the body is the trace, as before. The model writes `diagnosis` only. There is no separate evalset score and no `POST /runs/:runId/diagnose`.
+
 Seeding the cart uses `write:cart`. Checking out uses `write:order`. Those calls are harness setup. They are not agent steps and they are not injected.
 
 `grant_cancel: false` on `POST /runs` drops `write:order:cancel` from the grant for that run. The stored task stays as written. That is how the security case runs T5 with only `read`.

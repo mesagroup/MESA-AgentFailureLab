@@ -21,6 +21,7 @@ import {
   traceSchema,
   validateAgent,
   validateRun,
+  validateTaskEvalset,
   validateTrace,
 } from "../src/validate.js";
 
@@ -173,6 +174,9 @@ describe("examples", () => {
       ],
     };
     assert.deepEqual(t1?.evalset, expected);
+    assertOk(validateTaskEvalset(t1?.evalset), "t1 evalset");
+    assert.equal(validateTaskEvalset({ version: TASK_EVALSET_VERSION, cases: [] }).ok, true);
+    assert.equal(validateTaskEvalset(undefined).ok, false);
     for (const taskId of ["T2", "T3", "T4", "T5"]) {
       assert.equal(result.value.tasks.find((task) => task.task_id === taskId)?.evalset, undefined, taskId);
     }

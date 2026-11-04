@@ -1,4 +1,4 @@
-import type { Agent, AgentTask, AgentTaskCheck } from "./types.js";
+import type { Agent, AgentTask, AgentTaskCheck, TaskEvalset } from "./types.js";
 
 /**
  * Shop permissions a task may grant the agent.
@@ -164,15 +164,20 @@ export function validateTaskChecks(task: AgentTask, taskIndex = 0): string[] {
 
 /** Duplicate `case_id` values inside one task's evalset. The schema already checked the shape. */
 function validateEvalset(task: AgentTask, taskIndex: number): string[] {
-  const cases = task.evalset?.cases;
-  if (!cases) return [];
+  if (!task.evalset) return [];
+  return evalsetCaseIdErrors(task.evalset, `/tasks/${taskIndex}/evalset`);
+}
+
+/**
+ * Duplicate `case_id` values. `prefix` is the path of the evalset object.
+ * An empty prefix reports `/cases/0/case_id` on a standalone evalset document.
+ */
+export function evalsetCaseIdErrors(evalset: TaskEvalset, prefix = ""): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
-  cases.forEach((entry, caseIndex) => {
+  evalset.cases.forEach((entry, caseIndex) => {
     if (seen.has(entry.case_id)) {
-      errors.push(
-        `/tasks/${taskIndex}/evalset/cases/${caseIndex}/case_id duplicate case_id ${entry.case_id}`,
-      );
+      errors.push(`${prefix}/cases/${caseIndex}/case_id duplicate case_id ${entry.case_id}`);
     }
     seen.add(entry.case_id);
   });

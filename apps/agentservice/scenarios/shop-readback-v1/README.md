@@ -151,7 +151,10 @@ For the injected run, set `phase:injected` and copy **the full
 `scenario.json.injection_plan` object** into `injection` (not `preset`: these are
 custom task IDs). Obtain the returned `run.run_id` and `trace.trace_id` from
 `results[0]`. Request persisted diagnosis with
-`POST /traces/<trace_id>/diagnose` and no body. For replay, use:
+`POST /traces/<trace_id>/diagnose` and no body. This fixture's tasks omit
+`evalset`, so agentservice receives the trace alone. A task that stores one is
+sent as `{ "trace", "task_evalset" }` guidance; the saved field is still only
+`diagnosis`. For replay, use:
 
 ```json
 {

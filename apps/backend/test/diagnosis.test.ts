@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
-import type { Trace } from "@mesa/shared";
+import { TASK_EVALSET_VERSION, type Trace } from "@mesa/shared";
 import type { FastifyInstance } from "fastify";
+import { MemoryAgentStore } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { diagnosis, diagnosisRun, diagnosisTrace, deferred } from "./diagnosis-fixtures.js";
@@ -243,7 +244,7 @@ describe("stored trace diagnosis", () => {
 
   it("connects to the real agentservice over loopback with an explicitly offline model", async () => {
     const module = await import(new URL("../../agentservice/src/app.ts", import.meta.url).href) as {
-      buildApp: (options: { logger: boolean; config: { apiKey: null; baseUrl: string; modelName: string; timeoutMs: number }; model: { complete: (input: { user: string }) => Promise<{ content: string; usage: null }> } }) => FastifyInstance;
+      buildApp: (options: { logger: boolean; config: { apiKey: null; baseUrl: string; modelName: string; timeoutMs: number }; model: { complete: (input: { system: string; user: string }) => Promise<{ content: string; usage: null }> } }) => FastifyInstance;
     };
     let modelCalls = 0;
     const service = module.buildApp({ logger: false,
@@ -253,6 +254,8 @@ describe("stored trace diagnosis", () => {
         const view = JSON.parse(input.user);
         assert.equal(view.fault, undefined);
         assert.equal(view.outcome, undefined);
+        assert.equal(Object.hasOwn(view, "task_evalset"), false);
+        assert.equal(input.system.includes("task_evalset is user-written guidance"), false);
         assert.doesNotMatch(input.user, /jury-nota-malevola-cancel|unauthorized_cancel_via_juror_note/);
         return { content: JSON.stringify(diagnosis()), usage: null };
       } },
@@ -266,6 +269,161 @@ describe("stored trace diagnosis", () => {
       assert.equal(result.json().diagnosis.category, "Security");
       assert.deepEqual(result.json(), await store.getTrace(diagnosisTrace().trace_id));
       assert.deepEqual(result.json().outcome, diagnosisTrace().outcome);
+      assert.equal(modelCalls, 1);
+    } finally { await app.close(); await service.close(); }
+  });
+
+  it("sends the task evalset for agent_id and task_id and keeps the verifier", async () => {
+    const store = await seeded();
+    const trace = diagnosisTrace();
+    trace.task_id = "T1";
+    await store.saveTrace(trace);
+    const agents = new MemoryAgentStore();
+    const evalset = (await agents.get("reference-shop"))?.tasks.find((task) => task.task_id === "T1")?.evalset;
+    assert.ok(evalset);
+    assert.equal(evalset.cases[0]?.case_id, "claim-after-catalog");
+    let body: unknown;
+    const app = buildApp({ logger: false, store, agents, diagnosis: {
+      baseUrl: "http://agentservice.test",
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(init?.body as string);
+        return Response.json({ ...trace, diagnosis: diagnosis() });
+      },
+    } });
+    try {
+      const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+      assert.equal(result.statusCode, 200);
+      assert.deepEqual(body, { trace, task_evalset: evalset });
+      assert.deepEqual(result.json().outcome.verifier, trace.outcome.verifier);
+      assert.deepEqual(result.json().fault, trace.fault);
+      assert.deepEqual(result.json().diagnosis, diagnosis());
+      assert.equal(Object.hasOwn(result.json(), "task_evalset"), false);
+      assert.deepEqual(await store.getTrace(trace.trace_id), result.json());
+    } finally { await app.close(); }
+  });
+
+  it("rejects an upstream verifier change when the evalset was sent", async () => {
+    const store = await seeded();
+    const trace = diagnosisTrace();
+    trace.task_id = "T1";
+    await store.saveTrace(trace);
+    const agents = new MemoryAgentStore();
+    const app = buildApp({ logger: false, store, agents, diagnosis: {
+      baseUrl: "http://agentservice.test",
+      fetchImpl: async () => {
+        const tampered = structuredClone(trace);
+        tampered.outcome.verifier.passed = !trace.outcome.verifier.passed;
+        tampered.diagnosis = diagnosis();
+        return Response.json(tampered);
+      },
+    } });
+    try {
+      const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+      assert.equal(result.statusCode, 502);
+      assert.equal(result.json().error, "invalid_diagnosis_response");
+      const stored = await store.getTrace(trace.trace_id);
+      assert.equal(stored?.diagnosis, null);
+      assert.equal(stored?.outcome.verifier.passed, trace.outcome.verifier.passed);
+      assert.deepEqual(stored?.outcome.verifier, trace.outcome.verifier);
+    } finally { await app.close(); }
+  });
+
+  it("posts the trace alone when no task evalset resolves", async () => {
+    for (const item of [
+      { name: "T5 omits evalset", task_id: "T5", agent_id: "reference-shop" },
+      { name: "unknown agent", task_id: "T1", agent_id: "missing-agent" },
+      { name: "unknown task", task_id: "T9", agent_id: "reference-shop" },
+    ]) {
+      const store = await seeded();
+      const trace = diagnosisTrace();
+      trace.task_id = item.task_id;
+      trace.agent_id = item.agent_id;
+      await store.saveTrace(trace);
+      let body: unknown;
+      const app = buildApp({ logger: false, store, diagnosis: {
+        baseUrl: "http://agentservice.test",
+        fetchImpl: async (_url, init) => {
+          body = JSON.parse(init?.body as string);
+          return Response.json({ ...trace, diagnosis: diagnosis() });
+        },
+      } });
+      try {
+        const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+        assert.equal(result.statusCode, 200, item.name);
+        assert.deepEqual(body, trace, item.name);
+        assert.deepEqual(result.json().outcome.verifier, trace.outcome.verifier, item.name);
+        assert.equal(Object.hasOwn(result.json() as object, "task_evalset"), false, item.name);
+      } finally { await app.close(); }
+    }
+  });
+
+  it("sends a stored empty evalset and still writes diagnosis only", async () => {
+    const store = await seeded();
+    const agents = new MemoryAgentStore();
+    const agent = await agents.get("reference-shop");
+    assert.ok(agent);
+    const next = structuredClone(agent);
+    const task = next.tasks.find((item) => item.task_id === "T1");
+    assert.ok(task);
+    task.evalset = { version: TASK_EVALSET_VERSION, cases: [] };
+    await agents.replace("reference-shop", next);
+    const trace = diagnosisTrace();
+    trace.task_id = "T1";
+    await store.saveTrace(trace);
+    let body: unknown;
+    const app = buildApp({ logger: false, store, agents, diagnosis: {
+      baseUrl: "http://agentservice.test",
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(init?.body as string);
+        return Response.json({ ...trace, diagnosis: diagnosis() });
+      },
+    } });
+    try {
+      const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+      assert.equal(result.statusCode, 200);
+      assert.deepEqual(body, { trace, task_evalset: { version: TASK_EVALSET_VERSION, cases: [] } });
+      assert.deepEqual(result.json().outcome.verifier, trace.outcome.verifier);
+      assert.equal(Object.hasOwn(result.json(), "evalset"), false);
+    } finally { await app.close(); }
+  });
+
+  it("passes the resolved evalset through to the offline model without changing the verifier", async () => {
+    const module = await import(new URL("../../agentservice/src/app.ts", import.meta.url).href) as {
+      buildApp: (options: { logger: boolean; config: { apiKey: null; baseUrl: string; modelName: string; timeoutMs: number }; model: { complete: (input: { system: string; user: string }) => Promise<{ content: string; usage: null }> } }) => FastifyInstance;
+    };
+    const store = await seeded();
+    const trace = diagnosisTrace();
+    trace.task_id = "T1";
+    await store.saveTrace(trace);
+    const agents = new MemoryAgentStore();
+    const evalset = (await agents.get("reference-shop"))?.tasks.find((task) => task.task_id === "T1")?.evalset;
+    assert.ok(evalset);
+    let modelCalls = 0;
+    const service = module.buildApp({ logger: false,
+      config: { apiKey: null, baseUrl: "http://unused.invalid", modelName: "offline-test", timeoutMs: 1000 },
+      model: { complete: async input => {
+        modelCalls++;
+        const view = JSON.parse(input.user) as { task_evalset?: unknown; fault?: unknown; outcome?: unknown };
+        assert.deepEqual(view.task_evalset, evalset);
+        assert.equal(view.fault, undefined);
+        assert.equal(view.outcome, undefined);
+        assert.match(input.system, /task_evalset is user-written guidance/);
+        assert.match(input.system, /Do not write outcome\.verifier, fault\.injected, fault\.labels, fault\.attacker/);
+        assert.doesNotMatch(input.user, /jury-nota-malevola-cancel|unauthorized_cancel_via_juror_note/);
+        return { content: JSON.stringify(diagnosis()), usage: null };
+      } },
+    });
+    const baseUrl = await service.listen({ host: "127.0.0.1", port: 0 });
+    const app = buildApp({ logger: false, store, agents, diagnosis: { baseUrl } });
+    try {
+      const result = await app.inject({ method: "POST", url: `/traces/${trace.trace_id}/diagnose` });
+      assert.equal(result.statusCode, 200);
+      assert.equal(result.json().diagnosis.category, "Security");
+      assert.equal(result.json().diagnosis.step_id, "step-3");
+      assert.ok(result.json().diagnosis.evidence.includes("step-3 reports permission_denied"));
+      assert.deepEqual(result.json().outcome.verifier, trace.outcome.verifier);
+      assert.deepEqual(result.json().fault, trace.fault);
+      assert.equal(Object.hasOwn(result.json(), "task_evalset"), false);
       assert.equal(modelCalls, 1);
     } finally { await app.close(); await service.close(); }
   });
