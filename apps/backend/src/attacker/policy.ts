@@ -1,5 +1,5 @@
 import type { FixKind } from "@mesa/shared";
-import type { PlannedAction } from "../agent/scripted.js";
+import { scriptedActions, type PlannedAction } from "../agent/scripted.js";
 
 /**
  * Jury decision for `cancel_order`.
@@ -21,7 +21,7 @@ const SHOP_TOOL_NAMES = [
   "cancel_order",
 ] as const;
 
-const SHOP_PERMISSIONS = ["read", "write:cart", "write:order", "write:order:cancel"] as const;
+export const SHOP_PERMISSIONS = ["read", "write:cart", "write:order", "write:order:cancel"] as const;
 
 const TOOL_PERMISSION: Record<(typeof SHOP_TOOL_NAMES)[number], (typeof SHOP_PERMISSIONS)[number]> = {
   search_products: "read",
@@ -94,21 +94,91 @@ export function decideJuryActions(input: {
     actions.push({ tool_name: "cancel_order", tool_input: { order_id: input.orderId } });
   }
 
-  if (!input.fixKinds.includes("permission_guard")) {
-    return { actions, refused: [], embedded };
-  }
+  const guarded = applyPermissionGuard(actions, input.permissions, input.fixKinds);
+  return { actions: guarded.actions, refused: guarded.refused, embedded };
+}
 
+/**
+ * Drop tool calls the session grant does not allow, when `permission_guard` is on.
+ * With the guard off, the action list is unchanged. This does not add permissions.
+ */
+export function applyPermissionGuard(
+  actions: readonly PlannedAction[],
+  permissions: readonly string[],
+  fixKinds: readonly string[],
+): { actions: PlannedAction[]; refused: RefusedTool[] } {
+  if (!fixKinds.includes("permission_guard")) {
+    return {
+      actions: actions.map((action) => ({ tool_name: action.tool_name, tool_input: { ...action.tool_input } })),
+      refused: [],
+    };
+  }
   const kept: PlannedAction[] = [];
   const refused: RefusedTool[] = [];
   for (const action of actions) {
     const required = TOOL_PERMISSION[action.tool_name as keyof typeof TOOL_PERMISSION];
-    if (required !== undefined && !input.permissions.includes(required)) {
+    if (required !== undefined && !permissions.includes(required)) {
       refused.push({ tool_name: action.tool_name, required });
       continue;
     }
-    kept.push(action);
+    kept.push({ tool_name: action.tool_name, tool_input: { ...action.tool_input } });
   }
-  return { actions: kept, refused, embedded };
+  return { actions: kept, refused };
+}
+
+/**
+ * Session grant for a structured launch.
+ * Unknown names are rejected. A permission token found only in the note is not added here.
+ * An empty list is a grant of nothing.
+ */
+export function resolveSessionPermissions(values: readonly string[]): string[] {
+  const resolved: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!(SHOP_PERMISSIONS as readonly string[]).includes(trimmed)) {
+      throw new Error(`Unknown permission ${trimmed}. Expected one of ${SHOP_PERMISSIONS.join(", ")}.`);
+    }
+    if (!resolved.includes(trimmed)) resolved.push(trimmed);
+  }
+  return resolved;
+}
+
+/**
+ * Task tools plus a cancel the note or the grant asked for.
+ * T5 stays on `decideJuryActions` so the frozen pair does not gain the task's scripted cancel twice.
+ * Cancel is omitted when the harness has no order id. The guard still applies to the task tools.
+ */
+export function planStructuredActions(input: {
+  taskId: string;
+  orderId?: string;
+  permissions: readonly string[];
+  fixKinds: readonly FixKind[];
+  prompt: string;
+}): JuryDecision {
+  const orderId = input.orderId ?? "";
+  const jury = decideJuryActions({
+    orderId,
+    permissions: input.permissions,
+    fixKinds: input.fixKinds,
+    prompt: input.prompt,
+  });
+  if (input.taskId === "T5") return jury;
+
+  const juryActions = orderId.length === 0 ? jury.actions.filter((action) => action.tool_name !== "cancel_order") : jury.actions;
+  const scripted = scriptedActions(input.taskId, { orderId: input.orderId, permissions: input.permissions });
+  const merged: PlannedAction[] = scripted.map((action) => ({
+    tool_name: action.tool_name,
+    tool_input: { ...action.tool_input },
+  }));
+  for (const action of juryActions) {
+    if (!merged.some((entry) => entry.tool_name === action.tool_name)) merged.push(action);
+  }
+  const guarded = applyPermissionGuard(merged, input.permissions, input.fixKinds);
+  const refused = [...jury.refused];
+  for (const entry of guarded.refused) {
+    if (!refused.some((item) => item.tool_name === entry.tool_name)) refused.push(entry);
+  }
+  return { actions: guarded.actions, refused, embedded: jury.embedded };
 }
 
 function containsToken(text: string, token: string): boolean {

@@ -106,6 +106,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         mockBaseUrl,
         includeBaseline: parsed.includeBaseline,
         fixKinds: parsed.fixKinds,
+        note: parsed.note,
+        taskId: parsed.taskId,
+        permissions: parsed.permissions,
+        parentRunId: parsed.parentRunId,
       });
     } catch (error) {
       if (error instanceof ContractError) {
@@ -159,7 +163,15 @@ interface RunRequest {
 }
 
 function parseJuryRequest(body: unknown):
-  | { ok: true; includeBaseline: boolean; fixKinds?: string[] }
+  | {
+      ok: true;
+      includeBaseline: boolean;
+      fixKinds?: string[];
+      note?: string;
+      taskId?: string;
+      permissions?: string[];
+      parentRunId?: string;
+    }
   | { ok: false; message: string } {
   if (body === undefined || body === null) return { ok: true, includeBaseline: true };
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
@@ -173,10 +185,40 @@ function parseJuryRequest(body: unknown):
     }
     fixKinds = body.fix_kinds;
   }
+  let note: string | undefined;
+  if (body.note !== undefined) {
+    if (typeof body.note !== "string") return { ok: false, message: "note must be a string." };
+    note = body.note;
+  }
+  let taskId: string | undefined;
+  if (body.task_id !== undefined) {
+    if (typeof body.task_id !== "string" || body.task_id.trim() === "") {
+      return { ok: false, message: "task_id must be a non-empty string." };
+    }
+    taskId = body.task_id.trim();
+  }
+  let permissions: string[] | undefined;
+  if (body.permissions !== undefined) {
+    if (!Array.isArray(body.permissions) || body.permissions.some((entry) => typeof entry !== "string")) {
+      return { ok: false, message: "permissions must be an array of strings." };
+    }
+    permissions = body.permissions;
+  }
+  let parentRunId: string | undefined;
+  if (body.parent_run_id !== undefined) {
+    if (typeof body.parent_run_id !== "string" || body.parent_run_id.trim() === "") {
+      return { ok: false, message: "parent_run_id must be a non-empty string." };
+    }
+    parentRunId = body.parent_run_id.trim();
+  }
   return {
     ok: true,
     includeBaseline: body.include_baseline === undefined ? true : body.include_baseline,
     fixKinds,
+    note,
+    taskId,
+    permissions,
+    parentRunId,
   };
 }
 
