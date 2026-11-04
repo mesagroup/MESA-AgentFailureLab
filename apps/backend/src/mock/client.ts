@@ -1,3 +1,4 @@
+import { isRecord } from "../util.js";
 import { parseSnapshot, type ShopSnapshot } from "./snapshot.js";
 
 export interface ShopRequest {
@@ -13,9 +14,22 @@ export interface ShopResponse {
   body: unknown;
 }
 
+/** `raw` is the JSON object from the shop. `parsed` is the view the checks read. */
+export interface ShopState {
+  raw: Record<string, unknown>;
+  parsed: ShopSnapshot;
+}
+
+export function shopStateFrom(value: unknown): ShopState {
+  if (!isRecord(value)) {
+    throw new Error("Mock /internal/state did not return an object.");
+  }
+  return { raw: value, parsed: parseSnapshot(value) };
+}
+
 export interface MockShopClient {
-  reset(): Promise<ShopSnapshot>;
-  state(): Promise<ShopSnapshot>;
+  reset(): Promise<ShopState>;
+  state(): Promise<ShopState>;
   request(options: ShopRequest): Promise<ShopResponse>;
 }
 
@@ -32,7 +46,6 @@ function stringInput(input: Record<string, unknown>, key: string): string | unde
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-/** Map a reference-agent tool name onto the mock shop HTTP API. */
 export function describeToolCall(toolName: string, input: Record<string, unknown>): ToolHttpCall {
   switch (toolName) {
     case "search_products": {
@@ -94,12 +107,12 @@ export function createHttpMockClient(baseUrl: string, fetchImpl: typeof fetch = 
     async reset() {
       const response = await fetchImpl(`${root}/internal/reset`, { method: "POST" });
       if (!response.ok) throw new Error(`Mock reset failed with ${response.status}.`);
-      return parseSnapshot(await readJson(response));
+      return shopStateFrom(await readJson(response));
     },
     async state() {
       const response = await fetchImpl(`${root}/internal/state`);
       if (!response.ok) throw new Error(`Mock state failed with ${response.status}.`);
-      return parseSnapshot(await readJson(response));
+      return shopStateFrom(await readJson(response));
     },
     async request(options) {
       const headers: Record<string, string> = {

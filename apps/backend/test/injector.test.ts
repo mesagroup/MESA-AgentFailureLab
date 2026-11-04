@@ -9,21 +9,21 @@ import {
   presetPlan,
   type FaultDefinition,
 } from "../src/injector/catalog.js";
-import type { MockShopClient, ShopResponse } from "../src/mock/client.js";
-import type { ShopSnapshot } from "../src/mock/snapshot.js";
+import type { MockShopClient, ShopResponse, ShopState } from "../src/mock/client.js";
 
-function emptySnapshot(): ShopSnapshot {
-  return { carts: [], orders: [], inventory: [], observations: [] };
+function emptyState(): ShopState {
+  const raw = { carts: [], orders: [], inventory: [], observations: [] };
+  return { raw, parsed: { carts: [], orders: [], inventory: [], observations: [] } };
 }
 
 function recordingClient(onRequest: (path: string, body: unknown) => ShopResponse): MockShopClient & { paths: string[] } {
   return {
     paths: [],
     async reset() {
-      return emptySnapshot();
+      return emptyState();
     },
     async state() {
-      return emptySnapshot();
+      return emptyState();
     },
     async request(options) {
       this.paths.push(options.path);

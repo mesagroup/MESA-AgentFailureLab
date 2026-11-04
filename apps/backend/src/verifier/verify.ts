@@ -10,6 +10,8 @@ import { formatUsd, lineTotalUsd, readParamNumber, readParamString, usdEqual } f
 export interface VerifyInput {
   checks: readonly AgentTaskCheck[];
   snapshot: ShopSnapshot;
+  /** Wire body of `GET /internal/state`. Stored as `mock_state_snapshot` when present. */
+  wireSnapshot?: Record<string, unknown>;
   sessionId: string;
   permissions: readonly string[];
   orderId?: string;
@@ -200,20 +202,17 @@ function runCheck(check: AgentTaskCheck, input: VerifyInput): VerifierCheck {
   }
 }
 
-/**
- * Sole writer of `outcome.verifier` and `outcome.success`.
- * Success is the conjunction of the task checks against mock state.
- * This function does not read assistant prose and does not write `fault.labels`.
- */
+/** Only this function writes `outcome.verifier`. It does not read assistant prose or `fault.labels`. */
 export function verifyOutcome(input: VerifyInput): TraceOutcome {
   const checks = input.checks.map((check) => runCheck(check, input));
   const passed = checks.length > 0 && checks.every((check) => check.passed);
+  const stored = input.wireSnapshot ?? (input.snapshot as unknown as Record<string, unknown>);
   return {
     success: passed,
     verifier: {
       passed,
       checks,
-      mock_state_snapshot: structuredClone(input.snapshot) as unknown as Record<string, unknown>,
+      mock_state_snapshot: structuredClone(stored),
     },
     agent_claimed_success: input.agentClaimedSuccess,
   };

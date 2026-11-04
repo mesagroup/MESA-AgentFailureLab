@@ -163,10 +163,11 @@ async function runOne(
       startedMs,
       claimedSuccess: remote.claimedSuccess,
     });
-    const snapshot = await options.mock.state();
+    const shopState = await options.mock.state();
     const outcome = verifyOutcome({
       checks: task.success_test.checks,
-      snapshot,
+      snapshot: shopState.parsed,
+      wireSnapshot: shopState.raw,
       sessionId,
       permissions,
       orderId: prepared.orderId,
