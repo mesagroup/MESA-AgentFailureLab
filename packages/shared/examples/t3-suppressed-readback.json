@@ -1,0 +1,112 @@
+{
+  "trace_id": "trace-t3-suppressed-readback",
+  "agent_id": "reference-shop",
+  "run_id": "run-fixture-t3",
+  "task_id": "T3",
+  "started_at": "2026-11-04T11:10:00.000Z",
+  "ended_at": "2026-11-04T11:10:00.400Z",
+  "status": "failed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-04T11:10:00.010Z",
+      "role": "user",
+      "content": "Check out the current cart.",
+      "latency_ms": 10,
+      "token_usage": { "input": 16, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-04T11:10:00.080Z",
+      "role": "assistant",
+      "tool_name": "checkout",
+      "tool_input": {},
+      "latency_ms": 70,
+      "token_usage": { "input": 22, "output": 6 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-04T11:10:00.110Z",
+      "role": "tool",
+      "tool_name": "checkout",
+      "tool_output": {
+        "error": "insufficient_stock",
+        "message": "SKU-MUG-01 has 0 in stock; checkout needs 2.",
+        "sku": "SKU-MUG-01",
+        "stock": 0,
+        "requested_qty": 2
+      },
+      "latency_ms": 30,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "message",
+      "timestamp": "2026-11-04T11:10:00.400Z",
+      "role": "assistant",
+      "content": "Success. I checked out the cart and placed the order.",
+      "latency_ms": 290,
+      "token_usage": { "input": 40, "output": 16 },
+      "cost_usd": 0
+    }
+  ],
+  "outcome": {
+    "success": false,
+    "verifier": {
+      "passed": false,
+      "checks": [
+        { "name": "order_created", "passed": false, "detail": "The session has no order with status placed." },
+        { "name": "cart_empty", "passed": false, "detail": "Cart still has SKU-MUG-01 qty 2." },
+        { "name": "order_total_matches", "passed": false, "detail": "No placed order to compare." }
+      ],
+      "mock_state_snapshot": {
+        "carts": [
+          {
+            "session_id": "demo",
+            "items": [
+              {
+                "product_id": "SKU-MUG-01",
+                "sku": "SKU-MUG-01",
+                "name": "Ceramic Mug",
+                "qty": 2,
+                "unit_price_usd": 12
+              }
+            ],
+            "total_usd": 24
+          }
+        ],
+        "orders": [],
+        "inventory": [],
+        "observations": []
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": { "latency_ms": 400, "tokens_in": 78, "tokens_out": 22, "cost_usd": 0 },
+  "fault": {
+    "injected": true,
+    "labels": [{ "category": "Verification", "step_id": "step-3", "code": "suppressed_readback" }],
+    "attacker": { "used": false, "payload_id": null }
+  },
+  "diagnosis": {
+    "category": "Verification",
+    "cause": "Checkout returned insufficient stock, and the agent claimed success without reading the cart or the order back.",
+    "step_id": "step-3",
+    "confidence": 0.86,
+    "evidence": [
+      "step-2 is an insufficient_stock error.",
+      "step-3 claims the order was placed. No get_cart or get_order follows checkout."
+    ],
+    "proposed_fixes": ["pre_response_check"]
+  }
+}

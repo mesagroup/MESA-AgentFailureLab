@@ -2,7 +2,7 @@
 
 Grok diagnosis for one `Trace`. `POST /diagnose` reads a trace, runs a deterministic pre-pass, asks Grok for a `Diagnosis`, and returns the same trace with `diagnosis` filled. It does not write `outcome.verifier` or `fault.*`.
 
-The reference agent (`src/reference-agent/`) and fix application (`src/fixes/`) are not in this change.
+`POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "claimed_success" }`. It does not call the shop. The backend harness executes the actions, injects faults, and writes `outcome.verifier`. Optional `fix_kinds` are `controlled_retry`, `pre_response_check`, and `permission_guard`. `permission_guard` drops `cancel_order` when `write:order:cancel` is missing. `pre_response_check` appends a read. `controlled_retry` is accepted and does not add a second tool call. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
 

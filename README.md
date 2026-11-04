@@ -27,8 +27,8 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
 | [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. |
-| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. Harness calls `MOCK_SHOP_URL`. The agent service calls a configured tool base URL. Own process, separate from the harness. |
-| [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference agent and Grok diagnosis. Writes `diagnosis` only. |
+| [`services/mock-shop`](services/mock-shop/README.md) | Backend | Stand-alone external HTTP shop on port 8787. Catalog, cart, checkout, cancel, `GET /internal/state`. The harness calls `MOCK_SHOP_URL`. Own process, separate from the harness. |
+| [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Proposes T1–T5 actions (`executed: false`). Grok diagnosis writes `diagnosis` only. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
 | [`docs/`](docs/README.md) | All | Overview, runtime architecture, and contributor guide. |
 | [`adr/`](adr/README.md) | Architect | Numbered ADRs, separate from `docs/`. |
@@ -94,3 +94,5 @@ Containers listen on `0.0.0.0`. `pnpm dev` still binds `127.0.0.1`. Compose publ
 - **Trace** — steps, per-step timings and costs, totals, `outcome.verifier`, fault labels, `diagnosis`
 - **Agent** — instance, test instance, trace store, docs, tasks with `verifier_checks` (the reference stub has T1–T5)
 - **Run** — harness metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`), not nested in Trace
+
+Hand-written T2, T3, and T5 traces are in `packages/shared/examples` and use the injector catalog codes. The reference agent is `POST /v1/tasks/run` on port 3002. The harness owns tool execution and `outcome.verifier`.
