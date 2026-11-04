@@ -13,6 +13,7 @@
     "jury-demo": "tsx src/attacker/cli.ts"
   },
   "dependencies": {
+    "@fastify/cors": "11.4.0",
     "@mesa/shared": "workspace:*",
     "fastify": "5.12.8",
     "pg": "8.23.1"

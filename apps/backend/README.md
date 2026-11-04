@@ -28,7 +28,7 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, `FRONTEND_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents, runs, and traces in memory.
 
 Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
@@ -51,6 +51,18 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces |
+
+### CORS
+
+Browser calls from the UI send `Content-Type: application/json`, so the browser preflights with `OPTIONS` before GET, POST, PUT, and DELETE. This app registers `@fastify/cors`. There is no `*` origin.
+
+`FRONTEND_URL` is a comma-separated allowlist of `http` and `https` origins, read at startup. A trailing slash is ignored. `*` and any token that is not an `http` or `https` URL are ignored. Two local origins are always allowed, including when `FRONTEND_URL` is unset: `http://127.0.0.1:3000` and `http://localhost:3000`. Those are the frontend's real ports. `apps/frontend/vite.config.ts` sets `server.port` and `preview.port` to 3000 with `strictPort`. `apps/frontend/package.json` passes `--port 3000 --strictPort` to `dev` and `preview`. Compose publishes `3000:3000`. The frontend README documents `http://127.0.0.1:3000`. A browser opened at `http://localhost:3000` sends that host.
+
+Compose sets `FRONTEND_URL` to `http://mesa-frontend:3000`. That name is only on the Compose network. The browser Origin for the published UI is one of the two port-3000 origins above. On Render, `render.yaml` already sets `FRONTEND_URL` to `https://mesa-frontend-rleq.onrender.com` for `mesa-backend`. A change is picked up on restart.
+
+Allowed methods are `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS`. The allowed request header is `content-type`. A preflight from an allowed origin returns 204 with `Access-Control-Allow-Origin` set to that origin. Any other origin gets no `Access-Control-Allow-Origin` header. `GET /health` still returns 200 for a client that does not send an `Origin` header.
+
+The post-deploy check, including `curl` and `Invoke-WebRequest -Method Options`, is in [docs/deploy.md](../../docs/deploy.md#browser-cors).
 
 `driver: scripted` (the default) performs the reference tool sequence against the mock. `driver: http` `POST`s `{test_instance or instance}/v1/tasks/run` with an `AgentRunRequest` from `@mesa/shared` and expects `{ "executed": false, "actions": [...] }`. The body includes `fix_kinds` when the Run has a non-empty list (`after_fix`). Baseline and injected omit it. The response may also carry `refused` and `embedded`. The harness executes `actions` only, so the injector can rewrite a call before it reaches the shop. When `fix_kinds` contains `controlled_retry`, `executeAttempt` re-issues a transient tool on that same path, at most twice, with backoff. Reads retry any transient result (`error: "timeout"`, or status 0, 408, 429, 500, 502, 503, 504). `add_to_cart`, `update_cart`, `checkout`, and `cancel_order` retry only when the attempt was not dispatched. A dispatched 5xx on those tools is not retried. A catalog `drop` fires again on the new attempt, so a deterministic drop still fails. `driver: auto` uses HTTP when that base URL's `/health` answers, and the scripted driver otherwise. Baseline calls `instance.base_url`. Injected and after_fix call `test_instance.base_url`.
 

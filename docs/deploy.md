@@ -33,7 +33,7 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 | `VITE_AGENTSERVICE_URL` | frontend, **build time** | no | `http://127.0.0.1:3002` | `https://mesa-agentservice.onrender.com` |
 | `BACKEND_URL` | agent service, runtime | no | Compose: `http://mesa-backend:3001` | `https://mesa-backend-itm4.onrender.com` |
 | `AGENTSERVICE_URL` | backend, runtime | no | Compose: `http://mesa-agentservice:3002` | `https://mesa-agentservice.onrender.com` |
-| `FRONTEND_URL` | backend and agent service, runtime | no | Compose: `http://mesa-frontend:3000` | `https://mesa-frontend-rleq.onrender.com` |
+| `FRONTEND_URL` | backend, runtime, CORS allowlist. Also declared on the agent service, which does not read it | no | Compose: `http://mesa-frontend:3000` (in-network name; the browser origin is the published port — see [Browser CORS](#browser-cors)) | `https://mesa-frontend-rleq.onrender.com` |
 | `MOCK_SHOP_URL` | backend, runtime | no | Compose: `http://mesa-mock-shop:8787`. `pnpm dev`: `http://127.0.0.1:8787` | `https://mesa-mock-shop.onrender.com` (intended host; confirm after apply) |
 | `PORT` | all four | no | 3000 / 3001 / 3002 / 8787 | same values in the Blueprint |
 | `HOST` | backend, agent service, and mock shop | no | `127.0.0.1` for `pnpm dev`; `0.0.0.0` in containers | `0.0.0.0` via env group `mesa-shared` |
@@ -119,7 +119,7 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 
 A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` from this file onto the services. It also refreshes `DATABASE_URL` from `mesa-postgres`. The password stays on the Render database, not in git. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
 
-After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` are read at runtime; a restart picks them up. Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
+After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` are read at runtime; a restart picks them up. The backend uses `FRONTEND_URL` as its browser CORS allowlist. See [Browser CORS](#browser-cors). Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
 
 Confirm:
 
@@ -131,6 +131,62 @@ curl -fsS https://mesa-mock-shop.onrender.com/health
 ```
 
 The shop curl uses the intended host. Use the Dashboard URL if Render assigned a suffix. The backend health body should show `mock_base_url` as that same `https://` shop URL.
+
+## Browser CORS
+
+The deployed UI at `https://mesa-frontend-rleq.onrender.com` calls `https://mesa-backend-itm4.onrender.com` from the browser. `apps/frontend/src/lib/api.ts` sets `Content-Type: application/json` on every request, including GET. That header is not a CORS-safelisted content type, so the browser sends an `OPTIONS` preflight before the real call. `apps/backend` used to have no CORS plugin, so that `OPTIONS` fell through to the 404 handler and the browser blocked POST, PUT, DELETE, and any call that sent `content-type`.
+
+`apps/backend/src/app.ts` registers `@fastify/cors`. The allowlist is never `*`.
+
+`FRONTEND_URL` is read when the process starts. Split it on commas. Each token is trimmed. A trailing slash is dropped. Only `http` and `https` URLs are kept, and the value stored is the URL's origin (scheme, host, and port). `*` is ignored, so a bad token cannot open the API. Two local origins are always added, including when `FRONTEND_URL` is unset or empty:
+
+- `http://127.0.0.1:3000`
+- `http://localhost:3000`
+
+Those are the origins a browser actually sends for this frontend. `apps/frontend/vite.config.ts` sets both `server.port` and `preview.port` to 3000 with `strictPort: true`. `apps/frontend/package.json` runs `vite --port 3000 --strictPort` and `vite preview --port 3000 --strictPort`. `docker-compose.yml` publishes `3000:3000` for `mesa-frontend`. The frontend README documents `http://127.0.0.1:3000`. The same server opened as `http://localhost:3000` sends the `localhost` origin. The allowlist uses that port. Vite's unused default of 5173 is not configured here.
+
+Compose also sets `FRONTEND_URL=http://mesa-frontend:3000`. That hostname resolves only on the Compose network. It is not the `Origin` header of a page opened on the host. The two port-3000 entries above cover that browser. On Render, `render.yaml` already sets `FRONTEND_URL=https://mesa-frontend-rleq.onrender.com` on `mesa-backend`. This change reads that value. It does not edit the Blueprint. Add another origin by appending it, comma-separated, and restart `mesa-backend`. A frontend rebuild is not required for this variable.
+
+Allowed methods are `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS`. The allowed request header is `content-type`. A preflight whose `Origin` is on the allowlist returns 204 with `Access-Control-Allow-Origin` set to that exact origin, `Access-Control-Allow-Methods` listing those methods, and `Access-Control-Allow-Headers: content-type`. Any other origin gets no `Access-Control-Allow-Origin` header. The server still answers a normal `GET` (for example `GET /health` with no `Origin`) so curl and the health check keep working.
+
+The current UI does not call the agent service from the browser. `VITE_AGENTSERVICE_URL` is baked into the frontend image and declared in `apps/frontend/src/vite-env.d.ts`, and `docs/architecture.md` draws a UI arrow to that service, but no module under `apps/frontend/src` reads it. `apps/agentservice/src/app.ts` is Fastify and does not register CORS. Nothing in that package reads `FRONTEND_URL`, even though Compose, `render.yaml`, and `apps/agentservice/.env.example` set the variable. A later browser call to `https://mesa-agentservice.onrender.com` would fail its preflight the same way until CORS is added there. That service is owned by ercoleMesa and is not changed here. `apps/backend/src/reference-agent.ts` loads a fixture. It is not an HTTP server. `apps/backend/src/agents/` is the agent CRUD on this backend, and the CORS plugin covers those routes.
+
+### Check after deploy
+
+The free web plan sleeps. The first request after idle can be slow. Run the preflight again once `GET /health` answers.
+
+```bash
+curl -i -X OPTIONS https://mesa-backend-itm4.onrender.com/agents \
+  -H "Origin: https://mesa-frontend-rleq.onrender.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type"
+```
+
+Expect `HTTP/2 204` (or `HTTP/1.1 204`) and this header:
+
+```text
+access-control-allow-origin: https://mesa-frontend-rleq.onrender.com
+```
+
+The same request with `Origin: https://evil.example` stays 204 and has no `access-control-allow-origin` header. `GET /health` stays 200.
+
+PowerShell (`Invoke-WebRequest -Method Options`):
+
+```powershell
+$response = Invoke-WebRequest -Method Options `
+  -Uri "https://mesa-backend-itm4.onrender.com/agents" `
+  -Headers @{
+    Origin = "https://mesa-frontend-rleq.onrender.com"
+    "Access-Control-Request-Method" = "POST"
+    "Access-Control-Request-Headers" = "content-type"
+  }
+$response.StatusCode
+$response.Headers["Access-Control-Allow-Origin"]
+```
+
+Expect status `204` and `https://mesa-frontend-rleq.onrender.com`.
+
+Against a local `pnpm dev:backend`, use the same headers with `http://127.0.0.1:3001/agents` and `Origin: http://127.0.0.1:3000`. That origin is allowed even when `FRONTEND_URL` is unset.
 
 GitHub Actions does not deploy and does not need `XAI_API_KEY`. `.github/workflows/ci.yml` runs on pull requests and on pushes to `main`: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm test`, `pnpm eval:gate`, `docker compose config`, and a Docker build of each image plus a local `GET /health`. `pnpm eval:gate` reruns the deterministic rules baseline and fails when those rates differ from `apps/agentservice/eval/baseline.json` by more than `max_rate_drop` (see [eval](eval.md)). The step sets `XAI_API_KEY` empty, so Grok is skipped. It does not push images. Render's own auto-deploy from `main` is separate (`autoDeployTrigger: commit`). A red CI run does not block that deploy.
 
