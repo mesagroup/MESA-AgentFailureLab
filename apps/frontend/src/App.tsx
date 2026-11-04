@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useTheme } from "@/hooks/use-theme";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { JuryPage } from "@/pages/JuryPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { TracePage } from "@/pages/TracePage";
 
@@ -28,6 +29,7 @@ function AppShell() {
         <main>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/jury" element={<JuryPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/runs" element={<RunsPage />} />
             <Route path="/runs/:runId" element={<RunsPage />} />

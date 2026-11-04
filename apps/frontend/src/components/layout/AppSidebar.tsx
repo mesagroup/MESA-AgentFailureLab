@@ -1,4 +1,4 @@
-import { Activity, Bot, LayoutDashboard, Play, Zap } from "lucide-react";
+import { Activity, Bot, LayoutDashboard, Play, Shield, Zap } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -13,6 +13,7 @@ import {
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/jury", label: "Giuria", icon: Shield, exact: false },
   { to: "/agents", label: "Agents", icon: Bot, exact: false },
   { to: "/runs", label: "Runs", icon: Play, exact: false },
   { to: "/traces", label: "Traces", icon: Activity, exact: false },

@@ -9,33 +9,51 @@ import type {
   TraceOutcome,
   TraceTotals,
 } from "@mesa/shared";
+import { isJuryReport, type JuryCaseDescription, type JuryCaseReport, type JuryRequestBody } from "./jury";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(status: number, message: string, code: string | null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) {
+    const { message, code } = await errorBody(res);
+    throw new ApiError(res.status, message, code);
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-async function errorMessage(res: Response): Promise<string> {
+async function errorBody(res: Response): Promise<{ message: string; code: string | null }> {
   try {
     const body: unknown = await res.json();
     if (typeof body === "object" && body !== null) {
-      const record = body as { message?: unknown; errors?: unknown };
+      const record = body as { message?: unknown; errors?: unknown; error?: unknown };
+      const code = typeof record.error === "string" ? record.error : null;
       if (Array.isArray(record.errors) && record.errors.every((entry) => typeof entry === "string")) {
-        return record.errors.join("; ");
+        return { message: record.errors.join("; "), code };
       }
-      if (typeof record.message === "string" && record.message.length > 0) return record.message;
+      if (typeof record.message === "string" && record.message.length > 0) return { message: record.message, code };
+      return { message: `${res.status} ${res.statusText}`, code };
     }
   } catch {
     // The error body was not JSON.
   }
-  return `${res.status} ${res.statusText}`;
+  return { message: `${res.status} ${res.statusText}`, code: null };
 }
 
 // --- Agents ---
@@ -189,4 +207,21 @@ export async function listTraces(): Promise<Trace[]> {
 
 export async function getTrace(id: string): Promise<Trace> {
   return backendFetch<Trace>(`/traces/${id}`);
+}
+
+/** Case description. Does not start a run. `structured` feeds the form. */
+export async function getJuryCase(): Promise<JuryCaseDescription> {
+  return backendFetch<JuryCaseDescription>("/attacker/jury-case");
+}
+
+/** Launch or replay. `outcome.verifier` is the verdict. `diagnosis` stays null. */
+export async function postJuryCase(body: JuryRequestBody): Promise<JuryCaseReport> {
+  const report = await backendFetch<unknown>("/attacker/jury-case", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!isJuryReport(report)) {
+    throw new Error("La risposta non contiene outcome.verifier. Non è un esito del verifier.");
+  }
+  return report;
 }

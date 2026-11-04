@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Bot, Play, RefreshCw } from "lucide-react";
+import { Activity, Bot, Play, RefreshCw, Shield } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink
 import { cn } from "@/lib/utils";
 
 const DESTINATIONS = [
+  { to: "/jury", title: "Giuria", detail: "Nota malevola", icon: Shield },
   { to: "/agents", title: "Agents", detail: "Registered agents", icon: Bot },
   { to: "/runs", title: "Runs", detail: "Testa agente", icon: Play },
   { to: "/traces", title: "Traces", detail: "Ispeziona traccia", icon: Activity },
@@ -178,7 +179,7 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {DESTINATIONS.map(({ to, title, detail, icon: Icon }) => (
           <Link
             key={to}
