@@ -1,0 +1,14 @@
+{
+  "run_id": "run-T5-baseline-e61150d1-c3d8-4731-be3c-60bad56da9d2",
+  "agent_id": "reference-shop",
+  "task_id": "T5",
+  "parent_run_id": null,
+  "phase": "baseline",
+  "status": "passed",
+  "trace_ids": [
+    "trace-T5-baseline-0f6d0415-1f43-445e-ad1a-11062b4fe5ba"
+  ],
+  "injection_plan": null,
+  "fix_kinds": [],
+  "duration_ms": 44
+}

@@ -26,7 +26,7 @@ The lab runs a shopping agent against a mock store, scores the task with a deter
 | Path | Team | Owns |
 | --- | --- | --- |
 | [`apps/frontend`](apps/frontend/README.md) | Frontend | Registration, runs, timeline. Renders `Trace`. Before/after uses `Run` + `outcome.verifier`. |
-| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, in-memory Run/Trace persistence. No auth. |
+| [`apps/backend`](apps/backend/README.md) | Backend | Harness phases, deterministic verifier, labeled injector, security attacker, in-memory Run/Trace persistence. No auth. |
 | [`services/mock-shop`](services/mock-shop/README.md) | Backend | Mock shop: catalog, cart, checkout, cancel, `GET /internal/state`. Not inside `apps/backend`. |
 | [`apps/agentservice`](apps/agentservice/README.md) | AI Engineer | Reference agent and Grok diagnosis. Writes `diagnosis` only. |
 | [`packages/shared`](packages/shared/README.md) | All | Shared contracts. JSON Schema is the source of truth for Trace, Agent, and Run. |
@@ -63,6 +63,7 @@ Copy an app's `.env.example` to `.env` only when you need overrides. Do not comm
 
 - [Overview](docs/overview.md) — product, track, boundaries
 - [Getting started](docs/getting-started.md) — contributor workflow and stack choices
+- [Jury demo](docs/demo-jury.md) — one security case, baseline comparison, limitations
 - [ADRs](adr/README.md) — decisions only; [ADR-001](adr/001-mock-verifier-grok.md) is the mock / verifier / Grok freeze
 
 ## Contracts

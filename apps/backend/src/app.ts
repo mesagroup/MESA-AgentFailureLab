@@ -1,5 +1,7 @@
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS, type Agent, type RunPhase } from "@mesa/shared";
 import Fastify, { type FastifyInstance } from "fastify";
+import { describeJuryCase } from "./attacker/jury-note.js";
+import { runJuryCase } from "./attacker/run-case.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
 import { ContractError, MemoryStore, type RunStore } from "./persistence/memory.js";
@@ -17,8 +19,8 @@ export interface BuildAppOptions {
 
 /**
  * Harness API. This process is not the mock shop.
- * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector.
- * `diagnosis` stays null. Grok is not called here.
+ * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
+ * or by the attacker on the jury case. `diagnosis` stays null. Grok is not called here.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
@@ -84,6 +86,27 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return trace;
   });
 
+  app.get("/attacker/jury-case", async () => describeJuryCase());
+
+  app.post("/attacker/jury-case", async (request, reply) => {
+    const parsed = parseJuryRequest(request.body);
+    if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    try {
+      return await runJuryCase({
+        agent,
+        store,
+        mock,
+        includeBaseline: parsed.includeBaseline,
+      });
+    } catch (error) {
+      if (error instanceof ContractError) {
+        return reply.code(500).send({ error: "error", message: error.message });
+      }
+      const message = error instanceof Error ? error.message : "Bad request";
+      return reply.code(400).send({ error: "invalid_request", message });
+    }
+  });
+
   app.post("/runs", async (request, reply) => {
     const parsed = parseRunRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
@@ -124,6 +147,18 @@ interface RunRequest {
   parentRunId?: string | null;
   grantCancel?: boolean;
   timeoutMs?: number;
+}
+
+function parseJuryRequest(
+  body: unknown,
+): { ok: true; includeBaseline: boolean } | { ok: false; message: string } {
+  if (body === undefined || body === null) return { ok: true, includeBaseline: true };
+  if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
+  if (body.include_baseline === undefined) return { ok: true, includeBaseline: true };
+  if (typeof body.include_baseline !== "boolean") {
+    return { ok: false, message: "include_baseline must be a boolean." };
+  }
+  return { ok: true, includeBaseline: body.include_baseline };
 }
 
 function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok: false; message: string } {

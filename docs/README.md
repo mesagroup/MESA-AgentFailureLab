@@ -4,3 +4,4 @@ Product and contributor docs live here. Architecture Decision Records do not —
 
 - [Overview](overview.md) — what the lab is, and Track 03
 - [Getting started](getting-started.md) — install, run one app, where each team writes code
+- [Jury demo](demo-jury.md) — attacker round, baseline comparison, limitations
