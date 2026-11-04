@@ -1,6 +1,6 @@
 # @mesa/backend
 
-Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Runs and traces are stored in memory.
+Harness for the Agent Failure Lab. It runs tasks T1–T5, injects labeled faults, and is the only writer of `outcome.verifier`. Agent records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. Runs and traces stay in memory. See [persistence](../../docs/persistence.md).
 
 The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
@@ -28,7 +28,7 @@ Equivalent root script: `pnpm dev:backend`. Start the shop with `pnpm dev:mock-s
 - Health: http://127.0.0.1:3001/health
 - Production build: `pnpm exec turbo run build --filter=@mesa/backend` then `pnpm --filter @mesa/backend start`
 
-Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, or the agent-service URL. Do not commit `.env` or a database URL.
+Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT`, `HOST`, `MOCK_SHOP_URL`, the agent-service URL, or `DATABASE_URL`. Do not commit `.env` or a real database URL. Leave `DATABASE_URL` unset to keep agents in memory.
 
 Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t mesa-backend .` The image sets `HOST=0.0.0.0`, listens on port 3001, and answers `GET /health`. See [docs/deploy.md](../../docs/deploy.md).
 
@@ -38,7 +38,12 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness, contract version, paths Grok must not write |
+| `GET` | `/health` | Liveness, contract version, `agent_store` (`memory` or `postgres`), paths Grok must not write |
+| `GET` | `/agents` | `{ agents }` list, ordered by `created_at` then `agent_id` |
+| `GET` | `/agents/:agent_id` | One agent. 404 if absent |
+| `POST` | `/agents` | Create. Body is an Agent document. Omit `agent_id`, `created_at`, and `updated_at` and the server assigns them. 201, 400 if invalid, 409 if the id exists |
+| `PUT` | `/agents/:agent_id` | Replace. Server sets `updated_at`. Omitted `created_at` keeps the stored value. 404 if absent, 400 if invalid |
+| `DELETE` | `/agents/:agent_id` | 204. 404 if absent. `reference-shop` returns 409 |
 | `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
 | `POST` | `/runs` | Batch. Body: `phase`, optional `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `grant_cancel`, `timeout_ms` |
 | `GET` | `/attacker/jury-case` | Juror note and the security plan. Does not start a run |
@@ -65,8 +70,16 @@ pnpm --filter @mesa/backend jury-demo -- --run
 - `fixtures/jury/` — one frozen baseline/attacked pair and the juror note, for the timeline
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
+- `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
+- `migrations/` — numbered SQL files. `001_agents.sql` is the only one so far. Later files can add Run and Trace tables
 - `src/persistence/` — in-memory Run and Trace store. Saves are validated with `@mesa/shared/validate`
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
+
+## Persistence
+
+Agent records use Postgres when `DATABASE_URL` is set and an in-memory store otherwise. The full note is [docs/persistence.md](../../docs/persistence.md): why those two stores, the `AgentStore` interface, `001_agents.sql`, seed and 409 behavior, every `/agents` status code with request and response examples, env vars, the Compose and Windows PowerShell runbook, the Postgres-only tests, and what Run/Trace persistence (PR 2) still has to add.
+
+Runs and traces are not in that store.
 
 ## Tests
 
@@ -74,4 +87,4 @@ pnpm --filter @mesa/backend jury-demo -- --run
 pnpm --filter @mesa/backend test
 ```
 
-Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch.
+Root `pnpm test` includes this package through Turbo. Verifier checks are unit-tested from snapshots. The runner tests start the mock shop in-process and persist at least one baseline batch and one injected batch. Agent CRUD tests use the in-memory store. Postgres tests in `test/agents-postgres.test.ts` run only when `TEST_DATABASE_URL` is set, and they skip in CI.

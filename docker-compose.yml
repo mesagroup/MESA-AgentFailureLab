@@ -8,6 +8,8 @@
 # frontend build args (VITE_BACKEND_URL, VITE_AGENTSERVICE_URL).
 # The shop is mesa-mock-shop. Compose sets the harness MOCK_SHOP_URL to
 # http://mesa-mock-shop:8787. The agent service does not read a shop URL.
+# mesa-postgres persists agent records. The backend receives DATABASE_URL.
+# User and password mesa/mesa are local defaults, not production secrets.
 
 name: mesa-agent-failure-lab
 
@@ -44,8 +46,13 @@ services:
       AGENTSERVICE_URL: http://mesa-agentservice:3002
       FRONTEND_URL: http://mesa-frontend:3000
       MOCK_SHOP_URL: http://mesa-mock-shop:8787
+      # Wins over DATABASE_URL in a copied apps/backend/.env.
+      DATABASE_URL: postgres://mesa:mesa@mesa-postgres:5432/mesa
     depends_on:
-      - mesa-mock-shop
+      mesa-mock-shop:
+        condition: service_started
+      mesa-postgres:
+        condition: service_healthy
     networks:
       - mesa
 
@@ -80,6 +87,27 @@ services:
     networks:
       - mesa
 
+  mesa-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mesa
+      POSTGRES_PASSWORD: mesa
+      POSTGRES_DB: mesa
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - mesa-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mesa -d mesa"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - mesa
+
 networks:
   mesa:
     name: mesa
+
+volumes:
+  mesa-pgdata:

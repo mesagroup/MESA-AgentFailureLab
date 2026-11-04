@@ -1,7 +1,8 @@
 # MESA Agent Failure Lab — Render Blueprint.
-# Applying this file creates project mesa-agent-failure-lab / environment demo
-# and the four web services inside it. Do not also declare those services at
-# the root, or they land loose on the workspace.
+# Applying this file creates project mesa-agent-failure-lab / environment demo,
+# the four web services inside it, and one Postgres instance for agent records.
+# Do not also declare those services at the root, or they land loose on the workspace.
+# The database block is new (issues #50 / #64). Review the plan before syncing.
 # Preview environments and per-service PR previews stay off.
 # This file does not contain secret values. XAI_API_KEY is sync: false.
 
@@ -19,6 +20,18 @@ projects:
                 value: production
               - key: HOST
                 value: 0.0.0.0
+        # Agent store only. Runs and traces are not in this database yet.
+        # plan: free is 0.1 CPU / 256 MB. Confirm it is allowed on this workspace
+        # before applying. If free is rejected, use 0.1c-256mb.
+        # DATABASE_URL below is the private-network connection string. It is not
+        # written into this file. postgresMajorVersion is pinned to match Compose.
+        databases:
+          - name: mesa-postgres
+            plan: free
+            region: frankfurt
+            postgresMajorVersion: "16"
+            databaseName: mesa
+            user: mesa
         services:
           - type: web
             name: mesa-frontend
@@ -94,6 +107,12 @@ projects:
               # MOCK_SHOP_URL into mock_base_url on POST /v1/tasks/run.
               - key: MOCK_SHOP_URL
                 value: https://mesa-mock-shop.onrender.com
+              # Private-network URL for mesa-postgres in this environment.
+              # Confirm the free web service can reach that hostname.
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: mesa-postgres
+                  property: connectionString
 
           - type: web
             name: mesa-agentservice
