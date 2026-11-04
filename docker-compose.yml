@@ -1,0 +1,67 @@
+# Local stack. Does not replace Render. See docs/deploy.md.
+#
+#   cp apps/agentservice/.env.example apps/agentservice/.env
+#   # set XAI_API_KEY in that file if you need it; leave it empty otherwise
+#   docker compose up --build
+#
+# Optional: copy .env.example to .env at the repo root to override the
+# frontend build args (VITE_BACKEND_URL, VITE_AGENTSERVICE_URL).
+
+name: mesa-agent-failure-lab
+
+services:
+  mesa-frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://127.0.0.1:3001}
+        VITE_AGENTSERVICE_URL: ${VITE_AGENTSERVICE_URL:-http://127.0.0.1:3002}
+    image: mesa-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+    networks:
+      - mesa
+
+  mesa-backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    image: mesa-backend
+    ports:
+      - "3001:3001"
+    env_file:
+      - path: apps/backend/.env
+        required: false
+    environment:
+      # Wins over HOST=127.0.0.1 in a copied .env so other containers can connect.
+      HOST: 0.0.0.0
+      PORT: "3001"
+      AGENTSERVICE_URL: http://mesa-agentservice:3002
+      FRONTEND_URL: http://mesa-frontend:3000
+    networks:
+      - mesa
+
+  mesa-agentservice:
+    build:
+      context: .
+      dockerfile: apps/agentservice/Dockerfile
+    image: mesa-agentservice
+    ports:
+      - "3002:3002"
+    env_file:
+      - path: apps/agentservice/.env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3002"
+      BACKEND_URL: http://mesa-backend:3001
+      FRONTEND_URL: http://mesa-frontend:3000
+    networks:
+      - mesa
+
+networks:
+  mesa:
+    name: mesa

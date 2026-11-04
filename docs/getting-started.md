@@ -57,6 +57,8 @@ Copy an app's `.env.example` to `.env` in that same directory when you need to o
 
 The dev servers also start with built-in defaults if those variables are unset.
 
+Containers and the Render project are a separate path. Images listen on `0.0.0.0` and on ports 3000, 3001, and 3002. Variable names, Compose DNS, and the Blueprint apply steps are in [Deploy](deploy.md). Do not commit a filled-in `.env`.
+
 ## Where to write
 
 | You are changing… | Put it in… |

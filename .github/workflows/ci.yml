@@ -1,0 +1,99 @@
+# Install, build, test, and dry-build the three images.
+# No registry push. No secrets are read or printed.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pnpm:
+    name: pnpm build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+  compose:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose config >/dev/null
+
+  docker:
+    name: docker build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: mesa-frontend
+            file: apps/frontend/Dockerfile
+            port: 3000
+          - image: mesa-backend
+            file: apps/backend/Dockerfile
+            port: 3001
+          - image: mesa-agentservice
+            file: apps/agentservice/Dockerfile
+            port: 3002
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f "${{ matrix.file }}" -t "${{ matrix.image }}" .
+
+      - name: Health endpoint responds
+        run: |
+          set -eu
+          docker run -d --name "${{ matrix.image }}" -p "${{ matrix.port }}:${{ matrix.port }}" "${{ matrix.image }}"
+          trap 'docker logs "${{ matrix.image }}" >&2 || true' EXIT
+          ok=0
+          for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            if curl -fsS "http://127.0.0.1:${{ matrix.port }}/health"; then
+              echo
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "health check failed for ${{ matrix.image }}" >&2
+            exit 1
+          fi
+          docker rm -f "${{ matrix.image }}" >/dev/null
+          trap - EXIT

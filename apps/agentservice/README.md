@@ -19,6 +19,8 @@ Equivalent root script: `pnpm dev:agentservice`.
 
 Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally when a real client is added. `.env` is gitignored. `XAI_API_KEY=` in the example must stay empty.
 
+Container image, from the repo root: `docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .` The image sets `HOST=0.0.0.0`, listens on port 3002, and answers `GET /health`. The key is a runtime env var, not a Docker build arg. See [docs/deploy.md](../../docs/deploy.md).
+
 `turbo run dev` builds `@mesa/shared` first.
 
 ## Boundaries
