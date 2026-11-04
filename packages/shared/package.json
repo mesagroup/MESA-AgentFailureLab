@@ -10,16 +10,26 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./validate": {
+      "types": "./dist/validate.d.ts",
+      "import": "./dist/validate.js",
+      "default": "./dist/validate.js"
+    },
     "./schemas/trace.schema.json": "./schemas/trace.schema.json",
     "./schemas/agent.schema.json": "./schemas/agent.schema.json",
     "./schemas/run.schema.json": "./schemas/run.schema.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/schemas.test.ts"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   },
   "devDependencies": {
+    "@types/node": "22.20.5",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
   }

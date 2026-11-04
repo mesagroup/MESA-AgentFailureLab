@@ -34,7 +34,7 @@ Tre componenti con responsabilità esclusive.
 
 ## Run vs Trace
 - **Trace:** steps, totals, fault, outcome.verifier, diagnosis.
-- **Run (harness):** `phase` (`baseline|injected|after_fix`), `injection_plan_id`, `fix_*`, `trace_id`.
+- **Run (harness):** `phase` (`baseline|injected|after_fix`), `injection_plan`, `fix_kinds`, `trace_ids`. Non sono campi di Trace.
 
 ## Conseguenze
 - Frontend timeline = Trace; before/after = Run + verifier.

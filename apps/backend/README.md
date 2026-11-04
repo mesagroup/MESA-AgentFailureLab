@@ -1,8 +1,10 @@
 # @mesa/backend
 
-Mock e-commerce API, deterministic verifier, and harness runner. This package owns world state (catalog, cart, orders, user permissions) and is the only writer of `outcome.verifier`. It also records harness `Run` metadata (`phase`, `injection_plan_id`, `fix_*`, `trace_id`).
+Deterministic verifier and harness runner. This app will be the only writer of `outcome.verifier` and will record harness `Run` metadata (`phase`, `injection_plan`, `fix_kinds`, `trace_ids`).
 
-This directory is a scaffold: Fastify boots, and `GET /health` answers. There is no mock catalog, no verifier, no persistence, and no auth.
+The inspectable shop is a separate package, [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
+
+This directory is a scaffold: Fastify boots, and `GET /health` answers. There is no verifier, no persistence, and no auth.
 
 ## Run from the monorepo root
 
@@ -32,8 +34,7 @@ Copy `apps/backend/.env.example` to `apps/backend/.env` to override `PORT` or `H
 
 Keep new modules inside this app so the other packages stay independent:
 
-- `src/mock/` — e-commerce world and the inspect API the verifier reads
-- `src/verifier/` — check runner over mock state
+- `src/verifier/` — check runner over mock-shop state (`GET /internal/state`)
 - `src/harness/` — baseline / injected / after_fix phases and `Run` persistence
 - `src/persistence/` — trace and run storage
 

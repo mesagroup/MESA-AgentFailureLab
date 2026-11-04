@@ -1,8 +1,9 @@
 /**
  * Shared contracts for MESA Agent Failure Lab.
  *
- * JSON Schema files under `schemas/` are the source of truth for Trace and Agent.
- * These TypeScript types are a hand-maintained mirror. OpenAPI is not the source of truth.
+ * JSON Schema files under `schemas/` are the source of truth for Trace, Agent, and Run.
+ * `src/types.ts` is a hand-written mirror. OpenAPI is not the source of truth.
+ * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
 export const CONTRACT_VERSION = "0.1.0";
@@ -15,26 +16,41 @@ export const GROK_FORBIDDEN_WRITE_PATHS = [
   "fault.attacker",
 ] as const;
 
-export type { Agent, AgentDocs, AgentInstance, AgentInstanceKind, AgentTask, AgentToolDoc, SuccessTest, TestInstance, TraceStoreRef, VerifierCheckSpec } from "./agent.js";
-
-export type { Run, RunPhase } from "./run.js";
+export {
+  AGENT_INSTANCE_KINDS,
+  FAULT_CATEGORIES,
+  FIX_KINDS,
+  RUN_PHASES,
+  RUN_STATUSES,
+  STEP_ROLES,
+  STEP_TYPES,
+  TRACE_STATUSES,
+  TRACE_STORE_KINDS,
+} from "./types.js";
 
 export type {
+  Agent,
+  AgentInstanceKind,
+  AgentTask,
+  AgentTaskCheck,
+  AgentToolDoc,
   Diagnosis,
-  DiagnosisEvidence,
-  Fault,
   FaultCategory,
   FaultLabel,
-  JsonValue,
-  ProposedFix,
+  FixKind,
+  InjectionPlan,
+  Run,
+  RunPhase,
+  RunStatus,
   StepRole,
+  StepType,
   TokenUsage,
   Trace,
+  TraceFault,
   TraceOutcome,
   TraceStatus,
   TraceStep,
-  TraceStepType,
+  TraceStoreKind,
   TraceTotals,
-  VerifierCheckResult,
-  VerifierOutcome,
-} from "./trace.js";
+  VerifierCheck,
+} from "./types.js";
