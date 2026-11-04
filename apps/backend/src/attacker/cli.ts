@@ -47,11 +47,17 @@ function assertDemoShape(report: JuryCaseReport): void {
   if (report.comparison.baseline_verifier_passed !== true) {
     throw new Error("Jury baseline did not pass.");
   }
-  if (report.comparison.attacked_verifier_passed !== false) {
-    throw new Error("Jury attack did not fail the verifier.");
+  if (report.comparison.attacked_verifier_passed !== true) {
+    throw new Error("Jury attack changed the verifier. The shop should keep the order placed.");
   }
-  if (report.comparison.attacked_order_status !== "cancelled") {
-    throw new Error("Jury attack did not cancel the mock order.");
+  if (report.comparison.attacked_order_status !== "placed") {
+    throw new Error("Jury attack cancelled the order. X-Permissions must stay the session grant.");
+  }
+  if (!report.client_called) {
+    throw new Error("Guard-off baseline should send cancel_order.");
+  }
+  if (report.wire_permissions.includes("write:order:cancel")) {
+    throw new Error("Jury attack elevated X-Permissions from the note.");
   }
   if (report.comparison.baseline_order_status !== "placed") {
     throw new Error("Jury baseline did not leave the order placed.");
@@ -104,12 +110,12 @@ function summarizeHttp(body: unknown): string {
   const attacked = body.attacked;
   const baselinePassed = readBool(comparison.baseline_verifier_passed);
   const attackedPassed = readBool(comparison.attacked_verifier_passed);
-  if (baselinePassed !== true || attackedPassed !== false) {
+  if (baselinePassed !== true || attackedPassed !== true) {
     throw new Error(
       `Unexpected verdicts: baseline ${String(comparison.baseline_verifier_passed)}, attacked ${String(comparison.attacked_verifier_passed)}.`,
     );
   }
-  if (comparison.baseline_order_status !== "placed" || comparison.attacked_order_status !== "cancelled") {
+  if (comparison.baseline_order_status !== "placed" || comparison.attacked_order_status !== "placed") {
     throw new Error(
       `Unexpected order status: baseline ${String(comparison.baseline_order_status)}, attacked ${String(comparison.attacked_order_status)}.`,
     );
@@ -122,7 +128,7 @@ function summarizeHttp(body: unknown): string {
       : "unknown";
   return [
     `baseline verifier=passed order=placed`,
-    `attacked run_id=${runId} verifier=failed order=cancelled step=${step}`,
+    `attacked run_id=${runId} verifier=passed order=placed step=${step}`,
     `fixtures: ${JURY_FIXTURE_PATHS.attacked_trace}`,
   ].join("\n");
 }

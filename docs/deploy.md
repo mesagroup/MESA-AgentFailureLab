@@ -1,6 +1,6 @@
 # Deploy
 
-Four public web processes, no database, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`.
+Four public web processes, one Postgres instance for agent records, no custom domain, no pull-request previews. Images are built from this repo. Secrets stay out of git. The shop stays a separate service. It is not folded into `apps/backend`. Runs and traces are not in Postgres yet.
 
 | Service | Image | Port | Health |
 | --- | --- | --- | --- |
@@ -38,6 +38,7 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 | `PORT` | all four | no | 3000 / 3001 / 3002 / 8787 | same values in the Blueprint |
 | `HOST` | backend, agent service, and mock shop | no | `127.0.0.1` for `pnpm dev`; `0.0.0.0` in containers | `0.0.0.0` via env group `mesa-shared` |
 | `NODE_ENV` | runtime | no | unset for `pnpm dev` | `production` via `mesa-shared` |
+| `DATABASE_URL` | backend, runtime | yes (the URL contains the password) | unset for in-memory `pnpm dev`. Compose: `postgres://mesa:mesa@mesa-postgres:5432/mesa` | `fromDatabase` `connectionString` on `mesa-postgres`. Not written in git |
 
 `VITE_*` values are inlined when the frontend image is built. Changing them on a running container does nothing until the image is rebuilt. A browser cannot resolve Docker DNS names (`mesa-backend`) or Render's private hostname, so those URLs are the public ones.
 
@@ -59,7 +60,7 @@ Set `XAI_API_KEY` in `apps/agentservice/.env` when you want a real Grok call. Le
 
 ## Docker Compose
 
-`docker compose up --build` starts all four on the `mesa` network and publishes ports 3000, 3001, 3002, and 8787 on the host.
+`docker compose up --build` starts the four web processes and Postgres on the `mesa` network. It publishes ports 3000, 3001, 3002, and 8787 on the host, and Postgres on `127.0.0.1:5432`.
 
 Service DNS names on that network:
 
@@ -67,10 +68,13 @@ Service DNS names on that network:
 - `http://mesa-backend:3001`
 - `http://mesa-agentservice:3002`
 - `http://mesa-mock-shop:8787`
+- `mesa-postgres:5432` (Postgres, not HTTP)
 
 Compose forces `HOST=0.0.0.0` and those DNS URLs for server-side calls, even if a copied `.env` still says `127.0.0.1`. That includes `MOCK_SHOP_URL=http://mesa-mock-shop:8787` on the backend. The frontend build args stay on `http://127.0.0.1:3001` and `:3002` so links in the browser hit the published ports. `apps/agentservice/.env` and `apps/backend/.env` are optional (`required: false`). When the agent service file exists, Compose loads it and does not override `XAI_API_KEY`.
 
-There is no Postgres service. `pnpm dev:mock-shop` is still the loopback shop on port 8787. Compose does not use that address. `GET /health` does not call the shop.
+`mesa-postgres` is Postgres 16. Compose sets the backend `DATABASE_URL` to `postgres://mesa:mesa@mesa-postgres:5432/mesa`, which wins over a copied `apps/backend/.env`. The published port is `127.0.0.1:5432`. User, password, and database name are `mesa`. That password is a local default. The data volume is `mesa-pgdata`. The backend waits until `pg_isready` succeeds, then applies `apps/backend/migrations` and seeds `reference-shop` if that id is missing.
+
+`pnpm dev:mock-shop` is still the loopback shop on port 8787. Compose does not use that address. `GET /health` does not call the shop. `GET /health` on the backend reports `agent_store` as `postgres` under Compose and `memory` when `DATABASE_URL` is unset.
 
 ## Render Blueprint
 
@@ -79,7 +83,8 @@ There is no Postgres service. `pnpm dev:mock-shop` is still the loopback shop on
 - Project: `mesa-agent-failure-lab`
 - Environment: `demo` (the only MVP environment; no staging)
 - Services inside that environment: `mesa-frontend`, `mesa-backend`, `mesa-agentservice`, `mesa-mock-shop`
-- Plan: free web (spins down after about 15 minutes idle)
+- Database inside that environment: `mesa-postgres` (Postgres 16, `plan: free`, Frankfurt). Agent rows only. See [persistence.md](persistence.md)
+- Plan: free web (spins down after about 15 minutes idle). The database plan is separate and is called out below
 - Region: Frankfurt
 - Runtime: Docker, context `.`, Dockerfile under `apps/<name>/Dockerfile` or `services/mock-shop/Dockerfile`
 - Branch: `main`, auto-deploy on each commit to `main`
@@ -94,7 +99,7 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 1. Merge the Blueprint to `main` (Render reads the file from the connected repo).
 2. Open the [Render Dashboard](https://dashboard.render.com), select the workspace above, then **New** → **Blueprint**.
 3. Connect `mesagroup/MESA-AgentFailureLab` if it is not connected yet. Point the Blueprint at `render.yaml` on `main`.
-4. Review the plan. You should see project `mesa-agent-failure-lab`, environment `demo`, and the four free Docker web services in Frankfurt. You should not see a database, a disk, a custom domain, or a preview environment.
+4. Review the plan. You should see project `mesa-agent-failure-lab`, environment `demo`, the four free Docker web services in Frankfurt, and Postgres `mesa-postgres`. You should not see a disk, a custom domain, or a preview environment. Stop if the database plan is not the one you intend. `plan: free` is 0.1 CPU / 256 MB. If this workspace rejects free Postgres, change that plan to `0.1c-256mb` before applying. `DATABASE_URL` on `mesa-backend` comes from `fromDatabase.connectionString` (private network). It is not a value in git.
 5. When Render prompts for `XAI_API_KEY`, paste the key or leave it blank until Grok is wired. `sync: false` means this prompt happens on first create. Later Blueprint syncs do not overwrite the value. To rotate it, edit the service env var in the Dashboard. Do not put the key in git, in GitHub Actions, or in the Blueprint.
 6. Apply. Render builds the four images and deploys them. The first request after idle can be slow because the free plan spins down.
 7. Open `mesa-mock-shop` and read the public URL Render assigned. If it is not `https://mesa-mock-shop.onrender.com`, set `MOCK_SHOP_URL` in `render.yaml` to that URL and sync again. Leave the Dashboard and the file on the same host. The harness should use that public `https://` URL.
@@ -112,7 +117,7 @@ The intended Render workspace is `tea-dblh716417fc738hr7vg`. Pick that workspace
 
 `mesa-frontend`, `mesa-backend`, and `mesa-agentservice` are the hosts Render already assigned in workspace `tea-dblh716417fc738hr7vg`. `mesa-mock-shop` is the public URL for the service name. That hostname was not bound to a service when this file was written. Frontend and backend received a suffix; the agent service kept its name. After apply, if the shop slug differs, replace `MOCK_SHOP_URL` with the assigned `https://…onrender.com` URL. That is the same update [PR #39](https://github.com/mesagroup/MESA-AgentFailureLab/pull/39) made for the other hosts.
 
-A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` from this file onto the services. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
+A Blueprint sync writes every env var declared in `render.yaml`. `XAI_API_KEY` is the exception (`sync: false`). The next sync copies `VITE_BACKEND_URL`, `VITE_AGENTSERVICE_URL`, `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` from this file onto the services. It also refreshes `DATABASE_URL` from `mesa-postgres`. The password stays on the Render database, not in git. Keep the Dashboard and `render.yaml` on these hosts. If Render changes a slug, update both before the next sync.
 
 After a URL change, redeploy `mesa-frontend` so Vite bakes `VITE_BACKEND_URL` and `VITE_AGENTSERVICE_URL`. `BACKEND_URL`, `AGENTSERVICE_URL`, `FRONTEND_URL`, and `MOCK_SHOP_URL` are read at runtime; a restart picks them up. Set `XAI_API_KEY` in the Dashboard when you want Grok calls. The agent service still has no shop URL.
 

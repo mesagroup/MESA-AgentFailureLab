@@ -9,6 +9,7 @@ flowchart LR
   AS[agentservice :3002]
   SHOP[mock-shop stand-alone :8787]
   XAI[xAI Grok API]
+  PG[(Postgres agents)]
   SHARED["@mesa/shared schemas"]
 
   UI --> BE
@@ -17,12 +18,13 @@ flowchart LR
   BE -.->|HTTP MOCK_SHOP_URL tools + /internal/state| SHOP
   AS -.->|HTTP tools / configured base_url| SHOP
   AS --> XAI
+  BE -->|DATABASE_URL| PG
   BE --- SHARED
   AS --- SHARED
   UI --- SHARED
 ```
 
-Solid arrows are HTTP between the lab apps, or from the agent service to the xAI Grok API. Dotted arrows are HTTP to the stand-alone shop. The lines to `@mesa/shared` are the JSON Schema contracts those apps import.
+Solid arrows are HTTP between the lab apps, or from the agent service to the xAI Grok API. Dotted arrows are HTTP to the stand-alone shop. The line to Postgres exists only when `DATABASE_URL` is set. The lines to `@mesa/shared` are the JSON Schema contracts those apps import.
 
 ## Ports and URLs
 
@@ -51,12 +53,12 @@ The harness client is `apps/backend/src/mock/`. It calls tool routes, `GET /inte
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after the harness replays the task and the verifier passes.
 
-The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. It does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
+The fix applicator lives in `apps/agentservice/src/fixes/`. It turns `controlled_retry`, `pre_response_check`, and `permission_guard` into behavior around a shop tool client, and into the action list `planTaskRun` returns with `executed: false`. The harness copies `Run.fix_kinds` onto that request for `after_fix`, and applies `controlled_retry` inside `executeAttempt` without importing this package. The applicator does not inject faults and it does not write `outcome.verifier` or `fault.*`. See the agent service README for that glue, and for the replay that scores T1–T5 with the backend verifier.
 
-Runs, traces, and the shop catalog are in memory. The MVP has no database. Restarting the shop, or `POST /internal/reset`, restores the seed catalog.
+Agent records live in the backend process. With `DATABASE_URL` set they are rows in Postgres and survive a restart. Without it they stay in memory and the process reseeds `reference-shop` on boot. Runs, traces, and the shop catalog are still in memory. Restarting the shop, or `POST /internal/reset`, restores the seed catalog. Store choice, SQL, the `/agents` API, env vars, and the local runbook are in [persistence.md](persistence.md).
 
 ## Render
 
-The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop. Apply steps and env vars are in [deploy.md](deploy.md).
+The demo Blueprint ([`render.yaml`](../render.yaml)) is four free web services in project `mesa-agent-failure-lab`, environment `demo`: frontend, backend, agentservice, and mock-shop, plus a Postgres instance `mesa-postgres` for agent records. Apply steps and env vars are in [deploy.md](deploy.md). Review that database block before the next Blueprint sync.
 
 `mesa-mock-shop` is that fourth service. It is still not part of `apps/backend`. The harness `MOCK_SHOP_URL` on Render is the shop's public `https://…onrender.com` URL. Local `pnpm dev` keeps `http://127.0.0.1:8787`.

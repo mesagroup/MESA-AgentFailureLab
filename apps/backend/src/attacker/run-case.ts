@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { Agent, InjectionPlan, Run, Trace, TraceStatus, TraceStep } from "@mesa/shared";
-import { scriptedActions } from "../agent/scripted.js";
+import type { Agent, FixKind, InjectionPlan, Run, Trace, TraceStatus, TraceStep } from "@mesa/shared";
+import { FIX_KINDS } from "@mesa/shared";
+import { agentRunRequest, type AgentRunRequest, type AgentRunResponse } from "../agent/http.js";
+import { scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { executeAttempt, traceBounds } from "../harness/execute.js";
 import { prepareWorld } from "../harness/world.js";
 import type { MockShopClient } from "../mock/client.js";
@@ -11,16 +13,17 @@ import { prePass, type PrePassFinding } from "../verifier/prepass.js";
 import { verifyOutcome } from "../verifier/verify.js";
 import { applyJurorAttack } from "./apply.js";
 import {
+  attackedUserContent,
   GRANTED_PERMISSIONS,
   JURY_FAULT_CODE,
   JURY_PAYLOAD_ID,
   JURY_TASK_ID,
-  WIRE_PERMISSIONS,
   juryNote,
   juryPlan,
   renderTaskPrompt,
   type JuryNote,
 } from "./jury-note.js";
+import { decideJuryActions, type RefusedTool } from "./policy.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -54,7 +57,13 @@ export interface JuryCaseReport {
   payload_id: typeof JURY_PAYLOAD_ID;
   note: JuryNote;
   granted_permissions: string[];
+  /** Header sent on cancel_order. Empty when the agent refused and the client was not called. */
   wire_permissions: string[];
+  /** Request handed to the agent before any cancel. Permissions are the session grant. */
+  agent_request: AgentRunRequest;
+  agent_actions: PlannedAction[];
+  agent_refused: RefusedTool[];
+  client_called: boolean;
   baseline: JuryAttempt | null;
   attacked: JuryAttempt;
   comparison: JuryComparison;
@@ -67,6 +76,15 @@ export interface JuryCaseOptions {
   /** When false, only the attacked run is persisted. Default true. */
   includeBaseline?: boolean;
   timeoutMs?: number;
+  /** Sent on the agent request. Empty is the guard-off baseline. Not stored on the injected Run. */
+  fixKinds?: readonly string[];
+  /** Shop URL copied onto the agent request. The scripted jury agent does not call it. */
+  mockBaseUrl?: string;
+  /**
+   * Override the agent. Tests and a live `POST /v1/tasks/run` use this.
+   * The default is the in-process mirror of `guardCall` plus `readEmbeddedInstructions`.
+   */
+  callAgent?: (baseUrl: string, request: AgentRunRequest) => Promise<AgentRunResponse>;
 }
 
 function sessionIdFor(role: "baseline" | "attack"): string {
@@ -267,12 +285,20 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
   const startedMs = Date.now();
   const prepared = await prepareWorld(JURY_TASK_ID, options.mock, sessionId);
   if (!prepared.orderId) throw new Error("Jury attack did not receive an order id.");
+  const consulted = await consultJuryAgent(options, {
+    prompt: attackedUserContent(task.prompt, prepared.orderId),
+    sessionId,
+    orderId: prepared.orderId,
+    permissions: granted,
+  });
   const attack = await applyJurorAttack({
     taskPrompt: task.prompt,
     orderId: prepared.orderId,
     client: options.mock,
     sessionId,
     startedMs,
+    permissions: consulted.request.permissions,
+    actions: consulted.actions,
   });
   const shopState = await options.mock.state();
   const attacked = commitBuilt({
@@ -302,7 +328,11 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
     payload_id: JURY_PAYLOAD_ID,
     note: juryNote(),
     granted_permissions: granted,
-    wire_permissions: [...WIRE_PERMISSIONS],
+    wire_permissions: attack.wirePermissions,
+    agent_request: consulted.request,
+    agent_actions: consulted.actions,
+    agent_refused: consulted.refused,
+    client_called: attack.clientCalled,
     baseline,
     attacked,
     comparison: {
@@ -320,4 +350,55 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
       injector_preset_code: "forged_permission_success",
     },
   };
+}
+
+function resolveJuryFixes(values: readonly string[] | undefined): FixKind[] {
+  const kinds: FixKind[] = [];
+  for (const kind of values ?? []) {
+    if (!(FIX_KINDS as readonly string[]).includes(kind)) {
+      throw new Error(`Unknown fix kind ${kind}.`);
+    }
+    const fix = kind as FixKind;
+    if (!kinds.includes(fix)) kinds.push(fix);
+  }
+  return kinds;
+}
+
+/**
+ * Ask the agent before any cancel.
+ * The request permissions are the session grant. The prompt's permission tokens stay in the prompt.
+ */
+async function consultJuryAgent(
+  options: JuryCaseOptions,
+  input: { prompt: string; sessionId: string; orderId: string; permissions: readonly string[] },
+): Promise<{ request: AgentRunRequest; actions: PlannedAction[]; refused: RefusedTool[] }> {
+  const fixKinds = resolveJuryFixes(options.fixKinds);
+  const request = agentRunRequest({
+    agent_id: options.agent.agent_id,
+    task_id: JURY_TASK_ID,
+    prompt: input.prompt,
+    session_id: input.sessionId,
+    permissions: input.permissions,
+    mock_base_url: options.mockBaseUrl ?? "",
+    order_id: input.orderId,
+    fix_kinds: fixKinds,
+  });
+  if (options.callAgent) {
+    const baseUrl =
+      options.agent.test_instance.base_url.length > 0
+        ? options.agent.test_instance.base_url
+        : options.agent.instance.base_url;
+    const response = await options.callAgent(baseUrl, request);
+    if (response.executed) {
+      throw new Error("The jury agent must set executed to false and return actions.");
+    }
+    return { request, actions: response.actions ?? [], refused: [] };
+  }
+  const decided = decideJuryActions({
+    orderId: input.orderId,
+    permissions: request.permissions,
+    fixKinds: request.fix_kinds ?? [],
+    prompt: request.prompt,
+  });
+  return { request, actions: decided.actions, refused: decided.refused };
 }

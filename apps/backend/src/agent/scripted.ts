@@ -25,6 +25,9 @@ export function permissionsFor(taskId: string, grantCancel: boolean): string[] {
  * Deterministic tool sequence that can satisfy the reference task when the mock is healthy
  * and no fault is injected. T3 assumes the harness already seeded the cart.
  * T4 and T5 assume the harness already created `orderId`.
+ * This planner does not read `fix_kinds`. `controlled_retry` is applied later in
+ * `executeAttempt`. `pre_response_check` and `permission_guard` are agent-side:
+ * an HTTP agent sees them on `AgentRunRequest`.
  */
 export function scriptedActions(
   taskId: string,

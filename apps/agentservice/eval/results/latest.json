@@ -59,7 +59,7 @@
       "scored": 19,
       "errors": 0,
       "category_correct": 4,
-      "step_exact": 4,
+      "step_exact": 5,
       "step_tolerance_1": 10,
       "fix_hits": 4,
       "fix_applicable": 7,
@@ -328,17 +328,17 @@
       "baseline": {
         "prediction": {
           "kind": "prediction",
-          "category": "Verification",
-          "step_id": "step-4",
+          "category": "Execution",
+          "step_id": "step-3",
           "proposed_fixes": [
-            "pre_response_check"
+            "controlled_retry"
           ],
-          "finding": "false_success_claim"
+          "finding": "tool_error"
         },
         "latency_ms": 0.064,
         "usage": null,
         "category_match": false,
-        "step_exact": false,
+        "step_exact": true,
         "step_tolerance_1": true,
         "fix_hit": false
       },

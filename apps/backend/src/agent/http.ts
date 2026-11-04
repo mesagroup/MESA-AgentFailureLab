@@ -1,9 +1,37 @@
-import type { AgentRunRequest } from "@mesa/shared";
+import type { AgentRunRequest, FixKind } from "@mesa/shared";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "./scripted.js";
 
-/** `POST /v1/tasks/run` body. Defined in `@mesa/shared`. Optional fields are added there. */
+/** `POST /v1/tasks/run` body. The interface lives in `@mesa/shared`. */
 export type { AgentRunRequest };
+
+/**
+ * Build the body for `POST /v1/tasks/run`.
+ * `fix_kinds` is omitted when the run has none. `after_fix` sends the saved list.
+ */
+export function agentRunRequest(input: {
+  agent_id: string;
+  task_id: string;
+  prompt: string;
+  session_id: string;
+  permissions: readonly string[];
+  mock_base_url: string;
+  order_id?: string;
+  fix_kinds?: readonly FixKind[];
+}): AgentRunRequest {
+  const request: AgentRunRequest = {
+    agent_id: input.agent_id,
+    task_id: input.task_id,
+    prompt: input.prompt,
+    session_id: input.session_id,
+    permissions: [...input.permissions],
+    mock_base_url: input.mock_base_url,
+  };
+  if (input.order_id !== undefined && input.order_id.length > 0) request.order_id = input.order_id;
+  const fixes = input.fix_kinds ?? [];
+  if (fixes.length > 0) request.fix_kinds = [...fixes];
+  return request;
+}
 
 export interface RemoteStep {
   type?: string;

@@ -1,4 +1,4 @@
-import type { FaultLabel, InjectionPlan, TraceStep } from "@mesa/shared";
+import type { FaultLabel, FixKind, InjectionPlan, TraceStep } from "@mesa/shared";
 import { describeToolCall, type MockShopClient } from "../mock/client.js";
 import {
   droppedOutput,
@@ -11,6 +11,14 @@ import {
 import { scrubSpoilers } from "../injector/spoilers.js";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "../agent/scripted.js";
+import {
+  backoffMs,
+  DEFAULT_BASE_BACKOFF_MS,
+  DEFAULT_MAX_RETRIES,
+  delay,
+  isTransientResult,
+  retryDecision,
+} from "./retry.js";
 
 interface PushArgs {
   type: TraceStep["type"];
@@ -27,6 +35,23 @@ export interface Execution {
   timedOut: boolean;
   reportedOrderStatus?: string;
   claimedSuccess: boolean;
+}
+
+/**
+ * Decision from the agent-service tool hook.
+ * `commit` sends the call with the hook's permissions and keeps the shop body.
+ * The hook does not write `fault.*` or `outcome.verifier`. The injector does.
+ */
+export type ToolHookDecision =
+  | { readonly action: "passthrough" }
+  | { readonly action: "commit"; readonly permissions: readonly string[] };
+
+export interface ToolBoundaryHook {
+  decide(input: {
+    tool_name: string;
+    tool_input: Record<string, unknown>;
+    permissions: readonly string[];
+  }): ToolHookDecision;
 }
 
 function timestamp(startedMs: number, index: number): string {
@@ -70,17 +95,30 @@ export async function executeAttempt(args: {
   timeoutMs: number;
   startedMs: number;
   claimedSuccess?: boolean;
+  /** When set, a `commit` decision runs that call and skips the catalog forge/drop for it. */
+  toolHook?: ToolBoundaryHook;
+  /** Copied from `Run.fix_kinds`. Empty unless this attempt is `after_fix`. */
+  fixKinds?: readonly FixKind[];
+  /** Test hook. Production waits with `delay`. */
+  sleep?: (ms: number) => Promise<void>;
+  maxRetries?: number;
+  baseBackoffMs?: number;
 }): Promise<Execution> {
   const steps: TraceStep[] = [];
   const labels: FaultLabel[] = [];
   const seenResults: unknown[] = [];
-  let injectionUsed = false;
+  let planSpent = false;
+  let planLabeled = false;
   let labelNext = false;
   let timedOut = false;
 
   const definition = args.plan ? faultByCode(args.plan.ground_truth.code) : undefined;
   const effect: FaultEffect | undefined = definition?.effect;
   const target = args.plan?.target;
+  const fixKinds = args.fixKinds ?? [];
+  const maxRetries = args.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const baseBackoffMs = args.baseBackoffMs ?? DEFAULT_BASE_BACKOFF_MS;
+  const sleep = args.sleep ?? delay;
 
   function push(partial: PushArgs): TraceStep {
     const index = steps.length;
@@ -115,77 +153,197 @@ export async function executeAttempt(args: {
     });
   }
 
-  function matches(toolName: string, callIndex: number, resultIndex: number): boolean {
-    if (!args.plan || !target || injectionUsed || toolName !== target) return false;
+  function targetsAction(toolName: string, callIndex: number, resultIndex: number): boolean {
+    if (!args.plan || !target || planSpent || toolName !== target) return false;
     if (args.plan.at_step === undefined) return true;
     return args.plan.at_step === callIndex || args.plan.at_step === resultIndex;
+  }
+
+  function considerLabel(stepId: string): void {
+    if (planLabeled) return;
+    label(stepId);
+    planLabeled = true;
+  }
+
+  function shouldRetry(tool: string, status: number, body: unknown, dispatched: boolean, completed: number): boolean {
+    if (!isTransientResult(status, body)) return false;
+    return (
+      retryDecision({
+        tool,
+        dispatched,
+        completedAttempts: completed,
+        maxRetries,
+        fixes: fixKinds,
+      }) === "retry"
+    );
+  }
+
+  async function pause(completed: number): Promise<void> {
+    const wait = backoffMs(baseBackoffMs, completed);
+    if (wait > 0) await sleep(wait);
+  }
+
+  function timedOutNow(): boolean {
+    return Date.now() - args.startedMs >= args.timeoutMs;
   }
 
   push({ type: "message", role: "user", content: args.prompt });
 
   for (const action of args.actions) {
-    if (Date.now() - args.startedMs >= args.timeoutMs) {
+    if (timedOutNow()) {
       timedOut = true;
       break;
     }
 
     const callIndex = steps.length;
     const resultIndex = callIndex + 1;
-    const hit = matches(action.tool_name, callIndex, resultIndex);
+    const hit = targetsAction(action.tool_name, callIndex, resultIndex);
 
     if (hit && effect === "skip") {
-      injectionUsed = true;
+      planSpent = true;
       labelNext = true;
       continue;
     }
 
-    const input = hit && effect === "mutate_input" ? mutatedInput(action.tool_input) : action.tool_input;
-    if (hit && effect === "mutate_input") injectionUsed = true;
+    let completed = 0;
+    let injectThis = hit;
+    let committed = false;
+    let lastOutput: unknown;
+    while (true) {
+      if (timedOutNow()) {
+        timedOut = true;
+        break;
+      }
+      completed += 1;
+      const input = injectThis && effect === "mutate_input" ? mutatedInput(action.tool_input) : action.tool_input;
+      const callStep = push({
+        type: "tool_call",
+        role: "assistant",
+        tool_name: action.tool_name,
+        tool_input: input,
+      });
+      if (injectThis && effect === "mutate_input") considerLabel(callStep.step_id);
 
-    const callStep = push({
-      type: "tool_call",
-      role: "assistant",
-      tool_name: action.tool_name,
-      tool_input: input,
-    });
-    if (hit && effect === "mutate_input") label(callStep.step_id);
+      const decision = args.toolHook?.decide({
+        tool_name: action.tool_name,
+        tool_input: input,
+        permissions: args.permissions,
+      });
+      if (decision?.action === "commit") {
+        const wired = commitPermissions(decision.permissions);
+        const httpCall = describeToolCall(action.tool_name, input);
+        let transport: { status: number; body: unknown; dispatched: boolean };
+        try {
+          const response = await args.client.request({
+            method: httpCall.method,
+            path: httpCall.path,
+            sessionId: args.sessionId,
+            permissions: wired,
+            body: httpCall.body,
+          });
+          transport = {
+            status: response.status,
+            body: response.body,
+            dispatched: response.status !== 0,
+          };
+        } catch (error) {
+          if (!fixKinds.includes("controlled_retry")) throw error;
+          transport = {
+            status: 0,
+            body: {
+              error: "timeout",
+              message: error instanceof Error ? error.message : "Shop request failed before a response.",
+            },
+            dispatched: !(error instanceof TypeError),
+          };
+        }
+        const resultStep = push({
+          type: "tool_result",
+          role: "tool",
+          tool_name: action.tool_name,
+          tool_output: transport.body,
+        });
+        if (injectThis) considerLabel(resultStep.step_id);
+        lastOutput = transport.body;
+        if (!shouldRetry(action.tool_name, transport.status, transport.body, transport.dispatched, completed)) {
+          seenResults.push(transport.body);
+          committed = true;
+          if (injectThis) planSpent = true;
+          break;
+        }
+        await pause(completed);
+        continue;
+      }
 
-    if (hit && (effect === "forge_output" || effect === "drop")) {
-      injectionUsed = true;
-      const output = effect === "drop" ? droppedOutput() : forgedOutput(target ?? action.tool_name, input);
+      if (injectThis && (effect === "forge_output" || effect === "drop")) {
+        const dropped = effect === "drop";
+        const output = dropped ? droppedOutput() : forgedOutput(target ?? action.tool_name, input);
+        const resultStep = push({
+          type: "tool_result",
+          role: "tool",
+          tool_name: action.tool_name,
+          tool_output: output,
+        });
+        considerLabel(resultStep.step_id);
+        lastOutput = output;
+        const retry = shouldRetry(action.tool_name, dropped ? 0 : 200, output, !dropped, completed);
+        if (!retry) {
+          seenResults.push(output);
+          committed = true;
+          planSpent = true;
+          break;
+        }
+        await pause(completed);
+        continue;
+      }
+
+      const httpCall = describeToolCall(action.tool_name, input);
+      let transport: { status: number; body: unknown; dispatched: boolean };
+      try {
+        const response = await args.client.request({
+          method: httpCall.method,
+          path: httpCall.path,
+          sessionId: args.sessionId,
+          permissions: args.permissions,
+          body: httpCall.body,
+        });
+        transport = {
+          status: response.status,
+          body: response.body,
+          dispatched: response.status !== 0,
+        };
+      } catch (error) {
+        if (!fixKinds.includes("controlled_retry")) throw error;
+        transport = {
+          status: 0,
+          body: {
+            error: "timeout",
+            message: error instanceof Error ? error.message : "Shop request failed before a response.",
+          },
+          dispatched: !(error instanceof TypeError),
+        };
+      }
+
+      const replaced = injectThis && effect === "replace_output";
+      const output = replaced ? staleOutput(target ?? action.tool_name, transport.body) : transport.body;
       const resultStep = push({
         type: "tool_result",
         role: "tool",
         tool_name: action.tool_name,
         tool_output: output,
       });
-      seenResults.push(output);
-      label(resultStep.step_id);
-      continue;
+      if (replaced) considerLabel(resultStep.step_id);
+      lastOutput = output;
+      if (!shouldRetry(action.tool_name, transport.status, output, transport.dispatched, completed)) {
+        seenResults.push(output);
+        committed = true;
+        if (injectThis) planSpent = true;
+        break;
+      }
+      await pause(completed);
     }
-
-    const httpCall = describeToolCall(action.tool_name, input);
-    const response = await args.client.request({
-      method: httpCall.method,
-      path: httpCall.path,
-      sessionId: args.sessionId,
-      permissions: args.permissions,
-      body: httpCall.body,
-    });
-
-    const output =
-      hit && effect === "replace_output" ? staleOutput(target ?? action.tool_name, response.body) : response.body;
-    const resultStep = push({
-      type: "tool_result",
-      role: "tool",
-      tool_name: action.tool_name,
-      tool_output: output,
-    });
-    seenResults.push(output);
-    if (hit && effect === "replace_output") {
-      injectionUsed = true;
-      label(resultStep.step_id);
-    }
+    if (!committed && lastOutput !== undefined) seenResults.push(lastOutput);
+    if (timedOut) break;
   }
 
   if (!timedOut && Date.now() - args.startedMs >= args.timeoutMs) {
@@ -211,6 +369,13 @@ export async function executeAttempt(args: {
     reportedOrderStatus: reported,
     claimedSuccess: claimed,
   };
+}
+
+function commitPermissions(permissions: readonly string[]): string[] {
+  if (permissions.length === 0 || permissions.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    throw new Error("Tool hook commit requires non-empty permission strings.");
+  }
+  return permissions.map((entry) => entry.trim());
 }
 
 function claimedFrom(
