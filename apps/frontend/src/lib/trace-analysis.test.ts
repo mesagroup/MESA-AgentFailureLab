@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import type { Diagnosis } from "@mesa/shared";
+import type { Diagnosis, Trace } from "@mesa/shared";
 import { PRIMARY_NAV } from "./nav.ts";
 import {
   ANALYSIS_SECTION_ID,
@@ -59,12 +59,16 @@ test("analysis is always a panel: CTA when absent, summary and proposed_fixes wh
   assert.equal(absent.present, false);
   assert.equal(absent.runDiagnosisCta, true);
   assert.equal(absent.summary, null);
+  assert.equal(absent.step_id, null);
+  assert.equal(absent.confidence, null);
   assert.deepEqual(absent.proposed_fixes, []);
 
   const present = analysisView(diagnosis());
   assert.equal(present.present, true);
   assert.equal(present.runDiagnosisCta, false);
   assert.equal(present.summary, "Cancelled the wrong order.");
+  assert.equal(present.step_id, "s1");
+  assert.equal(present.confidence, 0.8);
   assert.deepEqual(present.proposed_fixes, ["permission_guard"]);
 });
 
@@ -80,6 +84,21 @@ test("diagnose POST maps 409 busy and changed separately from a missing body", (
   assert.doesNotMatch(describeDiagnoseFailure({ status: 409, code: "diagnosis_busy", message: "busy" }), /world_busy/);
 });
 
+test("storyboard T3 fixture already has cause, step, confidence, and proposed_fixes", () => {
+  const fixture = JSON.parse(
+    readFileSync(join(here, "../../../../packages/shared/examples/injected-failed-trace.json"), "utf8"),
+  ) as Trace;
+  const view = analysisView(fixture.diagnosis);
+  assert.equal(fixture.trace_id, "trace-t3-forged-checkout");
+  assert.equal(view.present, true);
+  assert.equal(view.runDiagnosisCta, false);
+  assert.equal(typeof view.summary, "string");
+  assert.ok(view.summary && view.summary.length > 0);
+  assert.equal(view.step_id, fixture.diagnosis?.step_id);
+  assert.equal(view.confidence, fixture.diagnosis?.confidence);
+  assert.deepEqual(view.proposed_fixes, ["pre_response_check"]);
+});
+
 test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run link", () => {
   const page = readFileSync(join(here, "../pages/TracePage.tsx"), "utf8");
   assert.match(page, /id=\{ANALYSIS_SECTION_ID\}/);
@@ -88,10 +107,15 @@ test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run l
   assert.match(page, /Diagnosis not available/);
   assert.match(page, /Proposed fixes/);
   assert.match(page, /trace\.diagnosis\.cause/);
+  assert.match(page, /Failing step \{trace\.diagnosis\.step_id\}/);
   assert.match(page, /Open parent run/);
   assert.match(page, /diagnoseTrace/);
   assert.match(page, /Open as GitHub issue/);
+  assert.match(page, /AfterFixPanel/);
   assert.doesNotMatch(page, /Giuria/);
+  const panel = readFileSync(join(here, "../pages/AfterFixPanel.tsx"), "utf8");
+  assert.match(panel, /Replay after_fix/);
+  assert.match(panel, /Select fixes/);
 });
 
 test("traces index empty state and pull panel stay on the list page", () => {

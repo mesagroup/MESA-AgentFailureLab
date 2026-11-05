@@ -7,6 +7,8 @@ import {
   DEMO_SEED_PAIRS,
   DEMO_SEED_RUN_IDS,
   DEMO_SEED_TRACE_IDS,
+  DEMO_STORYBOARD_RUN_ID,
+  DEMO_STORYBOARD_TRACE_ID,
   seedDemoRunsAndTraces,
 } from "../src/persistence/demo-seed.js";
 import { MemoryStore } from "../src/persistence/memory.js";
@@ -21,27 +23,50 @@ describe("demo seed runs and traces", () => {
       [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
     );
     assert.equal(agents.length, 2);
-    assert.equal(DEMO_SEED_PAIRS.length, 6);
+    assert.equal(DEMO_SEED_PAIRS.length, 7);
     const shop = DEMO_SEED_PAIRS.filter((pair) => pair.trace.agent_id === REFERENCE_AGENT_ID);
     const library = DEMO_SEED_PAIRS.filter((pair) => pair.trace.agent_id === LIBRARY_AGENT_ID);
-    assert.equal(shop.length, 3);
+    assert.equal(shop.length, 4);
     assert.equal(library.length, 3);
+    const storyboard = DEMO_SEED_PAIRS.find((pair) => pair.trace.trace_id === DEMO_STORYBOARD_TRACE_ID);
+    assert.ok(storyboard);
+    assert.equal(storyboard.run.run_id, DEMO_STORYBOARD_RUN_ID);
     for (const pair of DEMO_SEED_PAIRS) {
       assert.equal(validateTrace(pair.trace).ok, true, pair.trace.trace_id);
       assert.equal(validateRun(pair.run).ok, true, pair.run.run_id);
       assert.equal(pair.run.agent_id, pair.trace.agent_id);
       assert.equal(pair.run.run_id, pair.trace.run_id);
       assert.deepEqual(pair.run.trace_ids, [pair.trace.trace_id]);
-      assert.equal(pair.run.phase, "baseline");
-      assert.equal(pair.run.injection_plan, null);
-      assert.deepEqual(pair.run.fix_kinds, []);
-      assert.equal(pair.trace.diagnosis, null);
       assert.equal(pair.trace.source, "demo_seed");
-      assert.equal(pair.trace.fault.injected, false);
-      assert.deepEqual(pair.trace.fault.labels, []);
       assert.equal(pair.trace.outcome.success, pair.trace.outcome.verifier.passed);
       assert.ok(pair.trace.task_id);
       assert.ok(pair.trace.started_at <= pair.trace.ended_at);
+      if (pair.trace.trace_id === DEMO_STORYBOARD_TRACE_ID) {
+        assert.equal(pair.run.phase, "injected");
+        assert.equal(pair.run.status, "failed");
+        assert.equal(pair.run.injection_plan?.ground_truth.code, "forged_tool_result");
+        assert.deepEqual(pair.run.fix_kinds, []);
+        assert.equal(pair.trace.status, "failed");
+        assert.equal(pair.trace.fault.injected, true);
+        assert.equal(pair.trace.fault.labels[0]?.code, "forged_tool_result");
+        assert.ok(pair.trace.diagnosis);
+        assert.equal(pair.trace.diagnosis.cause.length > 0, true);
+        assert.ok(pair.trace.steps.some((step) => step.step_id === pair.trace.diagnosis?.step_id));
+        assert.ok(pair.trace.diagnosis.confidence >= 0 && pair.trace.diagnosis.confidence <= 1);
+        assert.ok(pair.trace.diagnosis.proposed_fixes.includes("pre_response_check"));
+        assert.equal(pair.trace.outcome.verifier.passed, false);
+        assert.equal(
+          pair.trace.outcome.verifier.checks.some((check) => check.name === "order_created" && !check.passed),
+          true,
+        );
+      } else {
+        assert.equal(pair.run.phase, "baseline");
+        assert.equal(pair.run.injection_plan, null);
+        assert.deepEqual(pair.run.fix_kinds, []);
+        assert.equal(pair.trace.diagnosis, null);
+        assert.equal(pair.trace.fault.injected, false);
+        assert.deepEqual(pair.trace.fault.labels, []);
+      }
     }
     assert.equal(agents[0]?.otel?.schema_id, "mesa.otel.shop.a");
     assert.equal(agents[0]?.otel?.prod.auth.type, "none");
@@ -51,7 +76,7 @@ describe("demo seed runs and traces", () => {
     assert.equal(agents[1]?.otel_mock?.schema_id, "mesa.otel.library.b");
     assert.deepEqual(
       shop.map((pair) => pair.trace.task_id),
-      ["T1", "T3", "T2"],
+      ["T1", "T3", "T2", "T3"],
     );
     assert.deepEqual(
       library.map((pair) => pair.trace.task_id),
@@ -129,8 +154,16 @@ describe("demo seed runs and traces", () => {
         traces.map((trace) => trace.trace_id),
         [...DEMO_SEED_TRACE_IDS],
       );
-      assert.equal(traces.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length, 3);
+      assert.equal(traces.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length, 4);
       assert.equal(traces.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length, 3);
+      const storyboard = traces.find((trace) => trace.trace_id === DEMO_STORYBOARD_TRACE_ID);
+      assert.ok(storyboard);
+      assert.ok(storyboard.diagnosis);
+      assert.ok(storyboard.diagnosis.proposed_fixes.includes("pre_response_check"));
+      const cached = await app.inject({ method: "POST", url: `/traces/${DEMO_STORYBOARD_TRACE_ID}/diagnose` });
+      assert.equal(cached.statusCode, 200);
+      assert.equal(cached.headers["x-diagnosis-cached"], "true");
+      assert.equal(cached.json().diagnosis.step_id, storyboard.diagnosis.step_id);
 
       for (const pair of DEMO_SEED_PAIRS) {
         const storedTrace = await app.inject({ method: "GET", url: `/traces/${pair.trace.trace_id}` });

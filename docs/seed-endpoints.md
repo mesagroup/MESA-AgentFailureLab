@@ -4,7 +4,7 @@ The demo store is **exactly these two agents**. Boot does not insert a third id 
 
 `reference-shop` and `external-library` are real agents. On boot the backend copies each fixture and writes the runtime and mock origins for this process onto the row. The harness calls `POST {runtime}/v1/tasks/run`. It does not store that path on the agent. The origin is `instance.base_url` for `baseline` and `test_instance.base_url` for `injected` and `after_fix`. Both seeds set those two fields to the same origin.
 
-Boot also inserts demo Run and Trace pairs when those ids are missing: three shop traces remapped from schema A (`prod` T1/T3 and `test` T2) and three library traces remapped from schema B (renew, return, hold). `GET /traces` lists them. A present id is kept, including an operator edit. Other runs and traces are not deleted. See [Demo traces](#demo-traces).
+Boot also inserts demo Run and Trace pairs when those ids are missing: three shop traces remapped from schema A (`prod` T1/T3 and `test` T2), three library traces remapped from schema B (renew, return, hold), and the storyboard T3 injected checkout (`trace-t3-forged-checkout`) with a canned Grok-shaped `diagnosis` and `proposed_fixes`. `GET /traces` lists them. A present id is kept, including an operator edit. Other runs and traces are not deleted. See [Demo traces](#demo-traces).
 
 The fixture files keep the laptop defaults so the JSON is a valid agent without a process environment:
 
@@ -57,14 +57,17 @@ An edit in the Agents page is a PUT. That sets `updated_at` to the time of the s
 
 ## Demo traces
 
-The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 and #163 with `remapShopSchemaA` / `remapLibrarySchemaB`, then inserts the resulting Trace and baseline Run when that id is missing.
+The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 and #163 with `remapShopSchemaA` / `remapLibrarySchemaB`, then inserts the resulting Trace and baseline Run when that id is missing. It also inserts the existing T3 forged-checkout example pair (not an OTel remap) for storyboard scenes 6–8.
 
-| Agent | Tasks | Source exports |
+| Agent | Tasks | Source |
 | --- | --- | --- |
 | `reference-shop` | T1, T3, T2 | [`examples/otel/shop-schema-a`](../packages/shared/examples/otel/shop-schema-a) (`mesa.otel.shop.a`) |
 | `external-library` | `renew-loan`, `return-loan`, `place-hold` | [`examples/otel/library-schema-b`](../packages/shared/examples/otel/library-schema-b) (`mesa.otel.library.b`) |
+| `reference-shop` | T3 injected (`trace-t3-forged-checkout` / `run-t3-injected-001`) | [`examples/injected-failed-trace.json`](../packages/shared/examples/injected-failed-trace.json) + [`examples/run-injected.json`](../packages/shared/examples/run-injected.json) |
 
-Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. Each Run is `phase: baseline` with `trace_ids` of that one Trace. `fault.labels` is empty (production mark from the remap). `outcome.verifier` is copied from the export `verdict` ([ADR-001](../adr/001-mock-verifier-grok.md)). The injector is the only writer of `fault.*`.
+Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. OTel remap Runs are `phase: baseline` with empty `fault.labels` and `diagnosis: null`. The storyboard pair is `phase: injected`, `fault.injected: true`, label `forged_tool_result` (written in the fixture by the injector, [ADR-002](../adr/002-fault-injection-and-fixes.md)), and a non-null `diagnosis` with `proposed_fixes: ["pre_response_check"]` (Grok-shaped field only, [ADR-001](../adr/001-mock-verifier-grok.md)). `outcome.verifier` on remaps is copied from the export `verdict`. On the storyboard fixture it is the failed `order_created` check. The injector is the only writer of `fault.*`.
+
+Storyboard scenes 6–8 open `/traces/trace-t3-forged-checkout`. Scene 8 replays `POST /runs` `phase: after_fix` with `parent_run_id: run-t3-injected-001` and `fix_kinds` from `diagnosis.proposed_fixes`. That live replay still needs the mock shop and agentservice; viewing the diagnosis does not.
 
 `POST /agents/:agentId/traces/pull` is a separate path. It GETs the mock OTel URL and upserts by trace id. Shop HTTP serves prod T1 and test T2. Library HTTP serves renew and return. A pull of those ids retags the demo row `otel_prod` or `otel_test` and does not insert a second row. Shop T3 and library place-hold stay `demo_seed` because those files are not on the HTTP route. See [otel.md](otel.md#pull-traces).
 

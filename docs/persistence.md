@@ -218,7 +218,7 @@ The fixtures are `packages/shared/examples/agent-reference-shop.json` (`referenc
 | Process restart | New empty map, then seed agents and demo traces. Other agents, runs, and traces are gone | Rows stay. The agent seed is inserted or rewritten by the rules above. Missing demo run/trace ids are inserted. Other rows stay |
 | `seedIfMissing()` again on a valid row newer than the fixture, or the same age with the same endpoints | No overwrite | No overwrite |
 
-There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Demo runs and traces are seeded insert-if-missing (`seedDemoRunsAndTraces`), remapped from the mock OTel schema A/B fixtures. A fresh memory process and a fresh Postgres database get the two agents plus the six demo traces. Other runs and traces are not created.
+There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Demo runs and traces are seeded insert-if-missing (`seedDemoRunsAndTraces`): six OTel remaps plus the diagnosed T3 storyboard pair. A fresh memory process and a fresh Postgres database get the two agents plus those seven demo traces. Other runs and traces are not created.
 
 A local wipe of the whole Postgres volume is still `docker compose down -v`, which deletes `mesa-pgdata`. The next start runs migrations on an empty database and seeds `reference-shop` and `external-library` because those ids are missing. `db:reset` does not delete the volume. It deletes runs, traces, and agents other than those seeds. A valid seed newer than its fixture is left as it is, including a name changed with PUT. An invalid or older seed is rewritten from its fixture. A row at the fixture timestamp is rewritten when its runtime or world URL differs from this process. Reset does not read a seed through `get`, so a document that fails the schema does not abort the command.
 
@@ -486,7 +486,7 @@ pnpm install
 pnpm dev:backend
 ```
 
-`GET http://127.0.0.1:3001/health` reports `agent_store` and `run_store` as `memory`. `GET /agents/reference-shop` returns the seed. `GET /traces` lists the six demo traces. `GET /runs` is a snapshot of those demo runs until something else calls `POST /runs`. Other agents, and every non-demo run and trace, disappear when the process stops. The next start inserts the two agents and the demo traces again.
+`GET http://127.0.0.1:3001/health` reports `agent_store` and `run_store` as `memory`. `GET /agents/reference-shop` returns the seed. `GET /traces` lists the seven demo traces. `GET /runs` is a snapshot of those demo runs until something else calls `POST /runs`. Other agents, and every non-demo run and trace, disappear when the process stops. The next start inserts the two agents and the demo traces again.
 
 Windows PowerShell:
 

@@ -334,6 +334,8 @@ Il replay con `permission_guard` è un altro POST: fase `after_fix`, `fix_kinds`
 
 Note di regia: la pagina `/jury` (PR #122) copre il caso security, non l’esperimento shop HTTP. Lo shop end-to-end si gira con `pnpm demo:shop -- --mode offline` (o live quando autorizzato). I numeri della scena 11 vanno presi dal README il giorno della registrazione, senza riscrivere le baseline eval.
 
+Scene 6–8 sul deploy usano la traccia seed `trace-t3-forged-checkout` (run `run-t3-injected-001`, fault `forged_tool_result`, check `order_created` ✗). Il boot inserisce già `diagnosis` (causa, `step_id`, confidenza, `proposed_fixes: ["pre_response_check"]`). Aprire `/traces/trace-t3-forged-checkout#analysis`. Il CTA **Run diagnosis** resta per tracce senza diagnosi (chiamata live Grok). Scene 7 usa **Open as GitHub issue** su quella diagnosi. Scene 8 usa **Select fixes** → **Replay after_fix** sul parent `run-t3-injected-001`.
+
 ## F. Relazione con gli altri documenti
 
 - Questo file è l’ombrello (demo prodotto + **runbook shop azione A**). [shop-experiment.md](shop-experiment.md) è il contratto del comando (flag, exit code, formula). [demo-jury.md](demo-jury.md) è il deep-dive security (passo 8) e non si cancella.
