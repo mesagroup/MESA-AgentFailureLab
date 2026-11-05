@@ -1,6 +1,6 @@
 # CHAOS.AI demo
 
-Narrated demo: [`demo-chaos-ai-en.mp4`](demo-chaos-ai-en.mp4) (English, about 4:49). The cut covers an introduction on why the project exists, plus the agent-setup scene. Script: [docs/video-3min.md](../video-3min.md).
+Narrated demo: [`demo-chaos-ai-en.mp4`](demo-chaos-ai-en.mp4) (English, about 5:47). The cut covers an introduction on why the project exists, plus the agent-setup scene. With short intro to Robot Lab, last idea that we introduced today. Script: [docs/video-3min.md](../video-3min.md).
 
 The larger idea still needs to be brought to completion. Features shipped during the hackathon are meant to evolve further after the hackathon — post-hackathon roadmap and follow-on work — and are not a finished product.
 
