@@ -304,6 +304,8 @@ function DashboardBody({
         )}
       </div>
 
+      <EvalSection />
+
       <div className="rounded-2xl bg-card shadow-island overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
           <h2 className="text-sm font-semibold">Recent runs</h2>
@@ -383,8 +385,6 @@ function DashboardBody({
           A row opens the first trace. A run with no trace opens the run. The verifier column is outcome.verifier on that trace.
         </p>
       </div>
-
-      <EvalSection />
     </>
   );
 }
