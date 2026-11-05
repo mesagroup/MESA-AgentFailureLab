@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch, isLoopback } from "@/lib/agents-page";
 import { createRun, deleteAgent, getHarnessSnapshot, getJuryCase, listAgents, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
 import { InjectedPhaseInfo } from "@/lib/injected-phase-info";
+import { JuryRunPicker } from "@/lib/jury-run-picker";
 import { PromptLaunchEditor, launchPromptOverride } from "@/lib/prompt-launch-editor";
 import {
   emptyOtelDraft,
@@ -756,13 +757,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     [agent, agentRuns],
   );
 
-  const filteredJuryReferences = useMemo(() => {
-    const filtered = filterRunsByQuery(juryReferences, agent, baselineFilter);
-    if (!parentRunId) return filtered;
-    if (filtered.some((run) => run.run_id === parentRunId)) return filtered;
-    const selected = juryReferences.find((run) => run.run_id === parentRunId);
-    return selected ? [selected, ...filtered] : filtered;
-  }, [juryReferences, agent, baselineFilter, parentRunId]);
+  const filteredJuryReferences = useMemo(
+    () => filterRunsByQuery(juryReferences, agent, baselineFilter),
+    [juryReferences, agent, baselineFilter],
+  );
 
   const selectedJuryRun = useMemo(
     () => juryReferences.find((run) => run.run_id === parentRunId) ?? null,
@@ -1016,24 +1014,12 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 onFilter={setBaselineFilter}
                 references={filteredJuryReferences}
                 totalReferences={juryReferences.length}
-                selectedRunId={parentRunId}
                 selectedRun={selectedJuryRun}
-                detailRunId={detailRunId}
                 onSelectRun={(runId) => {
                   if (launching) return;
                   setParentRunId(runId);
-                  setDetailRunId(runId);
                   setPromptTouched(false);
                   setError(null);
-                }}
-                onToggleDetail={(runId) => {
-                  if (launching) return;
-                  setDetailRunId((prev) => (prev === runId ? null : runId));
-                  if (parentRunId !== runId) {
-                    setParentRunId(runId);
-                    setPromptTouched(false);
-                    setError(null);
-                  }
                 }}
                 promptTask={selectedJuryTask}
                 promptHistory={promptHistory}
@@ -1251,11 +1237,8 @@ function JuryLaunchFields({
   onFilter,
   references,
   totalReferences,
-  selectedRunId,
   selectedRun,
-  detailRunId,
   onSelectRun,
-  onToggleDetail,
   note,
   onNote,
   maxChars,
@@ -1281,11 +1264,8 @@ function JuryLaunchFields({
   onFilter: (value: string) => void;
   references: Run[];
   totalReferences: number;
-  selectedRunId: string | null;
   selectedRun: Run | null;
-  detailRunId: string | null;
   onSelectRun: (runId: string) => void;
-  onToggleDetail: (runId: string) => void;
   note: string;
   onNote: (value: string) => void;
   maxChars: number;
@@ -1312,7 +1292,7 @@ function JuryLaunchFields({
           <p className="text-sm font-medium">
             {mode === "replay" ? JURY_LAUNCH_COPY.referenceReplay : JURY_LAUNCH_COPY.referenceAttack}
           </p>
-          <span className="text-xs text-muted-foreground">{references.length}/{totalReferences}</span>
+          <span className="text-xs text-muted-foreground">{totalReferences}</span>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
           {mode === "replay" ? JURY_LAUNCH_COPY.replayHint : JURY_LAUNCH_COPY.attackHint}
@@ -1324,90 +1304,15 @@ function JuryLaunchFields({
         ) : totalReferences === 0 ? (
           <p className="text-xs text-muted-foreground">{JURY_LAUNCH_COPY.emptyReferences}</p>
         ) : (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-              <Input
-                value={filter}
-                onChange={(event) => onFilter(event.target.value)}
-                placeholder="Filter by title, task, status, prompt…"
-                className="pl-9 h-9 text-sm"
-                aria-label="Filter reference runs"
-                disabled={launching}
-              />
-            </div>
-            {references.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No runs match this filter.</p>
-            ) : (
-              <div className="space-y-2" role="radiogroup" aria-label="Reference runs">
-                {references.map((run) => {
-                  const title = taskTitleForRun(agent, run);
-                  const task = taskForRun(agent, run);
-                  const open = detailRunId === run.run_id;
-                  const selected = selectedRunId === run.run_id;
-                  return (
-                    <div
-                      key={run.run_id}
-                      className={cn(
-                        "rounded-xl border transition-colors",
-                        selected ? "border-foreground bg-muted/20" : "border-border/40",
-                      )}
-                    >
-                      <label className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20">
-                        <input
-                          type="radio"
-                          name="jury-reference"
-                          checked={selected}
-                          disabled={launching}
-                          onChange={() => onSelectRun(run.run_id)}
-                          className="accent-primary shrink-0 mt-1"
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium truncate">{title}</span>
-                            <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
-                            <span className="text-[11px] text-muted-foreground">{runPhaseLabel(run.phase)}</span>
-                            <span className={cn(
-                              "text-[11px] font-mono",
-                              run.status === "passed" && "text-green-600",
-                              (run.status === "failed" || run.status === "error") && "text-red-500",
-                            )}>
-                              {run.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {task?.prompt ?? "No prompt on agent for this task id."}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={launching}
-                          className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 mt-0.5 disabled:opacity-50"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            onToggleDetail(run.run_id);
-                          }}
-                        >
-                          {open ? "Hide" : "Detail"}
-                        </button>
-                      </label>
-                      {open && (
-                        <div className="px-4 pb-3 pt-0 border-t border-border/20 space-y-2">
-                          <p className="text-xs font-medium pt-2">Task prompt</p>
-                          <pre className="text-xs whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-muted-foreground">
-                            {task?.prompt ?? "—"}
-                          </pre>
-                          {run.error_message && (
-                            <p className="text-xs text-destructive">{run.error_message}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <JuryRunPicker
+            agent={agent}
+            launching={launching}
+            filter={filter}
+            onFilter={onFilter}
+            references={references}
+            selectedRun={selectedRun}
+            onSelectRun={onSelectRun}
+          />
         )}
       </div>
 
@@ -1520,7 +1425,7 @@ function JuryLaunchFields({
 
       {selectedRun && (
         <p className="text-xs font-mono text-muted-foreground">
-          task {selectedRun.task_id} · {selectedRun.phase} · {mode ?? "pick a run"}
+          task {selectedRun.task_id} · {runPhaseLabel(selectedRun.phase)} · {mode ?? "pick a run"}
         </p>
       )}
     </div>
