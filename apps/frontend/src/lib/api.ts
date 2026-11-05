@@ -327,6 +327,14 @@ export async function getTrace(id: string): Promise<Trace> {
   return backendFetch<Trace>(`/traces/${encodeURIComponent(id)}`);
 }
 
+/** `POST /traces` — persist a pasted/uploaded production Trace. */
+export async function importTrace(trace: unknown): Promise<Trace> {
+  return backendFetch<Trace>("/traces", {
+    method: "POST",
+    body: JSON.stringify(trace),
+  });
+}
+
 /**
  * `POST /traces/:traceId/diagnose`. Empty JSON body. The lab reads the stored
  * trace; the browser does not send a document, URL, or force flag.
