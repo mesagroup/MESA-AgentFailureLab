@@ -6,6 +6,8 @@ Grok diagnosis for one `Trace`, the fix applicator for `controlled_retry`, `pre_
 
 `POST /evalset/generate` proposes a `TaskEvalset` (`version` 1) from a task's prompt, setup, checks, optional agent docs, optional existing evalset, and an optional operator instruction. The body is not saved. Invalid model JSON is `502 invalid_evalset` with `errors[]`. `MESA_EVALSET_STUB=1` returns a local proposal and does not call the provider. The AI does not judge a Trace or Run on this route.
 
+`GET /eval/results` reads the committed `pnpm eval` report (`eval/results/latest.json`) and, when present, the CI gate file `eval/baseline.json`. It does not run the eval, call Grok, or write Trace/Run/Agent fields. The backend exposes the same path as a proxy so the scoreboard UI (#57) can stay on `VITE_BACKEND_URL`.
+
 `POST /v1/tasks/run` proposes the T1–T5 tool list and returns `{ "executed": false, "actions", "refused", "embedded" }`. It does not call the shop, and it does not write `outcome.verifier` or `fault.*`. `claimed_success` stays unset: the action list has not seen tool results. The backend harness executes `actions`, injects faults, and writes the verifier. Optional `fix_kinds` on the shared `AgentRunRequest` (`@mesa/shared`) are parsed and passed to `applyFixesToPlan` in `src/fixes/plan.ts`. That module is the only copy of the three policies. `controlled_retry` does not add a second action; retry belongs to the harness ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). A tool name or permission named only in the prompt is recorded on `embedded` and is not a grant. Grok on this process is only the diagnosis client.
 
 ## Run from the monorepo root
@@ -21,6 +23,7 @@ Equivalent root script: `pnpm dev:agentservice`.
 - Health: http://127.0.0.1:3002/health
 - Diagnose: `POST /diagnose` with a JSON `Trace`, or `{ trace, evalset? }`
 - Propose evalset: `POST /evalset/generate` with a task (optional `instruction`, `docs`, `mode`)
+- Eval scoreboard: `GET /eval/results` (committed `latest.json` plus optional `baseline.json`)
 - Production build: `pnpm exec turbo run build --filter=@mesa/agentservice` then `pnpm --filter @mesa/agentservice start`
 
 Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_API_KEY` locally. `.env` is gitignored. `XAI_API_KEY=` in the example stays empty.
@@ -29,7 +32,7 @@ Copy `apps/agentservice/.env.example` to `apps/agentservice/.env` and set `XAI_A
 
 `GROK_MODEL` is the chat model sent on the diagnosis call (`grok-3` in the example). The call path receives that string from config. `XAI_BASE_URL` defaults to `https://api.x.ai/v1`. `GROK_TIMEOUT_MS` is the per-attempt timeout (default 30000). A timeout, a connection failure, or HTTP 408/429/500/502/503/504 is tried once more. Other statuses are not retried.
 
-Container image, from the repo root: `docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .` The image sets `HOST=0.0.0.0`, listens on port 3002, and answers `GET /health`. It starts with `node --env-file-if-exists=.env dist/index.js`. Render and Compose put `XAI_API_KEY` in the process environment, so the image boots when `.env` is absent. The key is a runtime env var, not a Docker build arg. See [docs/deploy.md](../../docs/deploy.md).
+Container image, from the repo root: `docker build -f apps/agentservice/Dockerfile -t mesa-agentservice .` The image sets `HOST=0.0.0.0`, listens on port 3002, and answers `GET /health`. It starts with `node --env-file-if-exists=.env dist/index.js`. Render and Compose put `XAI_API_KEY` in the process environment, so the image boots when `.env` is absent. The key is a runtime env var, not a Docker build arg. The image copies `eval/results/latest.json` and `eval/baseline.json` next to `dist/` so `GET /eval/results` has data in production. See [docs/deploy.md](../../docs/deploy.md).
 
 `turbo run dev` builds `@mesa/shared` first.
 
@@ -84,6 +87,29 @@ The backend exposes the same path as a proxy so the browser never sees `XAI_API_
 
 `MESA_EVALSET_STUB=1` skips the provider. Tests inject `evalsetModel` the same way diagnosis injects `model`. Usage, when present, is logged as `evalset generation usage` and is not returned on the body.
 
+## Eval scoreboard
+
+`GET /eval/results` is a static read of files written by `pnpm eval` / `pnpm eval:gate`. There is no `GET /eval/baseline`; the gate file is the optional `baseline` field on this response.
+
+```bash
+curl -sS http://127.0.0.1:3002/eval/results
+```
+
+| Field | Source |
+| --- | --- |
+| `schema_version`, `generated_at`, `dataset` | `eval/results/latest.json` (`dataset` is `scored_count`, `categories`, `category_counts`) |
+| `metrics[]` | Four scoreboard rates from `methods.baseline` (`id`, `label`, `hits`, `total`, `rate`). Same ids as `baseline.json` |
+| `report` | The full `latest.json` document (Grok column, latency, cost, per-trace rows) |
+| `baseline` | Parsed `eval/baseline.json`, or `null` if that file is missing |
+
+| Status | Body | When |
+| --- | --- | --- |
+| 200 | The object above | Files parsed |
+| 404 | `{ "error": "eval_results_not_found", "message" }` | `latest.json` is absent |
+| 500 | `{ "error": "invalid_eval_results" \| "invalid_eval_baseline", "message" }` | Invalid JSON or schema |
+
+This is not a Trace/Agent/Run contract. It is not in `@mesa/shared` and does not bump `CONTRACT_VERSION`. Definitions stay in [docs/eval.md](../../docs/eval.md).
+
 ## What Grok does not see
 
 The prompt is an allow-list, not a copy of the trace with a few keys deleted.
@@ -132,6 +158,7 @@ The backend harness records `fix_kinds` and replays the task (`Run.phase = after
 - `src/diagnosis/diagnose.ts` — `diagnoseTrace`. Pre-pass, the prompt allow-list (including optional evalset GUIDANCE), evidence checks, and the graft onto the trace are private to this file.
 - `src/diagnosis/request.ts` — `parseDiagnoseRequest`. Bare Trace or `{ trace, evalset? }`.
 - `src/evalset/` — `POST /evalset/generate`: parse, stub (`MESA_EVALSET_STUB`), and Grok proposal. Separate from `diagnoseTrace`.
+- `src/eval/http.ts` — `GET /eval/results`: parse committed `latest.json` / `baseline.json`. Does not run the eval.
 - `src/grok/config.ts` — `parseDiagnosisConfig`. The only place that reads `GROK_MODEL`, `XAI_API_KEY`, `XAI_BASE_URL`, and `GROK_TIMEOUT_MS`.
 - `src/grok/client.ts` — OpenAI SDK client pointed at `XAI_BASE_URL`, structured `json_schema` output, timeout, and one retry.
 - `src/fixes/` — the three `FixKind` policies, as a wrapper around a shop tool client

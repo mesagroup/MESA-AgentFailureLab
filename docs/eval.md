@@ -20,6 +20,27 @@ pnpm eval:gate
 
 Il report completo (confusione, hint per tipo, una riga per trace) è [apps/agentservice/eval/results/latest.md](../apps/agentservice/eval/results/latest.md).
 
+## HTTP (issue #193)
+
+`GET /eval/results` on agentservice (proxied by the backend on the same path) returns the committed scoreboard for the FE table ([#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57)). It does not rerun `pnpm eval`. There is no separate `GET /eval/baseline`: `baseline.json` is the optional `baseline` field on this response.
+
+The file `latest.json` has `schema_version`, `generated_at`, `dataset`, `methods`, and `cases`. It does not have a top-level `metrics[]`. The HTTP body adds:
+
+| Field | Meaning |
+| --- | --- |
+| `metrics[]` | Four rates from `methods.baseline` (`category_accuracy`, `step_accuracy_exact`, `step_accuracy_tolerance_1`, `proposed_fix_hit_rate`) with `id`, `label`, `hits`, `total`, `rate` |
+| `report` | The full `latest.json` (Grok column, latency, cost) |
+| `baseline` | The CI gate file, or `null` if it is missing |
+
+```bash
+curl -sS http://127.0.0.1:3002/eval/results
+curl -sS http://127.0.0.1:3001/eval/results
+```
+
+Agentservice: 200, 404 (`eval_results_not_found` when `latest.json` is absent), 500 on invalid JSON. Backend: 503 (`eval_results_not_configured`) when `AGENTSERVICE_URL` is unset, 404 passed through, 502 on upstream failure. The Docker image copies both JSON files into the agentservice runtime so the deployed route is not empty.
+
+This envelope is not a Trace/Agent/Run field and is not in `@mesa/shared`. `CONTRACT_VERSION` is unchanged.
+
 ## Gate CI
 
 `.github/workflows/ci.yml` lancia `pnpm eval:gate` su ogni pull request e su `main`, dopo build e test. Il job non ha bisogno di `XAI_API_KEY`. Il comando passa a `resolveGrok` una env con la chiave vuota, lo stesso skip di `pnpm eval` senza chiave, e non apre un client live.

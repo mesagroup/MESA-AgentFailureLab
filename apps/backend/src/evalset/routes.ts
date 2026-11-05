@@ -18,7 +18,7 @@ class EvalsetProxyError extends Error {
   }
 }
 
-function config(options: EvalsetGenerateOptions) {
+export function resolveAgentserviceProxy(options: EvalsetGenerateOptions) {
   const raw = options.baseUrl === undefined ? process.env.AGENTSERVICE_URL?.trim() : options.baseUrl;
   let baseUrl: string | null = null;
   if (raw) {
@@ -45,7 +45,7 @@ function config(options: EvalsetGenerateOptions) {
  * This route does not persist an Agent or write outcome.verifier.
  */
 export function registerEvalsetRoutes(app: FastifyInstance, options: EvalsetGenerateOptions = {}): void {
-  const upstream = config(options);
+  const upstream = resolveAgentserviceProxy(options);
   app.post("/evalset/generate", async (request, reply) => {
     try {
       const result = await forwardGenerate(request.body, upstream);
@@ -63,7 +63,7 @@ export function registerEvalsetRoutes(app: FastifyInstance, options: EvalsetGene
 
 async function forwardGenerate(
   body: unknown,
-  upstream: ReturnType<typeof config>,
+  upstream: ReturnType<typeof resolveAgentserviceProxy>,
 ): Promise<unknown> {
   if (!upstream.baseUrl) throw new EvalsetProxyError(503, "evalset_not_configured");
   const signal = AbortSignal.timeout(upstream.timeoutMs);

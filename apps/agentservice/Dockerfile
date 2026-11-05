@@ -35,7 +35,13 @@ RUN pnpm exec turbo run build --filter=@mesa/agentservice
 
 # pnpm 10 deploys injected workspace packages unless --legacy is set.
 # --legacy copies this package (including dist) and production deps to /out.
-RUN pnpm --filter @mesa/agentservice deploy --prod --legacy /out
+# GET /eval/results reads committed scoreboard files from /app/eval at runtime.
+# Copy them explicitly so a deploy file filter cannot drop them (same pattern
+# as backend migrations).
+RUN pnpm --filter @mesa/agentservice deploy --prod --legacy /out \
+ && mkdir -p /out/eval/results \
+ && cp apps/agentservice/eval/results/latest.json /out/eval/results/latest.json \
+ && cp apps/agentservice/eval/baseline.json /out/eval/baseline.json
 
 FROM node:22-bookworm-slim AS runner
 

@@ -62,6 +62,8 @@ The harness client is `apps/backend/src/mock/`. On a shop run it calls tool rout
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after a later run, once the agent owner has changed the agent on their own deploy, and the verifier passes.
 
+`GET /eval/results` on the backend proxies `AGENTSERVICE_URL/eval/results`. Agentservice reads the committed `pnpm eval` files (`eval/results/latest.json` and optional `eval/baseline.json`). It does not write Trace, Run, or Agent fields and does not call Grok. The scoreboard UI (#57) should use the backend path.
+
 The explicit backend operation `POST /traces/:traceId/diagnose` loads a stored
 trace, resolves `tasks[].evalset` from that trace's `agent_id` + `task_id` when
 the Agent document has one, and posts either the bare Trace or `{ trace, evalset }`

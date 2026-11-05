@@ -14,6 +14,7 @@ import { readEvalsetStub } from "./evalset/stub.js";
 import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
+import { loadEvalResults, type EvalResultsFiles } from "./eval/http.js";
 import { UnsupportedTaskError, parseTaskRun, planTaskRun } from "./reference-agent/plan.js";
 
 export interface AppDeps {
@@ -23,6 +24,8 @@ export interface AppDeps {
   /** Separate from diagnosis: evalset completions use a TaskEvalset JSON schema. */
   evalsetModel?: DiagnosisModel | null;
   evalsetStub?: boolean;
+  /** Test override for GET /eval/results file paths. */
+  evalResults?: EvalResultsFiles;
   logger?: boolean;
 }
 
@@ -31,6 +34,7 @@ export interface AppDeps {
  * `POST /diagnose` writes `Trace.diagnosis` only.
  * The body is a Trace, or `{ trace, evalset? }` when the caller resolved a task evalset.
  * `POST /evalset/generate` proposes a TaskEvalset. It does not save an Agent.
+ * `GET /eval/results` returns the committed pnpm eval scoreboard plus optional baseline.json.
  * `POST /v1/tasks/run` proposes tool actions with `executed: false`,
  * plus `refused` and `embedded` from the shared plan.
  * The harness executes `actions`, injects faults, and writes `outcome.verifier`.
@@ -65,7 +69,7 @@ export function buildApp(deps: AppDeps = {}) {
   app.get("/", async () => ({
     service: "agentservice",
     message:
-      "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. POST /evalset/generate proposes a task evalset. POST /v1/tasks/run proposes actions for the harness. See GET /health.",
+      "MESA Agent Failure Lab agent service. POST /diagnose fills Trace.diagnosis. POST /evalset/generate proposes a task evalset. GET /eval/results returns the committed eval scoreboard. POST /v1/tasks/run proposes actions for the harness. See GET /health.",
     contract_version: CONTRACT_VERSION,
   }));
 
@@ -164,6 +168,14 @@ export function buildApp(deps: AppDeps = {}) {
       }
       throw error;
     }
+  });
+
+  app.get("/eval/results", async (_request, reply) => {
+    const loaded = loadEvalResults(deps.evalResults);
+    if (!loaded.ok) {
+      return reply.code(loaded.status).send({ error: loaded.error, message: loaded.message });
+    }
+    return loaded.body;
   });
 
   return app;

@@ -84,7 +84,12 @@ export function isGatedMetricId(value: string | undefined): value is GatedMetric
   return GATED_METRICS.some((metric) => metric.id === value);
 }
 
-export function metricsFromSummary(summary: MethodSummary): BaselineMetric[] {
+export type GatedSummaryCounts = Pick<
+  MethodSummary,
+  "category_correct" | "scored" | "step_exact" | "step_tolerance_1" | "fix_hits" | "fix_applicable"
+>;
+
+export function metricsFromSummary(summary: GatedSummaryCounts): BaselineMetric[] {
   return GATED_METRICS.map((metric) => ({
     id: metric.id,
     scoreboard: metric.scoreboard,
