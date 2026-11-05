@@ -64,6 +64,27 @@ export type { CheckParamField, CheckParamType, CheckType, CheckTypeSpec } from "
 
 export { planShopTask, taskNeedsOrderId } from "./shop-plan.js";
 export { planLibraryTask } from "./library-plan.js";
+export { SHOP_TOOL_SCHEMAS, isShopToolSchemaName } from "./shop-tools.js";
+export type { ShopToolParameter, ShopToolParameters, ShopToolSchema } from "./shop-tools.js";
+export {
+  AGENT_RUNTIME_LABELS,
+  GROK_AGENT_HTTP_TIMEOUT_MS,
+  GROK_ATTACKER_ATTEMPTS,
+  GROK_ATTACKER_ATTEMPT_TIMEOUT_MS,
+  GROK_ATTACKER_HARNESS_TIMEOUT_MS,
+  GROK_ATTACKER_TOTAL_TIMEOUT_MS,
+  GROK_FIX_RUNS,
+  GROK_FIX_RUN_TIMEOUT_MS,
+  GROK_FIX_TOTAL_TIMEOUT_MS,
+  GROK_MODEL_ID,
+  GROK_MODEL_TIMEOUT_MS,
+  GROK_POLL_INTERVAL_MS,
+  GROK_POLL_REQUEST_TIMEOUT_MS,
+  GROK_REASONING_EFFORT,
+  GROK_RUN_TIMEOUT_MS,
+  agentRuntimeLine,
+} from "./grok-budget.js";
+export type { AgentRuntimeLabel } from "./grok-budget.js";
 
 export type { ShopPlanAction, ShopPlanResult } from "./shop-plan.js";
 

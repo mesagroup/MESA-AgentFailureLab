@@ -10,6 +10,7 @@ import {
 } from "../injector/catalog.js";
 import { scrubSpoilers } from "../injector/spoilers.js";
 import { isRecord } from "../util.js";
+import type { AgentUsage } from "../agent/http.js";
 import type { PlannedAction } from "../agent/scripted.js";
 import {
   backoffMs,
@@ -103,6 +104,15 @@ export async function executeAttempt(args: {
   sleep?: (ms: number) => Promise<void>;
   maxRetries?: number;
   baseBackoffMs?: number;
+  /**
+   * Measured model call. Omitted on the scripted planner, which keeps
+   * latency 1 and zero tokens and cost on every step.
+   */
+  usage?: AgentUsage;
+  /** Model text used as the closing assistant message. */
+  closingAnswer?: string;
+  /** `Agent runtime: …` line. Omitted on the historical scripted trace. */
+  runtimeLine?: string;
 }): Promise<Execution> {
   const steps: TraceStep[] = [];
   const labels: FaultLabel[] = [];
@@ -120,17 +130,18 @@ export async function executeAttempt(args: {
   const baseBackoffMs = args.baseBackoffMs ?? DEFAULT_BASE_BACKOFF_MS;
   const sleep = args.sleep ?? delay;
 
-  function push(partial: PushArgs): TraceStep {
+  function push(partial: PushArgs, modelStep = false): TraceStep {
     const index = steps.length;
+    const measured = stepMetrics(args.usage, modelStep);
     const step: TraceStep = {
       step_id: `step-${index}`,
       index,
       type: partial.type,
       timestamp: timestamp(args.startedMs, index),
       role: partial.role,
-      latency_ms: 1,
-      token_usage: { input: 0, output: 0 },
-      cost_usd: 0,
+      latency_ms: measured.latency_ms,
+      token_usage: measured.token_usage,
+      cost_usd: measured.cost_usd,
     };
     if (partial.content !== undefined) step.content = scrubSpoilers(partial.content);
     if (partial.tool_name !== undefined) step.tool_name = partial.tool_name;
@@ -188,6 +199,9 @@ export async function executeAttempt(args: {
   }
 
   push({ type: "message", role: "user", content: args.prompt });
+  if (args.runtimeLine) {
+    push({ type: "system", role: "system", content: args.runtimeLine });
+  }
 
   for (const action of args.actions) {
     if (timedOutNow()) {
@@ -353,10 +367,12 @@ export async function executeAttempt(args: {
   const claimed = claimedFrom(args, seenResults, timedOut);
   const closing = timedOut
     ? "Stopped: harness timeout."
-    : claimed
-      ? `Success. ${args.taskId} is done.`
-      : `I could not complete ${args.taskId}.`;
-  const closingStep = push({ type: "message", role: "assistant", content: closing });
+    : args.closingAnswer !== undefined && args.closingAnswer.trim().length > 0
+      ? args.closingAnswer
+      : claimed
+        ? `Success. ${args.taskId} is done.`
+        : `I could not complete ${args.taskId}.`;
+  const closingStep = push({ type: "message", role: "assistant", content: closing }, args.usage !== undefined);
   if (args.plan && labels.length === 0) {
     label(closingStep.step_id);
   }
@@ -368,6 +384,22 @@ export async function executeAttempt(args: {
     timedOut,
     reportedOrderStatus: reported,
     claimedSuccess: claimed,
+  };
+}
+
+function stepMetrics(
+  usage: AgentUsage | undefined,
+  modelStep: boolean,
+): { latency_ms: number; token_usage: { input: number; output: number }; cost_usd: number } {
+  if (!usage) return { latency_ms: 1, token_usage: { input: 0, output: 0 }, cost_usd: 0 };
+  if (!modelStep) return { latency_ms: 0, token_usage: { input: 0, output: 0 }, cost_usd: 0 };
+  return {
+    latency_ms: Math.max(0, Math.round(usage.latency_ms)),
+    token_usage: {
+      input: Math.max(0, Math.round(usage.input_tokens)),
+      output: Math.max(0, Math.round(usage.output_tokens)),
+    },
+    cost_usd: usage.cost_usd,
   };
 }
 

@@ -28,6 +28,7 @@ import {
   TRACE_LIST_ROUTE,
 } from "@/lib/trace-analysis";
 import { traceListSource } from "@/lib/traces";
+import { agentRuntimeLabelFromTrace } from "@/lib/agent-runtime";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -409,6 +410,9 @@ export function TracePage() {
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="text-sm font-mono font-medium truncate">{trace.trace_id}</h1>
             <TraceSourceBadge source={traceListSource(trace)} />
+            <span data-testid="trace-agent-runtime" className="text-xs text-muted-foreground">
+              {agentRuntimeLabelFromTrace(trace)}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {trace.agent_id} · {trace.task_id}
@@ -464,7 +468,8 @@ export function TracePage() {
                 {fmt(trace.started_at)} → {fmt(trace.ended_at)}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-5">
+              <Metric label="Agent" value={agentRuntimeLabelFromTrace(trace)} />
               <Metric label="Latency" value={`${(trace.totals.latency_ms / 1000).toFixed(2)}s`} />
               <Metric label="Cost" value={fmtCost(trace.totals.cost_usd)} />
               <Metric label="Tokens in" value={trace.totals.tokens_in.toLocaleString()} />

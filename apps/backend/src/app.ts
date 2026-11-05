@@ -1,9 +1,24 @@
 import { FEATURES } from "@mesa/shared/robot-lab";
 import { registerRobotRuns } from "./robot-lab/routes.js";
-import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS, type Agent, type RunPhase } from "@mesa/shared";
+import {
+  AGENT_RUNTIME_LABELS,
+  CONTRACT_VERSION,
+  GROK_AGENT_HTTP_TIMEOUT_MS,
+  GROK_ATTACKER_HARNESS_TIMEOUT_MS,
+  GROK_FIX_RUN_TIMEOUT_MS,
+  GROK_RUN_TIMEOUT_MS,
+  GROK_FORBIDDEN_WRITE_PATHS,
+  agentRuntimeLine,
+  type Agent,
+  type AgentRuntimeLabel,
+  type RunPhase,
+} from "@mesa/shared";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
+import { parseAgentResponse, tasksRunUrl, type AgentRunRequest } from "./agent/http.js";
+import { agentUsesShopPlanner, anyPlannerRequested, plannerFlagForRole, roleForRun, runtimeLabel, runtimeSnapshot, flagRequestsGrok, type PlannerRole } from "./agent/runtime.js";
+import { acceptWhenGated, readAgentJob } from "./harness/grok-job.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
 import { mockBaseUrlForAgent } from "./agents/endpoints.js";
@@ -42,6 +57,10 @@ export interface BuildAppOptions {
   otelFetch?: OtelRouteOptions["fetchImpl"];
   /** Clock for the pull cursor. Production uses the current time. */
   now?: () => Date;
+  /** Planner flags. Defaults to process.env. Offline demo passes an empty object. */
+  agentEnv?: NodeJS.ProcessEnv;
+  /** Fetch used to probe agentservice and to post the grok planner. */
+  agentFetch?: typeof fetch;
 }
 
 /**
@@ -68,6 +87,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";
   const agent = options.agent ?? loadReferenceAgent();
   const mock = options.mock ?? createHttpMockClient(mockBaseUrl);
+  const agentEnv = options.agentEnv ?? process.env;
+  const agentFetch = options.agentFetch ?? fetch;
 
   app.setNotFoundHandler((request, reply) => {
     reply.code(404).send({
@@ -153,11 +174,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.get("/attacker/jury-case", async () => describeJuryCase());
 
+  app.get("/agent-runtimes", async () => {
+    const configured = anyPlannerRequested(agentEnv) ? await probeGrokConfigured(agentEnv, agentFetch) : null;
+    return runtimeSnapshot(agentEnv, configured);
+  });
+
+  app.get<{ Params: { jobId: string } }>("/agent-jobs/:jobId", async (request, reply) => {
+    const job = readAgentJob(request.params.jobId);
+    if (!job) return reply.code(404).send({ error: "not_found", message: `No agent job ${request.params.jobId}` });
+    return job;
+  });
+
   app.post("/attacker/jury-case", async (request, reply) => {
     const parsed = parseJuryRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
     try {
-      return await runJuryCase({
+      const choice = await choosePlanner(agentEnv, agentFetch, "jury", agent);
+      const juryOptions = {
         agent,
         store,
         mock,
@@ -170,6 +203,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         parentRunId: parsed.parentRunId,
         promptOverride: parsed.promptOverride,
         afterWorldSetup: options.afterWorldSetup,
+        timeoutMs: choice.mode === "grok" ? GROK_RUN_TIMEOUT_MS : undefined,
+        runtimeFallback: choice.mode === "no_key" ? ("no_key" as const) : undefined,
+        callAgent: choice.mode === "grok" ? grokCallAgent(agentFetch) : undefined,
+      };
+      if (choice.mode !== "grok") return await runJuryCase(juryOptions);
+      const accepted = await acceptWhenGated(GROK_RUN_TIMEOUT_MS, (onAcquired) =>
+        runJuryCase({ ...juryOptions, onGateAcquired: onAcquired }),
+      );
+      return reply.code(202).send({
+        status: "accepted",
+        ...accepted,
+        agent_runtime: AGENT_RUNTIME_LABELS.grok,
       });
     } catch (error) {
       return replyForHarnessFailure(error, reply);
@@ -199,29 +244,121 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // the runtime answers. A missed probe uses the scripted sequence.
       // generate-dataset passes scripted and does not use this default.
       const driver = parsed.value.driver ?? "auto";
-      const results = await runTasks({
+      const taskIds = replay.value?.taskIds ?? parsed.value.taskIds;
+      const role = roleForRun(parsed.value.phase, null);
+      const choice = await choosePlanner(agentEnv, agentFetch, role, registered);
+      const timeoutMs = parsed.value.timeoutMs ?? (choice.mode === "grok" ? harnessTimeout(role) : undefined);
+      const runOptions = {
         agent: registered,
         store,
         mock: runMock,
         mockBaseUrl: runMockUrl,
         phase: parsed.value.phase,
-        taskIds: replay.value?.taskIds ?? parsed.value.taskIds,
+        taskIds,
         driver,
         injection: replay.value ? replay.value.injection : parsed.value.injection,
         fixKinds: parsed.value.fixKinds,
         parentRunId: replay.value?.parentRunId ?? parsed.value.parentRunId,
         grantCancel: parsed.value.grantCancel,
-        timeoutMs: parsed.value.timeoutMs,
+        timeoutMs,
         promptOverride: parsed.value.promptOverride,
         afterWorldSetup: options.afterWorldSetup,
+        planner: choice.mode === "grok" ? ("grok" as const) : undefined,
+        runtimeLine: choice.mode === "no_key" ? agentRuntimeLine(AGENT_RUNTIME_LABELS.noKey) : undefined,
+      };
+      if (choice.mode !== "grok") {
+        const results = await runTasks(runOptions);
+        return { results: await withRunLinks(store, results) };
+      }
+      const accepted = await acceptWhenGated(jobDeadline(role, taskIds?.length ?? 1), (onAcquired) =>
+        runTasks({ ...runOptions, onGateAcquired: onAcquired }).then((results) => withRunLinks(store, results)),
+      );
+      return reply.code(202).send({
+        status: "accepted",
+        ...accepted,
+        agent_runtime: AGENT_RUNTIME_LABELS.grok,
       });
-      return { results: await withRunLinks(store, results) };
     } catch (error) {
       return replyForHarnessFailure(error, reply);
     }
   });
 
   return app;
+}
+
+type PlannerChoice = { mode: "scripted" | "grok" | "no_key"; label: AgentRuntimeLabel };
+
+async function choosePlanner(
+  env: NodeJS.ProcessEnv,
+  fetchImpl: typeof fetch,
+  role: PlannerRole,
+  shopAgent: Agent,
+): Promise<PlannerChoice> {
+  if (!agentUsesShopPlanner(shopAgent) || !flagRequestsGrok(env, plannerFlagForRole(role))) {
+    return { mode: "scripted", label: AGENT_RUNTIME_LABELS.scripted };
+  }
+  const configured = await probeGrokConfigured(env, fetchImpl);
+  if (configured === false) return { mode: "no_key", label: AGENT_RUNTIME_LABELS.noKey };
+  return { mode: "grok", label: runtimeLabel(true, configured) };
+}
+
+const grokProbeCache = new Map<string, { at: number; value: boolean | null }>();
+
+async function probeGrokConfigured(env: NodeJS.ProcessEnv, fetchImpl: typeof fetch): Promise<boolean | null> {
+  const origin = agentServiceOrigin(env);
+  if (!origin) return null;
+  const cached = grokProbeCache.get(origin);
+  if (cached && Date.now() - cached.at < 10_000) return cached.value;
+  let value: boolean | null = null;
+  try {
+    const response = await fetchImpl(`${origin}/health`, { signal: AbortSignal.timeout(300) });
+    if (response.ok) {
+      const body: unknown = await response.json();
+      if (isRecord(body) && typeof body.grok_configured === "boolean") value = body.grok_configured;
+    }
+  } catch {
+    value = null;
+  }
+  grokProbeCache.set(origin, { at: Date.now(), value });
+  return value;
+}
+
+function agentServiceOrigin(env: NodeJS.ProcessEnv): string | null {
+  const raw = env.AGENTSERVICE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.href.replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function grokCallAgent(fetchImpl: typeof fetch) {
+  return async (baseUrl: string, request: AgentRunRequest) => {
+    const response = await fetchImpl(tasksRunUrl(baseUrl), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...request, agent: "grok" }),
+      signal: AbortSignal.timeout(GROK_AGENT_HTTP_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`Jury Grok agent returned ${response.status}.`);
+    return parseAgentResponse(await response.json());
+  };
+}
+
+function harnessTimeout(role: PlannerRole): number {
+  if (role === "attacker") return GROK_ATTACKER_HARNESS_TIMEOUT_MS;
+  if (role === "fix") return GROK_FIX_RUN_TIMEOUT_MS;
+  return GROK_RUN_TIMEOUT_MS;
+}
+
+function jobDeadline(role: PlannerRole, taskCount: number): number {
+  const count = Math.max(1, taskCount);
+  if (role === "attacker") return GROK_ATTACKER_HARNESS_TIMEOUT_MS;
+  if (role === "fix") return count * GROK_FIX_RUN_TIMEOUT_MS;
+  return count * GROK_RUN_TIMEOUT_MS;
 }
 
 function replyForHarnessFailure(error: unknown, reply: FastifyReply) {
