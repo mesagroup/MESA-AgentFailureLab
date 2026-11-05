@@ -307,4 +307,8 @@ curl -s 'http://127.0.0.1:3001/traces?agent_id=reference-shop&source=otel_prod'
 curl -s http://127.0.0.1:3001/agents/reference-shop/otel/cursors
 ```
 
-Frontend Refresh should POST this route, show `imported`, `skipped`, `failed`, and `errors[].message`, then reload `GET /traces` with the agent and source filters. The button does not belong to this change.
+### Frontend
+
+Traces (`/traces`) lists this route. Each row shows `Trace.source`. A document that omits `source` uses the same rule as the list filter: a known demo seed id is `demo_seed`, and anything else is `harness`. Filters call `GET /traces` with `agent_id`, `source`, `since`, and `until`.
+
+**Pull traces** is on that page for the selected agent and on the agent row. The request sends `sources` and omits `since` unless the operator sets an override. The first pull therefore fetches the full seed. A later pull uses `last_pull_at` from `GET /agents/:agentId/otel/cursors`, which the page shows and does not send back as `since`. The page shows `imported`, `skipped`, and `failed`, each source `message`, and `errors[].message` for `network`, `auth`, `remap`, `validation`, and `conflict`. An empty window stays on screen (`empty: true`, `failed: 0`). A rejected request does not clear the list. After a parsed pull the page reloads `GET /traces` with the current filters. Pull does not invent `outcome.verifier` or `fault.labels`.
