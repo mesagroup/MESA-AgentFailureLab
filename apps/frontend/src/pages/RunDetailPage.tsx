@@ -11,6 +11,7 @@ import {
   type RunDetailLoad,
   type RunDetailView,
 } from "@/lib/run-detail";
+import { RUN_PHASE_LABELS } from "@/lib/run-launch";
 import { SECURITY_BADGE_LABEL, SECURITY_RUNS_HREF, isSecurityRun } from "@/lib/security-runs";
 import { cn } from "@/lib/utils";
 import type { RunPhase, RunStatus } from "@mesa/shared";
@@ -19,12 +20,6 @@ const PHASE_STYLES: Record<RunPhase, string> = {
   baseline: "bg-blue-500/15 text-blue-500 border-blue-500/20",
   injected: "bg-amber-500/15 text-amber-500 border-amber-500/20",
   after_fix: "bg-emerald-500/15 text-emerald-500 border-emerald-500/20",
-};
-
-const PHASE_LABELS: Record<RunPhase, string> = {
-  baseline: "baseline",
-  injected: "injected",
-  after_fix: "after fix",
 };
 
 const STATUS_STYLES: Record<RunStatus, string> = {
@@ -108,8 +103,8 @@ export function RunDetailPage() {
 
       <header className="rounded-2xl bg-card shadow-island p-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", PHASE_STYLES[run.phase])}>
-            {PHASE_LABELS[run.phase]}
+          <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs", PHASE_STYLES[run.phase])}>
+            {RUN_PHASE_LABELS[run.phase]}
           </span>
           {isSecurityRun(run) && (
             <span className="inline-flex items-center rounded-md border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-xs font-mono text-violet-500">

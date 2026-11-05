@@ -39,6 +39,25 @@ export function phaseNeedsBaselineParent(phase: RunPhase): boolean {
 export const LAUNCH_PHASES = ["baseline", "injected", "jury", "after_fix"] as const;
 export type LaunchPhase = (typeof LAUNCH_PHASES)[number];
 
+/** Plain-English labels for the Launch phase picker (internal IDs unchanged). */
+export const LAUNCH_PHASE_COPY: Record<LaunchPhase, { label: string; subtitle: string }> = {
+  baseline: { label: "Clean run", subtitle: "Measure normal behavior" },
+  injected: { label: "Inject fault", subtitle: "Replay a baseline with a fault" },
+  jury: { label: "Security attack", subtitle: "Malicious note + permission guard" },
+  after_fix: { label: "Verify fix", subtitle: "Replay after the owner fixed the agent" },
+};
+
+/** Short labels for stored RunPhase badges (no jury — launch mode only). */
+export const RUN_PHASE_LABELS: Record<RunPhase, string> = {
+  baseline: "Clean run",
+  injected: "Inject fault",
+  after_fix: "Verify fix",
+};
+
+export function runPhaseLabel(phase: RunPhase | string): string {
+  return RUN_PHASE_LABELS[phase as RunPhase] ?? phase;
+}
+
 export function isRunLaunchPhase(phase: LaunchPhase): phase is RunPhase {
   return phase === "baseline" || phase === "injected" || phase === "after_fix";
 }
@@ -49,7 +68,7 @@ export function phaseNeedsReferenceRun(phase: LaunchPhase): boolean {
 
 export const JURY_LAUNCH_COPY = {
   helper:
-    "Agent security testing: attacker, malicious juror note, and permission guard. Posts /attacker/jury-case.",
+    "Security launch mode (not a stored run phase): malicious note and permission guard via /attacker/jury-case.",
   referenceLabel: "Reference run",
   referenceAttack: "Baseline run to attack",
   referenceReplay: "Injected or after_fix run to replay",

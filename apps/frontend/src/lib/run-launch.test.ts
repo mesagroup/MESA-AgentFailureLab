@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Agent, Run } from "@mesa/shared";
 import {
+  LAUNCH_PHASE_COPY,
   LAUNCH_PHASES,
+  RUN_PHASE_LABELS,
   baselineRunsForAgent,
   buildJuryLaunchParams,
   buildLaunchParams,
@@ -13,6 +15,7 @@ import {
   jurySheetReady,
   phaseNeedsBaselineParent,
   phaseNeedsReferenceRun,
+  runPhaseLabel,
   taskTitleForRun,
   toggleLaunchFixKind,
 } from "./run-launch.ts";
@@ -156,6 +159,22 @@ test("jury is a launcher phase and does not change RunPhase parents", () => {
   assert.equal(juryLaunchMode({ phase: "baseline" }), "attack");
   assert.equal(juryLaunchMode({ phase: "injected" }), "replay");
   assert.equal(juryLaunchMode({ phase: "after_fix" }), "replay");
+});
+
+test("launch and run phase copy use plain-English labels without renaming IDs", () => {
+  assert.equal(LAUNCH_PHASE_COPY.baseline.label, "Clean run");
+  assert.equal(LAUNCH_PHASE_COPY.injected.label, "Inject fault");
+  assert.equal(LAUNCH_PHASE_COPY.jury.label, "Security attack");
+  assert.equal(LAUNCH_PHASE_COPY.after_fix.label, "Verify fix");
+  assert.match(LAUNCH_PHASE_COPY.jury.subtitle, /permission guard/i);
+  assert.deepEqual(RUN_PHASE_LABELS, {
+    baseline: "Clean run",
+    injected: "Inject fault",
+    after_fix: "Verify fix",
+  });
+  assert.equal(runPhaseLabel("baseline"), "Clean run");
+  assert.equal(runPhaseLabel("unknown"), "unknown");
+  assert.ok(!("jury" in RUN_PHASE_LABELS));
 });
 
 test("buildJuryLaunchParams validates note, reference run, and replay fix kinds", () => {

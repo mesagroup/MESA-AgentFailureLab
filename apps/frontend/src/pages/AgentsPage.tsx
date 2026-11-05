@@ -27,6 +27,7 @@ import {
 import {
   FIX_KINDS,
   JURY_LAUNCH_COPY,
+  LAUNCH_PHASE_COPY,
   LAUNCH_PHASES,
   baselineRunsForAgent,
   buildLaunchRequest,
@@ -36,6 +37,7 @@ import {
   juryReferenceRunsForAgent,
   jurySheetReady,
   phaseNeedsReferenceRun,
+  runPhaseLabel,
   taskForRun,
   taskTitleForRun,
   toggleLaunchFixKind,
@@ -921,13 +923,16 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                       : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
                   )}
                 >
-                  <span className="font-mono">{p === "jury" ? "jury" : p}</span>
-                  {p === "jury" && (
-                    <span className="block text-[11px] mt-0.5 opacity-80">security</span>
-                  )}
+                  <span>{LAUNCH_PHASE_COPY[p].label}</span>
+                  <span className="block text-[11px] mt-0.5 opacity-80">{LAUNCH_PHASE_COPY[p].subtitle}</span>
                 </button>
               ))}
             </div>
+            {phase === "baseline" && (
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                {LAUNCH_PHASE_COPY.baseline.subtitle}. Pick one or more tasks, then launch.
+              </p>
+            )}
             {phase === "injected" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                 Pick a completed baseline. Review the task prompt, edit it if needed, then inject.
@@ -1327,7 +1332,7 @@ function JuryLaunchFields({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium truncate">{title}</span>
                             <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
-                            <span className="font-mono text-[11px] text-muted-foreground">{run.phase}</span>
+                            <span className="text-[11px] text-muted-foreground">{runPhaseLabel(run.phase)}</span>
                             <span className={cn(
                               "text-[11px] font-mono",
                               run.status === "passed" && "text-green-600",
