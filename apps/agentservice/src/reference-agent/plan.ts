@@ -204,6 +204,12 @@ function shapeDataPlan(
   if (fixes.includes("pre_response_check")) {
     const read = confirmingReadFor(input.task, input.order_id);
     if (read !== null) next = [...next, read];
+    // Canonical T3 uses applyFixesToPlan. A T3-shaped list that is not
+    // byte-identical still needs the second checkout so a forged first
+    // checkout can be followed by a real one (ADR-002 injector).
+    if (input.task_id === "T3") {
+      next = [...next, { tool_name: "checkout", tool_input: {} }];
+    }
   }
   if (!fixes.includes("permission_guard")) {
     return { executed: false, actions: next, refused: [], embedded };

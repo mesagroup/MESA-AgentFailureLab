@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Run, Trace } from "@mesa/shared";
 import {
+  AFTER_FIX_SECTION_ID,
+  STORYBOARD_AFTER_FIX,
   afterFixRunBody,
+  beforeAfterHeadline,
   childRunsOf,
   compareBeforeAfter,
   parentChildLinks,
@@ -40,6 +43,25 @@ test("toggleFixKind adds and removes a kind", () => {
   assert.deepEqual(toggleFixKind(["controlled_retry", "permission_guard"], "controlled_retry"), [
     "permission_guard",
   ]);
+});
+
+test("storyboard scene 8 posts after_fix for the seeded T3 parent and pre_response_check", () => {
+  assert.equal(AFTER_FIX_SECTION_ID, "after-fix");
+  assert.equal(STORYBOARD_AFTER_FIX.traceId, "trace-t3-forged-checkout");
+  const built = afterFixRunBody({
+    agentId: STORYBOARD_AFTER_FIX.agentId,
+    parentRunId: STORYBOARD_AFTER_FIX.parentRunId,
+    fixKinds: [STORYBOARD_AFTER_FIX.fixKind],
+  });
+  assert.equal(built.ok, true);
+  if (!built.ok) return;
+  assert.deepEqual(built.body, {
+    agent_id: "reference-shop",
+    phase: "after_fix",
+    parent_run_id: "run-t3-injected-001",
+    fix_kinds: ["pre_response_check"],
+  });
+  assert.equal("injection" in built.body, false);
 });
 
 test("afterFixRunBody posts after_fix with parent_run_id and fix_kinds and omits injection", () => {
@@ -193,6 +215,11 @@ test("compareBeforeAfter reports success, regressions, recovered checks, timing 
   assert.equal(view.timing.latency_ms.after, 900);
   assert.equal(view.timing.duration_ms.after, 1100);
   assert.equal(view.timing.cost_usd.after, 0.03);
+  assert.equal(beforeAfterHeadline(view), "Verifier recovered: failed → passed");
+  assert.equal(
+    beforeAfterHeadline({ ...view, beforePassed: false, afterPassed: false, recovered: [], regressions: [] }),
+    "Verifier still failed after replay",
+  );
 });
 
 test("childRunsOf and hrefs link parent and child runs", () => {

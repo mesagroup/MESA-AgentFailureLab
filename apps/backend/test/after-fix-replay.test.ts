@@ -1,11 +1,34 @@
 import assert from "node:assert/strict";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
-import type { Run, Trace } from "@mesa/shared";
+import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
+import { REFERENCE_AGENT_ID } from "../src/agents/store.js";
 import { buildApp } from "../src/app.js";
 import { resolveAfterFixParent } from "../src/harness/replay.js";
+import {
+  DEMO_STORYBOARD_RUN_ID,
+  DEMO_STORYBOARD_TRACE_ID,
+  seedDemoRunsAndTraces,
+} from "../src/persistence/demo-seed.js";
 import { MemoryStore } from "../src/persistence/memory.js";
 import { startMockShop } from "./helpers.js";
+
+function listen(server: Server): Promise<string> {
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address() as AddressInfo;
+      resolve(`http://127.0.0.1:${address.port}`);
+    });
+  });
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+}
 
 describe("resolveAfterFixParent", () => {
   it("leaves a run without parent_run_id unchanged", async () => {
@@ -265,6 +288,95 @@ describe("POST /runs after_fix replay from a parent", { concurrency: false }, ()
       assert.match(wrongTask.json().message, /T3/);
     } finally {
       await app.close();
+    }
+  });
+
+  it("replays the seeded T3 forged checkout on the test instance to a passing verifier", async () => {
+    const store = new MemoryStore();
+    await seedDemoRunsAndTraces(store);
+    const seen: Array<{ url: string; fix_kinds?: unknown }> = [];
+    const runtime = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        if (request.method === "GET" && request.url === "/health") {
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ status: "ok" }));
+          return;
+        }
+        if (request.method === "POST" && request.url === "/v1/tasks/run") {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+            fix_kinds?: unknown;
+          };
+          seen.push({ url: request.url, fix_kinds: body.fix_kinds });
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(
+            JSON.stringify({
+              executed: false,
+              actions: [
+                { tool_name: "get_cart", tool_input: {} },
+                { tool_name: "checkout", tool_input: {} },
+                { tool_name: "get_cart", tool_input: {} },
+                { tool_name: "checkout", tool_input: {} },
+              ],
+            }),
+          );
+          return;
+        }
+        response.writeHead(404);
+        response.end();
+      });
+    });
+    const runtimeUrl = await listen(runtime);
+    const app = buildApp({ logger: false, mockBaseUrl: baseUrl, store });
+    try {
+      const current = await app.inject({ method: "GET", url: `/agents/${REFERENCE_AGENT_ID}` });
+      const agent = current.json() as Agent;
+      const saved = await app.inject({
+        method: "PUT",
+        url: `/agents/${REFERENCE_AGENT_ID}`,
+        payload: {
+          ...agent,
+          instance: { ...agent.instance, base_url: runtimeUrl },
+          test_instance: { ...agent.test_instance, base_url: runtimeUrl },
+        },
+      });
+      assert.equal(saved.statusCode, 200, saved.body);
+
+      const replay = await app.inject({
+        method: "POST",
+        url: "/runs",
+        payload: {
+          agent_id: REFERENCE_AGENT_ID,
+          phase: "after_fix",
+          parent_run_id: DEMO_STORYBOARD_RUN_ID,
+          fix_kinds: ["pre_response_check"],
+        },
+      });
+      assert.equal(replay.statusCode, 200, replay.body);
+      const afterFix = replay.json().results[0] as {
+        driver: string;
+        run: Run;
+        trace: Trace;
+        parent: { run: Run; trace: Trace };
+      };
+      assert.equal(afterFix.driver, "http");
+      assert.deepEqual(seen[0]?.fix_kinds, ["pre_response_check"]);
+      assert.equal(afterFix.run.parent_run_id, DEMO_STORYBOARD_RUN_ID);
+      assert.equal(afterFix.parent.trace.trace_id, DEMO_STORYBOARD_TRACE_ID);
+      assert.equal(afterFix.parent.trace.outcome.verifier.passed, false);
+      assert.equal(
+        afterFix.parent.trace.outcome.verifier.checks.some((check) => check.name === "order_created" && !check.passed),
+        true,
+      );
+      assert.equal(afterFix.trace.outcome.verifier.passed, true);
+      assert.equal(afterFix.trace.outcome.verifier.checks.find((check) => check.name === "order_created")?.passed, true);
+      assert.equal(afterFix.trace.fault.injected, true);
+      assert.equal(afterFix.trace.fault.labels[0]?.code, "forged_tool_result");
+      assert.equal(afterFix.run.injection_plan?.ground_truth.code, "forged_tool_result");
+    } finally {
+      await app.close();
+      await closeServer(runtime);
     }
   });
 });

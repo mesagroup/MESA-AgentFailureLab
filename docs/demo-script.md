@@ -233,12 +233,9 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 - Fallimento tipico: l'Agent non ha ancora un campo per il repository di destinazione (#52). Non si sa dove aprire l'issue.
 
 **6. Scegli il fix → replay `after_fix` → before/after**
-- OGGI (2 vie):
-  - a. `POST /runs` con `{"agent_id":"reference-shop","phase":"after_fix","task_ids":["T3"],"injection":"preset","fix_kinds":["pre_response_check"]}`. Il Run registra `fix_kinds` e l'harness li copia sulla richiesta della nuova run (#40/#41). Non è una patch in-lab: `after_fix` è una run successiva, dopo che il possessore ha modificato l'agente sul proprio deploy. Il verdetto resta `outcome.verifier`.
-  - b. Fonte attendibile per l'efficacia: `pnpm --filter @mesa/agentservice replay` → `apps/agentservice/replay/latest.md`, colonna `fix_verified` per task.
-- DOMANI (#53): in **Ispeziona traccia** → "Scegli fix" → "Replay" → vista before/after.
-- Atteso: before (injected) **failed** → after (after_fix) **passed**, senza regressioni sul baseline.
-- Fallimento tipico: after ancora failed perché il deploy del possessore non include la modifica, oppure un fix non adatto alla categoria. Prima di registrare, controllare `latest.md`.
+- OGGI: su `/traces/trace-t3-forged-checkout` lasciare **pre-response check** selezionato → **Replay after_fix** (niente Clean treated). Il POST è `{ "agent_id":"reference-shop","phase":"after_fix","parent_run_id":"run-t3-injected-001","fix_kinds":["pre_response_check"] }` (senza `injection`: il harness copia `forged_tool_result` e `at_step: 4`). La UI resta sulla traccia parent e mostra before/after `outcome.verifier`. Il piano trattato T3 è `get_cart`, `checkout` (forgiato), `get_cart`, `checkout` (vero). Serve `test_instance` con `/health` (altrimenti `auto` cade sul driver scripted e il fix non si applica).
+- Atteso: before (injected) **failed** → after (after_fix) **passed**, check `order_created` recovered.
+- Fallimento tipico: agentservice giù → driver scripted; 409 `world_busy`; Clean treated acceso (nessun forge, storia diversa).
 
 **7. Regression suite**
 - OGGI: `POST /runs` con `{"agent_id":"reference-shop","phase":"baseline"}` (senza `task_ids` = i task di quell'agente; il seed è T1–T5) → 5 trace, tutte passed. Il replay del passo 6b include anche "baseline con tutti e tre i fix" (nessuna regressione).
@@ -281,7 +278,7 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 | 4 | `outcome.verifier`, `fault.*` | **non modificati** dalla diagnosi |
 | 5 | issue | vedi template D.5 |
 | 6 | `Run.phase` / `Run.fix_kinds` | `after_fix` / `["pre_response_check"]` |
-| 6 | before → after | `verifier.passed` false → true (oggi: confermare con `fix_verified` in `replay/latest.md`) |
+| 6 | before → after | `verifier.passed` false → true su `#after-fix` (parent seed vs child run) |
 | 7 | 5 trace baseline | tutte `verifier.passed = true` |
 | 7 | T5 senza grant | ordine `placed` |
 | 8 | vedi D.8 | |
@@ -334,7 +331,7 @@ Il replay con `permission_guard` è un altro POST: fase `after_fix`, `fix_kinds`
 
 Note di regia: la pagina `/jury` (PR #122) copre il caso security, non l’esperimento shop HTTP. Lo shop end-to-end si gira con `pnpm demo:shop -- --mode offline` (o live quando autorizzato). I numeri della scena 11 vanno presi dal README il giorno della registrazione, senza riscrivere le baseline eval.
 
-Scene 6–8 sul deploy usano la traccia seed `trace-t3-forged-checkout` (run `run-t3-injected-001`, fault `forged_tool_result`, check `order_created` ✗). Il boot inserisce già `diagnosis` (causa, `step_id`, confidenza, `proposed_fixes: ["pre_response_check"]`). Aprire `/traces/trace-t3-forged-checkout#analysis`. Il CTA **Run diagnosis** resta per tracce senza diagnosi (chiamata live Grok). Scene 7 usa **Open as GitHub issue** su quella diagnosi. Scene 8 usa **Select fixes** → **Replay after_fix** sul parent `run-t3-injected-001`.
+Scene 6–8 sul deploy usano la traccia seed `trace-t3-forged-checkout` (run `run-t3-injected-001`, fault `forged_tool_result`, check `order_created` ✗). Il boot inserisce già `diagnosis` (causa, `step_id`, confidenza, `proposed_fixes: ["pre_response_check"]`). Aprire `/traces/trace-t3-forged-checkout#analysis`. Il CTA **Run diagnosis** resta per tracce senza diagnosi (chiamata live Grok). Scene 7 usa **Open as GitHub issue** su quella diagnosi. Scene 8: lasciare **pre-response check** selezionato → **Replay after_fix** (parent `run-t3-injected-001`, senza Clean treated). Il replay gira su `test_instance` (agentservice). L’iniettore contraffà ancora il primo checkout; il fix completa un checkout vero dopo la rilettura del carrello. Before/after: verifier failed → passed, check `order_created` recovered. Serve agentservice up (`driver: auto` → HTTP). Se il runtime è giù il harness cade sul driver scripted e il fix non si applica.
 
 ## F. Relazione con gli altri documenti
 

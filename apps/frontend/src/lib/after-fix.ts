@@ -2,6 +2,19 @@ import { isFixKind, type FixKind, type Run, type Trace, type TraceOutcome, type 
 
 export const AFTER_FIX_PHASE = "after_fix" as const;
 
+/** Bookmarkable before/after block on `/traces/:traceId`. */
+export const AFTER_FIX_SECTION_ID = "after-fix";
+
+/** Storyboard scene 8 (`docs/demo-script.md` § E). */
+export const STORYBOARD_AFTER_FIX = {
+  traceId: "trace-t3-forged-checkout",
+  parentRunId: "run-t3-injected-001",
+  agentId: "reference-shop",
+  taskId: "T3",
+  fault: "forged_tool_result",
+  fixKind: "pre_response_check",
+} as const;
+
 export const FIX_KIND_LABELS: Record<FixKind, string> = {
   controlled_retry: "controlled retry",
   pre_response_check: "pre-response check",
@@ -300,4 +313,19 @@ export function formatDurationMs(ms: number | null): string {
 export function passedWord(value: boolean | null): string {
   if (value === null) return "—";
   return value ? "passed" : "failed";
+}
+
+/** Headline for the before/after card. Null when a side is still missing. */
+export function beforeAfterHeadline(view: BeforeAfterView): string | null {
+  if (view.beforePassed === null || view.afterPassed === null) return null;
+  if (view.beforePassed === false && view.afterPassed === true) {
+    return "Verifier recovered: failed → passed";
+  }
+  if (view.beforePassed === true && view.afterPassed === true) {
+    return "Verifier passed before and after";
+  }
+  if (view.beforePassed === true && view.afterPassed === false) {
+    return "Verifier regressed: passed → failed";
+  }
+  return "Verifier still failed after replay";
 }

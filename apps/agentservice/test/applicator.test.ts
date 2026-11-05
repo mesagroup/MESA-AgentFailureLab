@@ -140,6 +140,15 @@ describe("fix applicator", () => {
       fixes: ["controlled_retry"],
     });
     assert.deepEqual(retried.actions, plain);
+    const t3 = applyFixesToPlan({
+      taskId: "T3",
+      permissions: ["read", "write:order"],
+      fixes: ["pre_response_check"],
+    });
+    assert.deepEqual(
+      t3.actions.map((action) => action.tool_name),
+      ["get_cart", "checkout", "get_cart", "checkout"],
+    );
   });
 
   it("rejects a retry config outside the allowed range", () => {

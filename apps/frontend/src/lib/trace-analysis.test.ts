@@ -116,6 +116,9 @@ test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run l
   const panel = readFileSync(join(here, "../pages/AfterFixPanel.tsx"), "utf8");
   assert.match(panel, /Replay after_fix/);
   assert.match(panel, /Select fixes/);
+  assert.match(panel, /AFTER_FIX_SECTION_ID/);
+  assert.match(panel, /beforeAfterHeadline/);
+  assert.match(page, /AFTER_FIX_SECTION_ID/);
 });
 
 test("traces index empty state and pull panel stay on the list page", () => {

@@ -95,6 +95,13 @@ export function applyFixesToPlan(input: {
   if (fixes.includes("pre_response_check")) {
     const read = confirmingRead(input.taskId, input.orderId);
     if (read !== null) actions = [...actions, read];
+    // T3: after the confirming cart read, complete checkout. The harness still
+    // forges the first checkout (ADR-002 injector). A second checkout is not
+    // a new FixKind: it is the static unfolding of "do not claim success
+    // while the cart still has the lines the task was meant to place."
+    if (input.taskId === "T3") {
+      actions = [...actions, { tool_name: "checkout", tool_input: {} }];
+    }
   }
 
   if (!fixes.includes("permission_guard")) {
