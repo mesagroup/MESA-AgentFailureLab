@@ -50,6 +50,7 @@ export {
   CHECK_REGISTRY,
   CHECK_TYPES,
   TASK_PERMISSIONS,
+  evalsetDuplicateCaseIds,
   isCheckType,
   validateAgentTasks,
 } from "./checks.js";

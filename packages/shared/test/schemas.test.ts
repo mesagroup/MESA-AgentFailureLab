@@ -21,6 +21,7 @@ import {
   traceSchema,
   validateAgent,
   validateRun,
+  validateTaskEvalset,
   validateTrace,
 } from "../src/validate.js";
 
@@ -293,6 +294,38 @@ describe("examples", () => {
     assert.deepEqual(evalset.properties.cases.items.required, ["case_id", "expectation"]);
     assert.equal(evalset.properties.cases.items.required.includes("rubric"), false);
     assert.equal(evalset.properties.cases.items.properties.rubric.minLength, 1);
+  });
+
+  it("validates a standalone evalset with the same rules as on a task", () => {
+    const result = validateAgent(agent);
+    assertOk(result, "agent");
+    if (!result.ok) return;
+    const t1 = result.value.tasks[0]!.evalset;
+    assert.ok(t1);
+    assertOk(validateTaskEvalset(t1), "t1 evalset");
+    const ok = validateTaskEvalset({
+      version: TASK_EVALSET_VERSION,
+      cases: [{ case_id: "claim", expectation: "Cite the catalog read." }],
+    });
+    assertOk(ok, "evalset");
+    const empty = validateTaskEvalset({ version: TASK_EVALSET_VERSION, cases: [] });
+    assertOk(empty, "empty evalset");
+    assert.equal(validateTaskEvalset({ version: 2, cases: [] }).ok, false);
+    const duplicate = validateTaskEvalset({
+      version: TASK_EVALSET_VERSION,
+      cases: [
+        { case_id: "same", expectation: "First." },
+        { case_id: "same", expectation: "Second." },
+      ],
+    });
+    assert.equal(duplicate.ok, false);
+    if (!duplicate.ok) assert.match(duplicate.errors.join(" "), /duplicate case_id same/);
+    const extra = validateTaskEvalset({
+      version: TASK_EVALSET_VERSION,
+      cases: [],
+      outcome: { verifier: { passed: true } },
+    });
+    assert.equal(extra.ok, false);
   });
 
   it("accepts the injected run that points at the trace", () => {

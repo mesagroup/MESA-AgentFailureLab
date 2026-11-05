@@ -278,7 +278,7 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 { "error": "not_found", "message": "No run missing-run" }
 ```
 
-`POST /runs` and `POST /attacker/jury-case` still return the same bodies. They write through whichever store `DATABASE_URL` selected. `POST /diagnose` on the agent service is not this store. Grok still writes `diagnosis` only, and only on the trace it is given. The harness does not call Grok.
+`POST /runs` and `POST /attacker/jury-case` still return the same bodies. They write through whichever store `DATABASE_URL` selected. `POST /diagnose` on the agent service is not this store. Grok still writes `diagnosis` only, and only on the trace it is given. When the backend resolved a task evalset it sends that object as prompt guidance; it is not persisted on the Trace. The harness does not call Grok.
 
 ### `GET /agents`
 
@@ -297,7 +297,7 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 }
 ```
 
-The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` and `otel` are optional user data on that document. The reference seed sets evalset on T1, omits it on T2–T5, and omits `otel`. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits either field. The column is still `agents.document` jsonb. There is no evalset table and no generate-evalset route. The verifier does not read evalset and does not write `outcome.verifier` from it. `POST /agents/:agentId/otel/import` writes Trace rows and a baseline Run through the same run/trace store. It copies a supplied outcome and does not invent `fault.labels`. See [otel.md](otel.md).
+The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` and `otel` are optional user data on that document. The reference seed sets evalset on T1, omits it on T2–T5, and omits `otel`. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits either field. The column is still `agents.document` jsonb. There is no evalset table. `POST /evalset/generate` proposes cases and does not write this row. The verifier does not read evalset and does not write `outcome.verifier` from it. `POST /agents/:agentId/otel/import` writes Trace rows and a baseline Run through the same run/trace store. It copies a supplied outcome and does not invent `fault.labels`. See [otel.md](otel.md).
 
 ### `GET /agents/:agent_id`
 

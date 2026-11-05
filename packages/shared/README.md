@@ -81,7 +81,7 @@ Always required: `step_id`, `index`, `type`, `timestamp`, `role`, `latency_ms`, 
 
 ### Task evalset
 
-`tasks[].evalset` is optional user data. A later Grok judgment of that task's Run or Trace may read it. It is not a verifier check, and it does not write `outcome.verifier`. Pass/fail stays on `success_test.checks`, which the deterministic verifier scores from mock world state ([ADR-001](../../adr/001-mock-verifier-grok.md)). This package does not call Grok and does not add a generate-evalset route.
+`tasks[].evalset` is optional user data. A later Grok judgment of that task's Run or Trace may read it. It is not a verifier check, and it does not write `outcome.verifier`. Pass/fail stays on `success_test.checks`, which the deterministic verifier scores from mock world state ([ADR-001](../../adr/001-mock-verifier-grok.md)). This package does not call Grok. `validateTaskEvalset` in `@mesa/shared/validate` is the same shape used by `POST /evalset/generate`.
 
 `TASK_EVALSET_VERSION` is `1`. That is the only valid `evalset.version`. Omit `evalset` when the task has none. `version: 1` with `cases: []` is also valid. `rubric` is optional on a case. `case_id` is unique within the task.
 
@@ -108,7 +108,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 | `cases[].expectation` | yes | What the judge should look for in the Trace or Run. Not a world-state assertion. |
 | `cases[].rubric` | no | How to score the expectation. Free text. |
 
-`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. There is no separate evalset API.
+`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. Proposing cases is `POST /evalset/generate` (agentservice, proxied by the backend). That route does not persist the Agent. `validateTaskEvalset` in `@mesa/shared/validate` checks a standalone object of that shape (including duplicate `case_id` values). The backend diagnose path may send it next to a Trace; it is still not a Trace field. `CONTRACT_VERSION` stays `0.3.0` for this HTTP envelope.
 
 ### OTel source
 

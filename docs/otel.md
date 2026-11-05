@@ -86,4 +86,4 @@ Fixture: [`packages/shared/examples/otel/t1-search.import.json`](../packages/sha
 
 This import is a separate path for spans that are not a Trace yet. After the mapper runs, the same `validateTrace` gate runs. An operator who already has a lab Trace uses #51 and skips the mapper. An operator who has spans uses this route and must attach an `outcome` the verifier already computed. The mapper will not score the mock.
 
-The Agents page registers `Agent.otel` on create and edit, and posts a pasted or uploaded batch to `POST /agents/:agentId/otel/import`. A successful import opens the stored Trace. The form stores `token_env` only. The bearer token is not sent to the lab. Generating an evalset (#121) and passing an evalset into diagnose (#119) are separate.
+The Agents page registers `Agent.otel` on create and edit, and posts a pasted or uploaded batch to `POST /agents/:agentId/otel/import`. A successful import opens the stored Trace. The form stores `token_env` only. The bearer token is not sent to the lab. Generating an evalset is `POST /evalset/generate`. Passing an evalset into diagnose stays #119.

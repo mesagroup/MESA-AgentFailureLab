@@ -7,11 +7,14 @@ import type {
   OtelSourceConfig,
   Run,
   RunPhase,
+  TaskEvalset,
   Trace,
   TraceOutcome,
   TraceTotals,
 } from "@mesa/shared";
 import { parseCreateRunResults, type HarnessTaskResult } from "./after-fix";
+import type { EvalsetGenerateBody } from "./evalset";
+import { isEvalsetProposal } from "./evalset";
 import { isJuryReport, type JuryCaseDescription, type JuryCaseReport, type JuryRequestBody } from "./jury";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
@@ -137,6 +140,25 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
 export interface OtelImportResult {
   traces: Trace[];
   runs: Run[];
+}
+
+export interface EvalsetGenerateResult {
+  evalset: TaskEvalset;
+}
+
+/**
+ * Propose an evalset for one task. The Grok key stays on agentservice.
+ * This call does not save the Agent.
+ */
+export async function generateEvalset(body: EvalsetGenerateBody): Promise<EvalsetGenerateResult> {
+  const result = await backendFetch<unknown>("/evalset/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!isEvalsetProposal(result)) {
+    throw new ApiError(502, "The model output was not a valid evalset.", "invalid_evalset_response");
+  }
+  return result;
 }
 
 /** Map a version-1 span batch into Traces. Does not send a bearer token. */

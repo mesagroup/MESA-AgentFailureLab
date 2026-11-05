@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
-import type { Diagnosis, Trace } from "@mesa/shared";
+import type { Diagnosis, TaskEvalset, Trace } from "@mesa/shared";
 import { validateTrace } from "@mesa/shared/validate";
 import type { FastifyInstance } from "fastify";
+import type { AgentStore } from "../agents/store.js";
 import type { RunStore } from "../persistence/store.js";
 
 export interface DiagnosisOptions {
@@ -44,7 +45,24 @@ function config(options: DiagnosisOptions) {
   return { baseUrl, timeoutMs, fetchImpl: options.fetchImpl ?? fetch };
 }
 
-async function requestDiagnosis(trace: Trace, upstream: ReturnType<typeof config>): Promise<Diagnosis> {
+async function resolveTaskEvalset(agents: AgentStore, trace: Trace): Promise<TaskEvalset | undefined> {
+  try {
+    const agent = await agents.get(trace.agent_id);
+    return agent?.tasks.find((task) => task.task_id === trace.task_id)?.evalset;
+  } catch {
+    return undefined;
+  }
+}
+
+function diagnoseUpstreamBody(trace: Trace, evalset: TaskEvalset | undefined): Trace | { trace: Trace; evalset: TaskEvalset } {
+  return evalset === undefined ? trace : { trace, evalset };
+}
+
+async function requestDiagnosis(
+  trace: Trace,
+  evalset: TaskEvalset | undefined,
+  upstream: ReturnType<typeof config>,
+): Promise<Diagnosis> {
   if (!upstream.baseUrl) throw new DiagnosisError(503, "diagnosis_not_configured");
   const signal = AbortSignal.timeout(upstream.timeoutMs);
   let value: unknown;
@@ -52,7 +70,7 @@ async function requestDiagnosis(trace: Trace, upstream: ReturnType<typeof config
     const response = await upstream.fetchImpl(`${upstream.baseUrl}/diagnose`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(trace),
+      body: JSON.stringify(diagnoseUpstreamBody(trace, evalset)),
       signal,
       redirect: "error",
     });
@@ -82,6 +100,7 @@ async function requestDiagnosis(trace: Trace, upstream: ReturnType<typeof config
 export function registerDiagnosisRoutes(
   app: FastifyInstance,
   store: RunStore,
+  agents: AgentStore,
   options: DiagnosisOptions = {},
 ): void {
   const upstream = config(options);
@@ -116,7 +135,8 @@ export function registerDiagnosisRoutes(
       if (original.diagnosis !== null) {
         return reply.header("x-diagnosis-cached", "true").send(original);
       }
-      const diagnosis = await requestDiagnosis(original, upstream);
+      const evalset = await resolveTaskEvalset(agents, original);
+      const diagnosis = await requestDiagnosis(original, evalset, upstream);
       const saved = await store.saveDiagnosis(original, diagnosis);
       if (!saved) return reply.code(409).send({ error: "trace_changed" });
       return reply.header("x-diagnosis-cached", "false")
