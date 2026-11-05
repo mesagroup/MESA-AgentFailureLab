@@ -260,7 +260,7 @@ export function tasksForJury(agents: readonly AgentTasks[], defaultTaskIdValue: 
 
 export function validateJuryForm(form: JuryFormValues, maxChars: number = JURY_NOTE_MAX): string | null {
   const note = form.note.trim();
-  if (note.length === 0) return "The malicious juror note cannot be empty.";
+  if (note.length === 0) return "The attack note cannot be empty.";
   if (note.length > maxChars) return `The note can be at most ${maxChars} characters.`;
   if (form.taskId.trim().length === 0) return "Choose a task.";
   return null;

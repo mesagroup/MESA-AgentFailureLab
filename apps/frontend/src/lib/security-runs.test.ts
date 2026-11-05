@@ -107,9 +107,8 @@ test("jury/security user-facing copy is English", () => {
   for (const text of blobs) {
     assert.equal(ITALIAN_USER_COPY.test(text), false, text);
   }
-  assert.match(SECURITY_FILTER_COPY.detail, /attacker/i);
-  assert.match(SECURITY_FILTER_COPY.detail, /malicious juror note/i);
-  assert.match(SECURITY_FILTER_COPY.detail, /permission guard/i);
+  assert.match(SECURITY_FILTER_COPY.detail, /Attack note/i);
+  assert.match(SECURITY_FILTER_COPY.detail, /permission check/i);
 });
 
 test("dashboard has no Security/Jury destination strip; security stays under Runs", () => {

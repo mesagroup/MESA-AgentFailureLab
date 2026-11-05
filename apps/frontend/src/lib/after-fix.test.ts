@@ -102,7 +102,7 @@ test("afterFixRunBody rejects an empty selection", () => {
   });
   assert.equal(built.ok, false);
   if (built.ok) return;
-  assert.match(built.message, /fix_kinds/);
+  assert.match(built.message, /Select at least one proposed fix/);
 });
 
 test("parseCreateRunResults reads parent verifier, totals, and links from POST /runs", () => {
@@ -215,10 +215,10 @@ test("compareBeforeAfter reports success, regressions, recovered checks, timing 
   assert.equal(view.timing.latency_ms.after, 900);
   assert.equal(view.timing.duration_ms.after, 1100);
   assert.equal(view.timing.cost_usd.after, 0.03);
-  assert.equal(beforeAfterHeadline(view), "Verifier recovered: failed → passed");
+  assert.equal(beforeAfterHeadline(view), "Checks recovered: failed → passed");
   assert.equal(
     beforeAfterHeadline({ ...view, beforePassed: false, afterPassed: false, recovered: [], regressions: [] }),
-    "Verifier still failed after replay",
+    "Checks still failed after replay",
   );
 });
 

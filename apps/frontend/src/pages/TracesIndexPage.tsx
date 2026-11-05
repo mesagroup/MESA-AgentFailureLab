@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { tracesIndexEmptyCopy } from "@/lib/trace-analysis";
 import {
   TRACE_SOURCES,
+  TRACE_SOURCE_LABELS,
   describeTraceListFailure,
   sortTracesNewestFirst,
   traceListPath,
@@ -299,7 +300,7 @@ export function TracesIndexPage() {
             <option value="">All sources</option>
             {TRACE_SOURCES.map((source) => (
               <option key={source} value={source}>
-                {source}
+                {TRACE_SOURCE_LABELS[source]}
               </option>
             ))}
           </select>

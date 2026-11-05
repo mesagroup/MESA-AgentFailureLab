@@ -13,7 +13,7 @@ export function VerifierChecks({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evaluation</p>
-          <h2 className="text-sm font-semibold mt-0.5">Verifier</h2>
+          <h2 className="text-sm font-semibold mt-0.5">Checks</h2>
         </div>
         {verifier ? (
           <span

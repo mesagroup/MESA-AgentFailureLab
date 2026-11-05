@@ -539,7 +539,7 @@ export function AgentTasksEditor({
                 onClick={() => void runEvalsetAi(index, "generate")}
               >
                 <Sparkles className="h-3 w-3" />
-                {aiBusy[index] ? "Working…" : "Genera evalset"}
+                {aiBusy[index] ? "Working…" : "Generate judge cases"}
               </Button>
               <Button
                 type="button"
@@ -550,7 +550,7 @@ export function AgentTasksEditor({
                 onClick={() => void runEvalsetAi(index, "revise")}
               >
                 <Sparkles className="h-3 w-3" />
-                Modifica con AI
+                Revise with AI
               </Button>
             </div>
             {aiToast[index] ? <p className="text-xs text-foreground">{aiToast[index]}</p> : null}

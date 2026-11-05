@@ -105,13 +105,13 @@ export function TracePullPanel({
     <section className="rounded-2xl bg-card shadow-island px-5 py-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="pull-telemetry" className="text-sm font-semibold">Pull traces</h2>
+          <h2 id="pull-telemetry" className="text-sm font-semibold">Import traces</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Fetches this agent's prod and test telemetry, then reloads the list. Leave the start time blank. The first pull fetches the full seed. A later pull uses the stored cursor.
           </p>
         </div>
         <Button type="button" size="sm" className="rounded-full" disabled={!agent || pulling} onClick={() => void handlePull()}>
-          {pulling ? "Pulling…" : "Pull traces"}
+          {pulling ? "Importing…" : "Import traces"}
         </Button>
       </div>
 
@@ -174,7 +174,7 @@ export function TracePullPanel({
         {pulling && (
           <p className="text-sm text-muted-foreground flex items-center gap-2" role="status">
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Pulling traces…
+            Importing traces…
           </p>
         )}
         {failure && (

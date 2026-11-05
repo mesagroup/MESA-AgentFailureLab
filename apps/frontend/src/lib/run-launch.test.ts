@@ -168,7 +168,7 @@ test("launch and run phase copy use plain-English labels without renaming IDs", 
   assert.equal(LAUNCH_PHASE_COPY.injected.label, "Inject fault");
   assert.equal(LAUNCH_PHASE_COPY.jury.label, "Security attack");
   assert.equal(LAUNCH_PHASE_COPY.after_fix.label, "Verify fix");
-  assert.match(LAUNCH_PHASE_COPY.jury.subtitle, /permission guard/i);
+  assert.match(LAUNCH_PHASE_COPY.jury.subtitle, /permission check/i);
   assert.deepEqual(RUN_PHASE_LABELS, {
     baseline: "Clean run",
     injected: "Inject fault",

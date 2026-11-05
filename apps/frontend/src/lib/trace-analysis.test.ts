@@ -108,13 +108,13 @@ test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run l
   assert.match(page, /Proposed fixes/);
   assert.match(page, /trace\.diagnosis\.cause/);
   assert.match(page, /Failing step \{trace\.diagnosis\.step_id\}/);
-  assert.match(page, /Open parent run/);
+  assert.match(page, /From run/);
   assert.match(page, /diagnoseTrace/);
   assert.match(page, /Open as GitHub issue/);
   assert.match(page, /AfterFixPanel/);
   assert.doesNotMatch(page, /Giuria/);
   const panel = readFileSync(join(here, "../pages/AfterFixPanel.tsx"), "utf8");
-  assert.match(panel, /Replay after_fix/);
+  assert.match(panel, /"Verify fix"/);
   assert.match(panel, /Select fixes/);
   assert.match(panel, /AFTER_FIX_SECTION_ID/);
   assert.match(panel, /beforeAfterHeadline/);

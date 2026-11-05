@@ -171,7 +171,7 @@ test("the reference shop supplies task choices, with the case default kept", () 
     { id: "T1", title: "Uno" },
     { id: "T5", title: "Permessi" },
   ]);
-  assert.equal(validateJuryForm({ ...form, note: "   " }), "The malicious juror note cannot be empty.");
+  assert.equal(validateJuryForm({ ...form, note: "   " }), "The attack note cannot be empty.");
 });
 
 test("a stored session round-trips", () => {

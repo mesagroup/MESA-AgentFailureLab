@@ -10,7 +10,7 @@ export const SECURITY_BADGE_LABEL = "Security";
 
 export const SECURITY_FILTER_COPY = {
   title: "Agent security testing",
-  detail: "Attacker, malicious juror note, and permission guard.",
+  detail: "Attack note + permission check.",
   launch: "Launch a run from Agents",
   empty: "No security runs yet. Launch from Agents to create a run, then filter here.",
 } as const;

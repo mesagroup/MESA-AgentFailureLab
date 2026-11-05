@@ -46,8 +46,9 @@ test("RunSheet jury UI collects note, permissions, reference run, and in-flight 
   assert.match(sheet, /if \(!open && !launching\) onClose\(\)/);
   assert.match(JURY_LAUNCH_COPY.helper, /Security launch mode/i);
   assert.match(JURY_LAUNCH_COPY.helper, /not a stored run phase/i);
-  assert.match(JURY_LAUNCH_COPY.helper, /permission guard/i);
-  assert.match(JURY_LAUNCH_COPY.noteLabel, /Malicious juror note/);
+  assert.match(JURY_LAUNCH_COPY.helper, /permission check/i);
+  assert.match(JURY_LAUNCH_COPY.noteLabel, /Attack note/);
+  assert.doesNotMatch(JURY_LAUNCH_COPY.helper, /\/attacker\/jury-case/);
 });
 
 test("RunSheet jury phase reuses Prompt for this launch from the reference task", () => {

@@ -341,7 +341,7 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
           to={parentTo}
           className="hover:text-foreground underline-offset-2 hover:underline font-mono"
         >
-          parent {run.parent_run_id}
+          From run {run.parent_run_id}
         </Link>
       )}
       {parentTraceTo && (
@@ -349,7 +349,7 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
           to={parentTraceTo}
           className="hover:text-foreground underline-offset-2 hover:underline"
         >
-          parent trace
+          From trace
         </Link>
       )}
       {children.map((child) => {
@@ -359,10 +359,10 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
           <span key={child.run_id} className="font-mono">
             {href ? (
               <Link to={href} className="hover:text-foreground underline-offset-2 hover:underline">
-                child {child.run_id.slice(0, 12)}…
+                Follow-up {child.run_id.slice(0, 12)}…
               </Link>
             ) : (
-              `child ${child.run_id}`
+              `Follow-up ${child.run_id}`
             )}
             {tHref && (
               <>

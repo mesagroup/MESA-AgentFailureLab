@@ -36,10 +36,10 @@ export const DEMO_STORYBOARD_TRACE_ID = "trace-t3-forged-checkout";
 const DEMO_SEED_TRACE_ID_SET = new Set<string>(DEMO_SEED_TRACE_IDS);
 
 export const TRACE_SOURCE_LABELS: Record<TraceSource, string> = {
-  harness: "Harness",
-  demo_seed: "Demo seed",
-  otel_prod: "OTel prod",
-  otel_test: "OTel test",
+  harness: "Lab run",
+  demo_seed: "Demo",
+  otel_prod: "Live prod",
+  otel_test: "Live test",
   production: "Production",
 };
 
