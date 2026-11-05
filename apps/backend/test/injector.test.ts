@@ -69,6 +69,13 @@ describe("fault catalog", () => {
     }
   });
 
+  it("maps library desk tasks to presets with library tool targets", () => {
+    assert.equal(presetPlan("place-hold").target, "place_hold");
+    assert.equal(presetPlan("place-hold").ground_truth.code, "forged_tool_result");
+    assert.equal(presetPlan("renew-loan").target, "renew_loan");
+    assert.equal(presetPlan("return-loan").target, "return_loan");
+  });
+
   it("rejects a plan whose category does not match the code", () => {
     assert.throws(
       () =>

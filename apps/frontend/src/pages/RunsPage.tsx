@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, Search } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
 import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
 import { runListClickHref } from "@/lib/run-detail";
+import { formatRunDuration, taskForRun, taskTitleForRun } from "@/lib/run-launch";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 
 function PhaseBadge({ phase }: { phase: RunPhase }) {
@@ -49,6 +51,7 @@ export function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [agentMap, setAgentMap] = useState<Record<string, Agent>>({});
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const openedFirstGroup = useRef(false);
@@ -88,7 +91,28 @@ export function RunsPage() {
     };
   }, [runs]);
 
-  const groups = runs.reduce<{ agentId: string; runs: Run[] }[]>((acc, run) => {
+  const filteredRuns = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return runs;
+    return runs.filter((run) => {
+      const agent = agentMap[run.agent_id];
+      const task = taskForRun(agent, run);
+      const haystack = [
+        run.run_id,
+        run.task_id,
+        run.status,
+        run.phase,
+        agent?.name ?? "",
+        agent?.agent_id ?? "",
+        task?.title ?? "",
+        task?.prompt ?? "",
+        run.error_message ?? "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [runs, agentMap, filter]);
+
+  const groups = filteredRuns.reduce<{ agentId: string; runs: Run[] }[]>((acc, run) => {
     const existing = acc.find((g) => g.agentId === run.agent_id);
     if (existing) { existing.runs.push(run); }
     else { acc.push({ agentId: run.agent_id, runs: [run] }); }
@@ -105,31 +129,48 @@ export function RunsPage() {
 
   return (
     <div className="px-5 pb-8 pt-4 max-w-5xl mx-auto space-y-4">
-      <div className="pb-2">
-        <h1 className="text-xl font-semibold">Runs</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Test history · Track 03 CHAOS.AI</p>
+      <div className="pb-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Runs</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Test history · Track 03 CHAOS.AI</p>
+        </div>
+        {!loading && runs.length > 0 && (
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+            <Input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter title, task, phase…"
+              className="pl-9 h-9 text-sm"
+              aria-label="Filter runs"
+            />
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
         </div>
-      ) : groups.length === 0 ? (
+      ) : runs.length === 0 ? (
         <div className="rounded-2xl bg-card shadow-island py-16 text-center">
           <p className="text-sm text-muted-foreground">No runs yet.</p>
           <p className="text-xs text-muted-foreground/60 mt-1">Launch a run from an agent to get started.</p>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-2xl bg-card shadow-island py-16 text-center">
+          <p className="text-sm text-muted-foreground">No runs match this filter.</p>
         </div>
       ) : (
         <div className="rounded-2xl bg-card shadow-island">
           {groups.map(({ agentId, runs: agentRuns }, idx) => {
             const agent = agentMap[agentId];
-            const isOpen = expanded.has(agentId);
+            const isOpen = expanded.has(agentId) || Boolean(filter.trim());
             const { passed, failed, running } = groupSummary(agentRuns);
             const isLast = idx === groups.length - 1;
 
             return (
               <div key={agentId} className={cn(!isLast && "border-b border-border/30")}>
-                {/* Group header */}
                 <button
                   type="button"
                   onClick={() => toggleExpand(agentId)}
@@ -160,43 +201,49 @@ export function RunsPage() {
                   </div>
                 </button>
 
-                {/* Expanded runs */}
                 {isOpen && (
                   <div className="border-t border-border/20 bg-muted/10 pt-1">
-                    {agentRuns.map((run) => (
-                      <div
-                        key={run.run_id}
-                        className="pl-9 pr-5 py-3 border-b border-border/15 last:border-0 first:pt-3.5 hover:bg-muted/30 transition-colors"
-                      >
-                        <Link
-                          to={runListClickHref(run)}
-                          title={run.run_id}
-                          className="flex items-center gap-4"
+                    {agentRuns.map((run) => {
+                      const title = taskTitleForRun(agent, run);
+                      const task = taskForRun(agent, run);
+                      return (
+                        <div
+                          key={run.run_id}
+                          className="pl-9 pr-5 py-3 border-b border-border/15 last:border-0 first:pt-3.5 hover:bg-muted/30 transition-colors"
                         >
-                          <StatusDot status={run.status} />
-                          <span className="font-mono text-xs text-muted-foreground/50 w-28 shrink-0 truncate" title={run.run_id}>
-                            {run.run_id.slice(0, 12)}…
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground/40 w-36 shrink-0 truncate">
-                            {run.task_id}
-                          </span>
-                          <PhaseBadge phase={run.phase} />
-                          <span className={cn(
-                            "text-xs font-mono",
-                            run.status === "passed" && "text-green-600",
-                            (run.status === "failed" || run.status === "error") && "text-red-500",
-                            run.status === "running" && "text-blue-500",
-                            run.status === "queued" && "text-muted-foreground/40",
-                          )}>
-                            {run.status}
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground/40 ml-auto shrink-0">
-                            {run.duration_ms != null ? `${(run.duration_ms / 1000).toFixed(2)}s` : "—"}
-                          </span>
-                        </Link>
-                        <RunLineage run={run} peers={agentRuns} />
-                      </div>
-                    ))}
+                          <Link
+                            to={runListClickHref(run)}
+                            title={run.run_id}
+                            className="block space-y-1"
+                          >
+                            <div className="flex items-center gap-3">
+                              <StatusDot status={run.status} />
+                              <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium truncate">{title}</span>
+                                <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
+                                <PhaseBadge phase={run.phase} />
+                                <span className={cn(
+                                  "text-xs font-mono",
+                                  run.status === "passed" && "text-green-600",
+                                  (run.status === "failed" || run.status === "error") && "text-red-500",
+                                  run.status === "running" && "text-blue-500",
+                                  run.status === "queued" && "text-muted-foreground/40",
+                                )}>
+                                  {run.status}
+                                </span>
+                                <span className="font-mono text-xs text-muted-foreground/40 ml-auto shrink-0">
+                                  {formatRunDuration(run.duration_ms)}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-1 pl-5">
+                              {task?.prompt ?? run.run_id}
+                            </p>
+                          </Link>
+                          <RunLineage run={run} peers={agentRuns} />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -215,11 +262,10 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
   const children = childRunsOf(peers, run.run_id);
   if (!parentTo && children.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1.5 pl-6 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1.5 pl-5 text-xs text-muted-foreground">
       {parentTo && (
         <Link
           to={parentTo}
-          onClick={(event) => event.stopPropagation()}
           className="hover:text-foreground underline-offset-2 hover:underline font-mono"
         >
           parent {run.parent_run_id}
@@ -228,7 +274,6 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
       {parentTraceTo && (
         <Link
           to={parentTraceTo}
-          onClick={(event) => event.stopPropagation()}
           className="hover:text-foreground underline-offset-2 hover:underline"
         >
           parent trace
@@ -240,7 +285,7 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
         return (
           <span key={child.run_id} className="font-mono">
             {href ? (
-              <Link to={href} onClick={(event) => event.stopPropagation()} className="hover:text-foreground underline-offset-2 hover:underline">
+              <Link to={href} className="hover:text-foreground underline-offset-2 hover:underline">
                 child {child.run_id.slice(0, 12)}…
               </Link>
             ) : (
@@ -249,7 +294,7 @@ function RunLineage({ run, peers }: { run: Run; peers: Run[] }) {
             {tHref && (
               <>
                 {" "}
-                <Link to={tHref} onClick={(event) => event.stopPropagation()} className="hover:text-foreground underline-offset-2 hover:underline">
+                <Link to={tHref} className="hover:text-foreground underline-offset-2 hover:underline">
                   trace
                 </Link>
               </>

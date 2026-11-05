@@ -182,6 +182,8 @@ export interface RunParams {
    * `null` is a clean treated control.
    */
   injection?: InjectionPlan | "preset" | null;
+  /** Replaces task.prompt for this run only when non-empty. */
+  prompt_override?: string;
 }
 
 /** One stored trace as `GET /runs` embeds it. Not a full Trace document. */
@@ -254,6 +256,7 @@ export async function createRun(params: RunParams): Promise<HarnessTaskResult[]>
   if (params.fix_kinds?.length) body.fix_kinds = params.fix_kinds;
   if (params.parent_run_id !== undefined) body.parent_run_id = params.parent_run_id;
   if (params.injection !== undefined) body.injection = params.injection;
+  if (params.prompt_override !== undefined) body.prompt_override = params.prompt_override;
   const data = await backendFetch<unknown>("/runs", {
     method: "POST",
     body: JSON.stringify(body),

@@ -193,6 +193,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         parentRunId: replay.value?.parentRunId ?? parsed.value.parentRunId,
         grantCancel: parsed.value.grantCancel,
         timeoutMs: parsed.value.timeoutMs,
+        promptOverride: parsed.value.promptOverride,
         afterWorldSetup: options.afterWorldSetup,
       });
       return { results: await withRunLinks(store, results) };
@@ -225,6 +226,8 @@ interface RunRequest {
   parentRunId?: string | null;
   grantCancel?: boolean;
   timeoutMs?: number;
+  /** Optional per-run prompt replacement from POST /runs body.prompt_override. */
+  promptOverride?: string;
 }
 
 function parseJuryRequest(body: unknown):
@@ -350,6 +353,14 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
     timeoutMs = body.timeout_ms;
   }
 
+  let promptOverride: string | undefined;
+  if (body.prompt_override !== undefined) {
+    if (typeof body.prompt_override !== "string" || body.prompt_override.trim() === "") {
+      return { ok: false, message: "prompt_override must be a non-empty string." };
+    }
+    promptOverride = body.prompt_override;
+  }
+
   return {
     ok: true,
     value: {
@@ -362,6 +373,7 @@ function parseRunRequest(body: unknown): { ok: true; value: RunRequest } | { ok:
       parentRunId,
       grantCancel: typeof body.grant_cancel === "boolean" ? body.grant_cancel : undefined,
       timeoutMs,
+      promptOverride,
     },
   };
 }

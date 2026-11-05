@@ -35,6 +35,12 @@ export interface RunTasksOptions {
    */
   attachedNote?: string;
   /**
+   * When set (non-empty), replaces `task.prompt` before any attached note.
+   * Launch UI uses this so the operator can edit the prompt for one run.
+   * Wired from POST /runs `prompt_override` in app.ts.
+   */
+  promptOverride?: string;
+  /**
    * Set only when the security attacker (or another attacker) is driving this run.
    * Requires an injection plan. Baseline stays unset.
    */
@@ -182,7 +188,11 @@ async function runOne(
   try {
     const prepared = await prepareWorld(task, options.mock, sessionId);
     await options.afterWorldSetup?.();
-    const prompt = withAttachedNote(task.prompt, options.attachedNote);
+    const basePrompt =
+      options.promptOverride !== undefined && options.promptOverride.length > 0
+        ? options.promptOverride
+        : task.prompt;
+    const prompt = withAttachedNote(basePrompt, options.attachedNote);
     const remote = await loadActions(
       options,
       driver,

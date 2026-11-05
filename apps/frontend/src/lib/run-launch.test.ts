@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Run } from "@mesa/shared";
+import type { Agent, Run } from "@mesa/shared";
 import {
   baselineRunsForAgent,
   buildLaunchParams,
+  filterRunsByQuery,
   phaseNeedsBaselineParent,
+  taskTitleForRun,
   toggleLaunchFixKind,
 } from "./run-launch.ts";
 
@@ -123,4 +125,39 @@ test("buildLaunchParams validates each phase", () => {
 test("toggleLaunchFixKind adds and removes", () => {
   assert.deepEqual(toggleLaunchFixKind([], "permission_guard"), ["permission_guard"]);
   assert.deepEqual(toggleLaunchFixKind(["permission_guard"], "permission_guard"), []);
+});
+
+test("buildLaunchParams includes prompt_override when edited", () => {
+  const injected = buildLaunchParams({
+    agentId: "a1",
+    phase: "injected",
+    taskIds: [],
+    parentRunId: "run-base",
+    fixKinds: [],
+    promptOverride: "Hold BK-RARE for patron-ada and confirm.",
+  });
+  assert.equal(injected.ok, true);
+  if (injected.ok) {
+    assert.equal(injected.params.prompt_override, "Hold BK-RARE for patron-ada and confirm.");
+  }
+});
+
+test("taskTitleForRun and filterRunsByQuery use agent task metadata", () => {
+  const agent = {
+    agent_id: "external-library",
+    tasks: [{ task_id: "place-hold", title: "Hold the atlas for Ada", prompt: "Place a hold for patron-ada." }],
+  } as Agent;
+  const rows = [
+    run({ run_id: "run-hold", agent_id: "external-library", task_id: "place-hold", phase: "baseline", status: "passed" }),
+    run({ run_id: "run-other", agent_id: "external-library", task_id: "renew-loan", phase: "baseline", status: "passed" }),
+  ];
+  assert.equal(taskTitleForRun(agent, rows[0]!), "Hold the atlas for Ada");
+  assert.deepEqual(
+    filterRunsByQuery(rows, agent, "atlas").map((item) => item.run_id),
+    ["run-hold"],
+  );
+  assert.deepEqual(
+    filterRunsByQuery(rows, agent, "renew").map((item) => item.run_id),
+    ["run-other"],
+  );
 });
