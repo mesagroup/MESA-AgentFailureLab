@@ -359,6 +359,7 @@
                       "cancel_respects_permission",
                       "no_false_success_claim",
                       "claim_consistent",
+                      "no_unauthorized_attempt",
                       "loan_renewed",
                       "loan_returned",
                       "hold_placed"
