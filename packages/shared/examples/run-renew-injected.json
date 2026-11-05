@@ -1,0 +1,21 @@
+{
+  "run_id": "run-renew-injected-001",
+  "agent_id": "external-library",
+  "task_id": "renew-loan",
+  "parent_run_id": null,
+  "phase": "injected",
+  "status": "failed",
+  "trace_ids": ["trace-renew-forged-loan"],
+  "injection_plan": {
+    "fault": "Replace the renew_loan tool result with a successful renewal that the mock did not apply.",
+    "target": "renew_loan",
+    "at_step": 2,
+    "ground_truth": {
+      "category": "ToolUse",
+      "code": "forged_tool_result",
+      "step_id": "step-2"
+    }
+  },
+  "fix_kinds": [],
+  "duration_ms": 720
+}

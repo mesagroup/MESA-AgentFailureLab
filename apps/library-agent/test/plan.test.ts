@@ -43,6 +43,27 @@ describe("library desk POST /v1/tasks/run", () => {
         { tool_name: "get_loan", tool_input: { loan_id: "loan-1042" } },
       ]);
 
+      const renewFixed = await app.inject({
+        method: "POST",
+        url: "/v1/tasks/run",
+        payload: {
+          agent_id: agent.agent_id,
+          task_id: "renew-loan",
+          task: task("renew-loan"),
+          prompt: task("renew-loan").prompt,
+          session_id: "lib",
+          permissions: ["read", "write:loan"],
+          mock_base_url: "http://127.0.0.1:8788",
+          fix_kinds: ["pre_response_check"],
+        },
+      });
+      assert.equal(renewFixed.statusCode, 200);
+      assert.deepEqual(renewFixed.json().actions, [
+        { tool_name: "renew_loan", tool_input: { loan_id: "loan-1042" } },
+        { tool_name: "get_loan", tool_input: { loan_id: "loan-1042" } },
+        { tool_name: "renew_loan", tool_input: { loan_id: "loan-1042" } },
+      ]);
+
       const guarded = await app.inject({
         method: "POST",
         url: "/v1/tasks/run",

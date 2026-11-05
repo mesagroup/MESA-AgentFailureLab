@@ -49,6 +49,17 @@ const STORYBOARD_TRACE_EXAMPLE = "injected-failed-trace.json";
 export const DEMO_STORYBOARD_TRACE_ID = "trace-t3-forged-checkout";
 export const DEMO_STORYBOARD_RUN_ID = "run-t3-injected-001";
 
+/**
+ * Library punch for live demo #189. Mirror of the T3 forged-checkout pair:
+ * forged renew_loan (renewals: 1) while mock stays at 0 + canned diagnosis.
+ * Callers: loadDemoSeedDocuments, demo-seed.test.ts.
+ */
+const LIBRARY_STORYBOARD_RUN_EXAMPLE = "run-renew-injected.json";
+const LIBRARY_STORYBOARD_TRACE_EXAMPLE = "injected-renew-failed-trace.json";
+
+export const DEMO_LIBRARY_STORYBOARD_TRACE_ID = "trace-renew-forged-loan";
+export const DEMO_LIBRARY_STORYBOARD_RUN_ID = "run-renew-injected-001";
+
 function examplesDir(): string {
   return dirname(fileURLToPath(import.meta.resolve("@mesa/shared/examples/agent-reference-shop.json")));
 }
@@ -75,7 +86,11 @@ function pairFromRemap(result: OtelImportResult, relative: string, agentId: stri
   return { run, trace: { ...trace, source: "demo_seed" } };
 }
 
-function pairFromLabExample(runRelative: string, traceRelative: string): DemoSeedPair {
+function pairFromLabExample(
+  runRelative: string,
+  traceRelative: string,
+  expected: { agentId: string; runId: string; traceId: string },
+): DemoSeedPair {
   const runParsed = validateRun(readExample(runRelative));
   const traceParsed = validateTrace(readExample(traceRelative));
   if (!runParsed.ok) {
@@ -86,14 +101,14 @@ function pairFromLabExample(runRelative: string, traceRelative: string): DemoSee
   }
   const run = runParsed.value;
   const trace = traceParsed.value;
-  if (trace.agent_id !== REFERENCE_AGENT_ID) {
-    throw new Error(`Demo seed trace ${trace.trace_id} has agent_id ${trace.agent_id}, expected ${REFERENCE_AGENT_ID}.`);
+  if (trace.agent_id !== expected.agentId) {
+    throw new Error(`Demo seed trace ${trace.trace_id} has agent_id ${trace.agent_id}, expected ${expected.agentId}.`);
   }
   if (run.run_id !== trace.run_id || run.trace_ids[0] !== trace.trace_id) {
     throw new Error(`Demo seed run ${run.run_id} is not linked to trace ${trace.trace_id}.`);
   }
-  if (run.run_id !== DEMO_STORYBOARD_RUN_ID || trace.trace_id !== DEMO_STORYBOARD_TRACE_ID) {
-    throw new Error(`Demo storyboard ids drifted: expected ${DEMO_STORYBOARD_RUN_ID} / ${DEMO_STORYBOARD_TRACE_ID}.`);
+  if (run.run_id !== expected.runId || trace.trace_id !== expected.traceId) {
+    throw new Error(`Demo storyboard ids drifted: expected ${expected.runId} / ${expected.traceId}.`);
   }
   if (trace.diagnosis === null || trace.diagnosis.proposed_fixes.length === 0) {
     throw new Error(`Demo storyboard trace ${trace.trace_id} must already include diagnosis.proposed_fixes.`);
@@ -101,7 +116,7 @@ function pairFromLabExample(runRelative: string, traceRelative: string): DemoSee
   return { run, trace: { ...trace, source: "demo_seed" } };
 }
 
-/** Validated demo Run/Trace pairs: OTel remaps, then the diagnosed T3 storyboard pair. */
+/** Validated demo Run/Trace pairs: OTel remaps, then diagnosed shop + library storyboard pairs. */
 export function loadDemoSeedDocuments(): DemoSeedPair[] {
   const shop = SHOP_SCHEMA_A_EXPORTS.map((relative) =>
     pairFromRemap(remapShopSchemaA(readExample(relative), { agentId: REFERENCE_AGENT_ID }), relative, REFERENCE_AGENT_ID),
@@ -113,7 +128,20 @@ export function loadDemoSeedDocuments(): DemoSeedPair[] {
       LIBRARY_AGENT_ID,
     ),
   );
-  return [...shop, ...library, pairFromLabExample(STORYBOARD_RUN_EXAMPLE, STORYBOARD_TRACE_EXAMPLE)];
+  return [
+    ...shop,
+    ...library,
+    pairFromLabExample(STORYBOARD_RUN_EXAMPLE, STORYBOARD_TRACE_EXAMPLE, {
+      agentId: REFERENCE_AGENT_ID,
+      runId: DEMO_STORYBOARD_RUN_ID,
+      traceId: DEMO_STORYBOARD_TRACE_ID,
+    }),
+    pairFromLabExample(LIBRARY_STORYBOARD_RUN_EXAMPLE, LIBRARY_STORYBOARD_TRACE_EXAMPLE, {
+      agentId: LIBRARY_AGENT_ID,
+      runId: DEMO_LIBRARY_STORYBOARD_RUN_ID,
+      traceId: DEMO_LIBRARY_STORYBOARD_TRACE_ID,
+    }),
+  ];
 }
 
 export const DEMO_SEED_PAIRS: readonly DemoSeedPair[] = loadDemoSeedDocuments();

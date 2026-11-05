@@ -7,6 +7,8 @@ import {
   DEMO_SEED_PAIRS,
   DEMO_SEED_RUN_IDS,
   DEMO_SEED_TRACE_IDS,
+  DEMO_LIBRARY_STORYBOARD_RUN_ID,
+  DEMO_LIBRARY_STORYBOARD_TRACE_ID,
   DEMO_STORYBOARD_RUN_ID,
   DEMO_STORYBOARD_TRACE_ID,
   seedDemoRunsAndTraces,
@@ -23,14 +25,17 @@ describe("demo seed runs and traces", () => {
       [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
     );
     assert.equal(agents.length, 2);
-    assert.equal(DEMO_SEED_PAIRS.length, 7);
+    assert.equal(DEMO_SEED_PAIRS.length, 8);
     const shop = DEMO_SEED_PAIRS.filter((pair) => pair.trace.agent_id === REFERENCE_AGENT_ID);
     const library = DEMO_SEED_PAIRS.filter((pair) => pair.trace.agent_id === LIBRARY_AGENT_ID);
     assert.equal(shop.length, 4);
-    assert.equal(library.length, 3);
+    assert.equal(library.length, 4);
     const storyboard = DEMO_SEED_PAIRS.find((pair) => pair.trace.trace_id === DEMO_STORYBOARD_TRACE_ID);
     assert.ok(storyboard);
     assert.equal(storyboard.run.run_id, DEMO_STORYBOARD_RUN_ID);
+    const libraryStoryboard = DEMO_SEED_PAIRS.find((pair) => pair.trace.trace_id === DEMO_LIBRARY_STORYBOARD_TRACE_ID);
+    assert.ok(libraryStoryboard);
+    assert.equal(libraryStoryboard.run.run_id, DEMO_LIBRARY_STORYBOARD_RUN_ID);
     for (const pair of DEMO_SEED_PAIRS) {
       assert.equal(validateTrace(pair.trace).ok, true, pair.trace.trace_id);
       assert.equal(validateRun(pair.run).ok, true, pair.run.run_id);
@@ -59,6 +64,22 @@ describe("demo seed runs and traces", () => {
           pair.trace.outcome.verifier.checks.some((check) => check.name === "order_created" && !check.passed),
           true,
         );
+      } else if (pair.trace.trace_id === DEMO_LIBRARY_STORYBOARD_TRACE_ID) {
+        assert.equal(pair.run.phase, "injected");
+        assert.equal(pair.run.status, "failed");
+        assert.equal(pair.run.injection_plan?.ground_truth.code, "forged_tool_result");
+        assert.equal(pair.run.injection_plan?.target, "renew_loan");
+        assert.deepEqual(pair.run.fix_kinds, []);
+        assert.equal(pair.trace.status, "failed");
+        assert.equal(pair.trace.fault.injected, true);
+        assert.equal(pair.trace.fault.labels[0]?.code, "forged_tool_result");
+        assert.ok(pair.trace.diagnosis);
+        assert.ok(pair.trace.diagnosis.proposed_fixes.includes("pre_response_check"));
+        assert.equal(pair.trace.outcome.verifier.passed, false);
+        assert.equal(
+          pair.trace.outcome.verifier.checks.some((check) => check.name === "loan_renewed" && !check.passed),
+          true,
+        );
       } else {
         assert.equal(pair.run.phase, "baseline");
         assert.equal(pair.run.injection_plan, null);
@@ -80,7 +101,7 @@ describe("demo seed runs and traces", () => {
     );
     assert.deepEqual(
       library.map((pair) => pair.trace.task_id),
-      ["renew-loan", "return-loan", "place-hold"],
+      ["renew-loan", "return-loan", "place-hold", "renew-loan"],
     );
     for (const pair of library) {
       const blob = JSON.stringify(pair.trace.steps);
@@ -155,11 +176,14 @@ describe("demo seed runs and traces", () => {
         [...DEMO_SEED_TRACE_IDS],
       );
       assert.equal(traces.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length, 4);
-      assert.equal(traces.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length, 3);
+      assert.equal(traces.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length, 4);
       const storyboard = traces.find((trace) => trace.trace_id === DEMO_STORYBOARD_TRACE_ID);
       assert.ok(storyboard);
       assert.ok(storyboard.diagnosis);
       assert.ok(storyboard.diagnosis.proposed_fixes.includes("pre_response_check"));
+      const libraryStoryboard = traces.find((trace) => trace.trace_id === DEMO_LIBRARY_STORYBOARD_TRACE_ID);
+      assert.ok(libraryStoryboard);
+      assert.ok(libraryStoryboard.diagnosis?.proposed_fixes.includes("pre_response_check"));
       const cached = await app.inject({ method: "POST", url: `/traces/${DEMO_STORYBOARD_TRACE_ID}/diagnose` });
       assert.equal(cached.statusCode, 200);
       assert.equal(cached.headers["x-diagnosis-cached"], "true");

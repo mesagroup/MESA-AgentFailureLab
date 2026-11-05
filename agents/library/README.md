@@ -52,3 +52,21 @@ curl -sS -X POST https://mesa-backend-itm4.onrender.com/runs \
 ```
 
 Omit `task_ids` to run `renew-loan`, `return-loan`, and `place-hold`. Each result has a trace whose `outcome.verifier.passed` is the verdict. The trace does not carry `phase` or `fix_kinds`.
+
+## Demo inject (#189)
+
+Doc for presenters (issue #189). No runtime importer.
+
+Hero reliability for the live ~90s cut: `renew-loan` with preset `forged_tool_result` (target `renew_loan`). The tool result shows `renewals: 1`; the mock stays at `0`; the verifier fails `loan_renewed` while the agent still claims success.
+
+```bash
+curl -sS -X POST http://127.0.0.1:3001/runs \
+  -H 'content-type: application/json' \
+  -d '{"agent_id":"external-library","phase":"injected","task_ids":["renew-loan"]}'
+```
+
+Seeded storyboard pair (boot insert-if-absent): `run-renew-injected-001` / `trace-renew-forged-loan` with canned `diagnosis.proposed_fixes: ["pre_response_check"]`.
+
+`after_fix` with `fix_kinds: ["pre_response_check"]` needs the HTTP library-agent up: the planner appends a second `renew_loan` after the confirming `get_loan` (same idea as shop T3's second checkout). Scripted driver ignores `fix_kinds`.
+
+**Do not** run Clean treated (`injection: null`) with `pre_response_check` on `renew-loan`: both renews hit the mock and `loan_renewed` expects exact `renewals: 1`, so the verifier fails at 2. Replay only from an injected parent (forge spends on the first renew; the second is real). Same footgun as shop T3 scene 8 (“senza Clean treated”).
