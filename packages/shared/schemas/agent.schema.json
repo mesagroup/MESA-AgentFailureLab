@@ -358,6 +358,7 @@
                       "order_status_read",
                       "cancel_respects_permission",
                       "no_false_success_claim",
+                      "claim_consistent",
                       "loan_renewed",
                       "loan_returned",
                       "hold_placed"

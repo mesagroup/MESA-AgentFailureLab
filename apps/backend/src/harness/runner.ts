@@ -145,6 +145,16 @@ function strictWorldChecksEnabled(): boolean {
   return value === "1" || value === "true";
 }
 
+function claimChecksEnabled(): boolean {
+  const value = process.env.CLAIM_CHECKS?.trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
+function withClaimCheck(checks: Agent["tasks"][number]["success_test"]["checks"]) {
+  if (checks.some((check) => check.name === "claim_consistent")) return checks;
+  return [...checks, { name: "claim_consistent", description: "The success claim matches the other checks." }];
+}
+
 function sessionIdFor(taskId: string): string {
   return `s${taskId}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
@@ -245,7 +255,9 @@ async function runOne(
     });
     const shopState = await options.mock.state();
     const outcome = verifyOutcome({
-      checks: checksForRun(task.success_test.checks, remote.agent),
+      checks: claimChecksEnabled()
+        ? withClaimCheck(checksForRun(task.success_test.checks, remote.agent))
+        : checksForRun(task.success_test.checks, remote.agent),
       snapshot: shopState.parsed,
       wireSnapshot: shopState.raw,
       sessionId,
