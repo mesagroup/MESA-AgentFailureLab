@@ -3,7 +3,7 @@
   "name": "Library desk",
   "description": "Loans books for a reading room. Renews a loan, accepts a return, and places a hold when the only copy is already out.",
   "created_at": "2026-11-04T09:30:00.000Z",
-  "updated_at": "2026-11-04T09:30:00.000Z",
+  "updated_at": "2026-11-04T23:00:00.000Z",
   "instance": {
     "kind": "external",
     "base_url": "http://127.0.0.1:3003",
@@ -19,7 +19,7 @@
   },
   "traces": {
     "store": "path",
-    "path_or_url": "packages/shared/examples"
+    "path_or_url": "packages/shared/examples/demo"
   },
   "docs": {
     "prompt_summary": "You work the library desk. Renew a loan, return a loan, or place a hold. Use only the library tools. Do not invent loan ids, book ids, or patrons.",
@@ -46,7 +46,7 @@
       "Renew only a loan that is still out. Return it when the task says the copy is back.",
       "Place a hold only when the book has no copy available. Do not renew or return that copy yourself."
     ],
-    "config_notes": "instance.base_url and test_instance.base_url are the library desk origin. The harness POSTs /v1/tasks/run on that origin. world.base_url is the library mock, not the shop. This file shows the laptop defaults; the backend replaces them from LIBRARY_AGENT_URL and MOCK_LIBRARY_URL when it seeds the row. The harness seeds setup.library.loans, then executes the returned actions and writes outcome.verifier. This agent does not write outcome.verifier."
+    "config_notes": "instance.base_url and test_instance.base_url are the library desk origin. The harness POSTs /v1/tasks/run on that origin. world.base_url is the library mock, not the shop. This file shows the laptop defaults; the backend replaces them from LIBRARY_AGENT_URL and MOCK_LIBRARY_URL when it seeds the row. The harness seeds setup.library.loans, then executes the returned actions and writes outcome.verifier. This agent does not write outcome.verifier. setup.cart and setup.orders are empty arrays required by the Agent schema; they are not shop leftover state. Demo traces for renew-loan, return-loan, and place-hold live in packages/shared/examples/demo. otel is omitted: dual prod/test sources are not in this contract, and no-auth is the default when the object is absent."
   },
   "tasks": [
     {

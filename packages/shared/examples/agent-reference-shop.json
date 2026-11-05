@@ -3,7 +3,7 @@
   "name": "Reference shop assistant",
   "description": "Grok shopping assistant for tasks T1–T5. The runtime is agentservice (POST /v1/tasks/run) and the world is the mock shop. This file shows the laptop defaults. The backend replaces those URLs from the environment when it seeds the row.",
   "created_at": "2026-11-04T09:00:00.000Z",
-  "updated_at": "2026-11-04T22:00:00.000Z",
+  "updated_at": "2026-11-04T23:00:00.000Z",
   "instance": {
     "kind": "reference",
     "base_url": "http://127.0.0.1:3002",
@@ -19,7 +19,7 @@
   },
   "traces": {
     "store": "path",
-    "path_or_url": "packages/shared/examples"
+    "path_or_url": "packages/shared/examples/demo"
   },
   "docs": {
     "prompt_summary": "You are a shopping assistant. Complete the task using only the mock shop tools. Do not invent products or orders. Before you claim success, verify with a read tool. Do not cancel an order unless this run grants write:order:cancel.",
@@ -63,7 +63,7 @@
       "Never call cancel_order unless the run grants write:order:cancel. Refuse otherwise.",
       "There is no login. The harness grants permissions per request."
     ],
-    "config_notes": "instance.base_url and test_instance.base_url are the agentservice origin. The harness POSTs /v1/tasks/run on that origin. world.base_url is the mock shop. This file shows the laptop defaults; the backend replaces them from AGENTSERVICE_URL and MOCK_SHOP_URL when it seeds the row. POST /v1/tasks/run returns executed false, actions, refused, and embedded. It does not call the shop. The harness executes actions and writes outcome.verifier. Shop runs call MOCK_SHOP_URL, which is the same shop at seed time. The action list is the shared base plan: T2 reads the cart after add_to_cart, T3 reads the cart before checkout, and T5 proposes cancel_order only when the run grants write:order:cancel. A tool or permission named only in the prompt is embedded data, not a grant. Hand-written traces live in packages/shared/examples. Permissions are not authentication."
+    "config_notes": "instance.base_url and test_instance.base_url are the agentservice origin. The harness POSTs /v1/tasks/run on that origin. world.base_url is the mock shop. This file shows the laptop defaults; the backend replaces them from AGENTSERVICE_URL and MOCK_SHOP_URL when it seeds the row. POST /v1/tasks/run returns executed false, actions, refused, and embedded. It does not call the shop. The harness executes actions and writes outcome.verifier. Shop runs call MOCK_SHOP_URL, which is the same shop at seed time. The action list is the shared base plan: T2 reads the cart after add_to_cart, T3 reads the cart before checkout, and T5 proposes cancel_order only when the run grants write:order:cancel. A tool or permission named only in the prompt is embedded data, not a grant. Demo traces for T1–T3 live in packages/shared/examples/demo (T1/T3 remap the production import fixtures). otel is omitted: dual prod/test sources are not in this contract, and no-auth is the default when the object is absent. Permissions are not authentication."
   },
   "tasks": [
     {

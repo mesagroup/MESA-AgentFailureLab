@@ -36,7 +36,7 @@ describe("run store selection", () => {
   });
 
   it("opens an empty in-memory store and drops rows on a new store", async () => {
-    const first = await openRunStore({});
+    const first = await openRunStore({}, { seed: false });
     try {
       assert.equal(first.kind, "memory");
       const run = baselineRun();
@@ -48,7 +48,7 @@ describe("run store selection", () => {
       await first.close();
     }
 
-    const second = await openRunStore({ DATABASE_URL: "   " });
+    const second = await openRunStore({ DATABASE_URL: "   " }, { seed: false });
     try {
       assert.equal(second.kind, "memory");
       assert.equal(await second.getRun(baselineRun().run_id), undefined);

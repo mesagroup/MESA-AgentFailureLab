@@ -1,3 +1,4 @@
+import { seedDemoRunsAndTraces } from "./demo-seed.js";
 import { MemoryStore, type RunStore } from "./memory.js";
 import { PostgresRunStore } from "./postgres.js";
 
@@ -7,16 +8,34 @@ export function runStoreKind(env: NodeJS.ProcessEnv): RunStore["kind"] {
   return url === "" ? "memory" : "postgres";
 }
 
+export interface OpenRunStoreOptions {
+  /**
+   * When false, skip demo run/trace insert. Export uses false so a read does not
+   * write rows. `new MemoryStore()` is still empty until this function seeds it.
+   * Default true.
+   */
+  seed?: boolean;
+}
+
 /**
  * Open the run and trace store. Postgres applies SQL migrations first.
- * The memory store starts empty. Runs and traces are not seeded.
+ * Then insert each demo run and trace when that id is absent. Existing rows,
+ * including user data, are never overwritten or deleted.
  */
-export async function openRunStore(env: NodeJS.ProcessEnv = process.env): Promise<RunStore> {
+export async function openRunStore(
+  env: NodeJS.ProcessEnv = process.env,
+  options: OpenRunStoreOptions = {},
+): Promise<RunStore> {
   const url = env.DATABASE_URL?.trim() ?? "";
-  if (url === "") return new MemoryStore();
+  if (url === "") {
+    const store = new MemoryStore();
+    if (options.seed !== false) await seedDemoRunsAndTraces(store);
+    return store;
+  }
   const store = new PostgresRunStore(url);
   try {
     await store.migrate();
+    if (options.seed !== false) await seedDemoRunsAndTraces(store);
   } catch (error) {
     await store.close();
     const message = error instanceof Error ? error.message : String(error);

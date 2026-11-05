@@ -306,7 +306,7 @@ No auth. The lab dashboard reads two lists. `GET /agents` is the agent registry.
 | Kind | `agents[].instance.kind` (`reference` or `external`) |
 | Task count | `agents[].tasks.length` |
 
-The demo seeds are `reference-shop` (`instance.kind` `reference`, five tasks) and `external-library` (`instance.kind` `external`, three library tasks). There is no separate `task_count` field.
+The demo is **only** those two agents: `reference-shop` (`instance.kind` `reference`, five tasks) and `external-library` (`instance.kind` `external`, three library tasks). There is no third stub. There is no separate `task_count` field. Boot also inserts six demo runs and traces when those ids are missing (three shop, three library). See [seed-endpoints.md](../../docs/seed-endpoints.md).
 
 ### `GET /runs`
 

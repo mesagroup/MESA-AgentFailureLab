@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { openAgentStore } from "../agents/open.js";
 import { openRunStore } from "./open.js";
 import { isRenderPostgresUrl } from "../agents/postgres.js";
+import { seedDemoRunsAndTraces } from "./demo-seed.js";
 import {
   databaseTargetLabel,
   exportFromHttp,
@@ -32,7 +33,8 @@ Do not pass both. Import and reset require DATABASE_URL. They do not print the U
 
 import validates every document, upserts, and keeps the created_at already stored for that id.
 A missing id is inserted with the created_at from the file. Rows absent from the file stay.
-reset deletes runs, traces, and agents other than reference-shop and external-library.
+After import, missing demo agents, demo runs, and demo traces are inserted; existing ids are kept.
+reset deletes runs, traces, and agents other than reference-shop and external-library, then inserts the demo runs and traces when those ids are absent.
 A valid seed newer than its fixture is kept, including one edited with PUT. An invalid or older seed is rewritten. A row at the fixture timestamp is also rewritten when its runtime or world URL differs from this process.
 There is no HTTP reset route.`;
 
@@ -135,7 +137,9 @@ function formatReset(counts: ResetCounts, target: string): string {
   const seed = Object.entries(counts.seed)
     .map(([agentId, result]) => formatSeedLine(agentId, result))
     .join("\n");
-  return `Deleted ${counts.agents_deleted} agents, ${counts.runs_deleted} runs, and ${counts.traces_deleted} traces on ${target}.\n${seed}`;
+  const demoRuns = Object.values(counts.demo.runs).filter((result) => result === "inserted").length;
+  const demoTraces = Object.values(counts.demo.traces).filter((result) => result === "inserted").length;
+  return `Deleted ${counts.agents_deleted} agents, ${counts.runs_deleted} runs, and ${counts.traces_deleted} traces on ${target}.\n${seed}\nInserted ${demoRuns} demo runs and ${demoTraces} demo traces (existing ids kept).`;
 }
 
 function formatSeedLine(agentId: string, result: ResetCounts["seed"][string]): string {
@@ -157,7 +161,7 @@ async function withStores<T>(
   }) => Promise<T>,
 ): Promise<T> {
   const agents = await openAgentStore(env, { seed });
-  const runs = await openRunStore(env).catch(async (error: unknown) => {
+  const runs = await openRunStore(env, { seed }).catch(async (error: unknown) => {
     await agents.close();
     throw error;
   });
@@ -259,10 +263,11 @@ async function runImport(
   const counts = await withStores(env, false, async ({ agents, runs }) => {
     const imported = await importPersistence(agents, runs, data);
     await agents.seedIfMissing();
+    await seedDemoRunsAndTraces(runs);
     return imported;
   });
   io.stdout(
-    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop and external-library are present (inserted when missing; rewritten when the stored row is invalid, older than the fixture, or the same age with different runtime or world URLs).`,
+    `Imported ${path} into ${databaseTargetLabel(url)}\n${formatImport(counts)}\nreference-shop and external-library are present (inserted when missing; rewritten when the stored row is invalid, older than the fixture, or the same age with different runtime or world URLs). Demo runs and traces are inserted when those ids are missing; existing ids are kept.`,
   );
   return 0;
 }
@@ -274,7 +279,7 @@ async function runReset(args: ParsedArgs, env: NodeJS.ProcessEnv, io: CliIo): Pr
   const url = databaseUrl(env);
   if (url === "") {
     throw new Error(
-      "reset requires DATABASE_URL. To drop an in-memory backend, stop that process. The next start has the seed and no runs.",
+      "reset requires DATABASE_URL. To drop an in-memory backend, stop that process. The next start has the two demo agents and the demo traces.",
     );
   }
   const target = databaseTargetLabel(url);

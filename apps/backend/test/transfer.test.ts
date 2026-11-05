@@ -23,6 +23,7 @@ import {
   serializePersistenceExport,
   type PersistenceExport,
 } from "../src/persistence/transfer.js";
+import { loadDemoSeedDocuments } from "../src/persistence/demo-seed.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
 
 function readFixture(name: string): unknown {
@@ -212,8 +213,14 @@ describe("in-memory backup and reset", () => {
     );
     assert.equal((await agents.get(REFERENCE_AGENT_ID))?.name, "Edited seed");
     assert.equal((await agents.get(REFERENCE_AGENT_ID))?.created_at, edited.created_at);
-    assert.deepEqual(await runs.listRuns(), []);
-    assert.deepEqual(await runs.listTraces(), []);
+    const demo = loadDemoSeedDocuments();
+    assert.equal((await runs.listRuns()).length, demo.length);
+    assert.equal((await runs.listTraces()).length, demo.length);
+    assert.equal(counts.demo.traces["trace-demo-shop-t1"], "inserted");
+    assert.deepEqual(
+      (await runs.listTraces()).map((trace) => trace.agent_id).sort(),
+      demo.map((document) => document.trace.agent_id).sort(),
+    );
     await assert.rejects(agents.delete(REFERENCE_AGENT_ID), (error: unknown) => {
       assert.ok(error instanceof ProtectedAgentError);
       return true;
@@ -225,7 +232,7 @@ describe("in-memory backup and reset", () => {
         return true;
       },
     );
-    assert.equal((await runs.listRuns()).length, 0);
+    assert.equal((await runs.listRuns()).length, demo.length);
     await agents.close();
     await runs.close();
   });

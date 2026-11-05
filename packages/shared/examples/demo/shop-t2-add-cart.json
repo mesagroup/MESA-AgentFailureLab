@@ -1,0 +1,146 @@
+{
+  "trace_id": "trace-demo-shop-t2",
+  "agent_id": "reference-shop",
+  "run_id": "run-demo-shop-t2",
+  "task_id": "T2",
+  "started_at": "2026-11-05T08:10:00.000Z",
+  "ended_at": "2026-11-05T08:10:00.420Z",
+  "status": "completed",
+  "steps": [
+    {
+      "step_id": "step-0",
+      "index": 0,
+      "type": "message",
+      "timestamp": "2026-11-05T08:10:00.010Z",
+      "role": "user",
+      "content": "Add 2 units of SKU-MUG-01 (Ceramic Mug) to the cart.",
+      "latency_ms": 10,
+      "token_usage": { "input": 24, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-1",
+      "index": 1,
+      "type": "tool_call",
+      "timestamp": "2026-11-05T08:10:00.120Z",
+      "role": "assistant",
+      "tool_name": "add_to_cart",
+      "tool_input": { "sku": "SKU-MUG-01", "qty": 2 },
+      "latency_ms": 110,
+      "token_usage": { "input": 40, "output": 10 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-2",
+      "index": 2,
+      "type": "tool_result",
+      "timestamp": "2026-11-05T08:10:00.150Z",
+      "role": "tool",
+      "tool_name": "add_to_cart",
+      "tool_output": {
+        "session_id": "demo-shop-t2",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 24
+      },
+      "latency_ms": 30,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-3",
+      "index": 3,
+      "type": "tool_call",
+      "timestamp": "2026-11-05T08:10:00.250Z",
+      "role": "assistant",
+      "tool_name": "get_cart",
+      "tool_input": {},
+      "latency_ms": 100,
+      "token_usage": { "input": 48, "output": 6 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-4",
+      "index": 4,
+      "type": "tool_result",
+      "timestamp": "2026-11-05T08:10:00.270Z",
+      "role": "tool",
+      "tool_name": "get_cart",
+      "tool_output": {
+        "session_id": "demo-shop-t2",
+        "items": [
+          {
+            "product_id": "SKU-MUG-01",
+            "sku": "SKU-MUG-01",
+            "name": "Ceramic Mug",
+            "qty": 2,
+            "unit_price_usd": 12
+          }
+        ],
+        "total_usd": 24
+      },
+      "latency_ms": 20,
+      "token_usage": { "input": 0, "output": 0 },
+      "cost_usd": 0
+    },
+    {
+      "step_id": "step-5",
+      "index": 5,
+      "type": "message",
+      "timestamp": "2026-11-05T08:10:00.420Z",
+      "role": "assistant",
+      "content": "The cart holds 2 units of Ceramic Mug (SKU-MUG-01).",
+      "latency_ms": 150,
+      "token_usage": { "input": 52, "output": 16 },
+      "cost_usd": 0
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "verifier": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "cart_contains",
+          "passed": true,
+          "detail": "Cart contains SKU-MUG-01 qty 2."
+        }
+      ],
+      "mock_state_snapshot": {
+        "carts": [
+          {
+            "session_id": "demo-shop-t2",
+            "items": [
+              {
+                "product_id": "SKU-MUG-01",
+                "sku": "SKU-MUG-01",
+                "name": "Ceramic Mug",
+                "qty": 2,
+                "unit_price_usd": 12
+              }
+            ],
+            "total_usd": 24
+          }
+        ],
+        "orders": [],
+        "inventory": [],
+        "observations": []
+      }
+    },
+    "agent_claimed_success": true
+  },
+  "totals": { "latency_ms": 420, "tokens_in": 164, "tokens_out": 32, "cost_usd": 0 },
+  "fault": {
+    "injected": false,
+    "labels": [],
+    "attacker": { "used": false, "payload_id": null }
+  },
+  "diagnosis": null
+}

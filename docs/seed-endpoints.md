@@ -1,6 +1,8 @@
 # Seed endpoints
 
-`reference-shop` and `external-library` are real agents. On boot the backend copies each fixture and writes the runtime and mock origins for this process onto the row. The harness calls `POST {runtime}/v1/tasks/run`. It does not store that path on the agent. The origin is `instance.base_url` for `baseline` and `test_instance.base_url` for `injected` and `after_fix`. Both seeds set those two fields to the same origin.
+The demo is **exactly two agents**: `reference-shop` and `external-library`. Boot does not insert a third stub, identity, or dummy agent. `GET /agents` after a fresh boot returns only those two `agent_id` values.
+
+Both are real agents. On boot the backend copies each fixture and writes the runtime and mock origins for this process onto the row. The harness calls `POST {runtime}/v1/tasks/run`. It does not store that path on the agent. The origin is `instance.base_url` for `baseline` and `test_instance.base_url` for `injected` and `after_fix`. Both seeds set those two fields to the same origin.
 
 The fixture files keep the laptop defaults so the JSON is a valid agent without a process environment:
 
@@ -50,6 +52,16 @@ The fixtures' `updated_at` values are unchanged by a URL overlay. Boot still fol
 An edit in the Agents page is a PUT. That sets `updated_at` to the time of the save, which is newer than the fixture, so the next boot keeps it. Change the URL in that form when a host changes and the row was already edited. An unedited seed picks up a new environment on the next boot because its timestamp still matches the fixture and the origins differ.
 
 `DELETE` of either id stays 409. `db:reset` still keeps both rows and uses the same rewrite rules.
+
+## Demo traces
+
+`new MemoryStore()` stays empty so harness tests can start from a blank run store. `openRunStore()` (backend boot) then inserts six baseline demo documents when those ids are missing: three shop traces (T1, T2, T3) and three library traces (`renew-loan`, `return-loan`, `place-hold`). Each Trace has a matching Run (`phase: baseline`, `injection_plan: null`, `fix_kinds: []`). `GET /traces` lists them. `GET /traces/:id` and `GET /runs/:id` return the linked documents.
+
+Shop T1 and T3 reuse the production import fixtures with remapped ids. Shop T2 and the library traces are [`packages/shared/examples/demo`](../packages/shared/examples/demo). Every demo Trace is validated with `validateTrace`. `outcome.verifier` matches the snapshot the deterministic verifier would read from that fixture. `fault.injected` is false, `fault.labels` is empty, and `diagnosis` is null. The seed does not invent injector ground truth.
+
+Insert is idempotent: a second boot, or `seedDemoRunsAndTraces` again, keeps an existing `run_id` or `trace_id`, including a user-edited copy. Other runs and traces are never deleted. `db:reset` wipes runs and traces, then inserts the demo set again so `GET /traces` is not empty.
+
+`traces.path_or_url` on both agent fixtures points at `packages/shared/examples/demo`. Dual OTel prod/test sources are not in the Agent contract (`otel` is a single optional source). Both seeds omit `otel`; no-auth is the default when that object is absent. Do not add a remap schema field until the contract has one.
 
 ## Render
 
