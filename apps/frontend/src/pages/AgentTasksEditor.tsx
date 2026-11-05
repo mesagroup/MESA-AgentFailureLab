@@ -2,24 +2,31 @@ import { useState, type ReactNode } from "react";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   CHECK_REGISTRY,
-  CHECK_TYPES,
   TASK_EVALSET_VERSION,
-  TASK_PERMISSIONS,
   isCheckType,
   type Agent,
   type AgentTask,
   type AgentTaskCheck,
   type CheckParamField,
   type CheckType,
+  type LibrarySeedLoan,
 } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { generateEvalset } from "@/lib/api";
 import { applyProposedEvalset, buildEvalsetGenerateBody, evalsetAiErrorText } from "@/lib/evalset";
+import {
+  checksForDomain,
+  defaultCheckForDomain,
+  deriveTaskDomain,
+  domainSetupCopy,
+  permissionsForDomain,
+  type TaskDomain,
+} from "@/lib/task-domain";
 import { appendEvalCase, evalsetErrorMessage, evalsetIssues, removeEvalCase, writeEvalCase } from "@/lib/tasks";
 
-export function blankTasks(): AgentTask[] {
-  return [blankTask("search")];
+export function blankTasks(domain: TaskDomain = "shop"): AgentTask[] {
+  return [blankTask(domain === "library" ? "renew-loan" : "search", domain)];
 }
 
 export function validateTasks(tasks: AgentTask[]): string | undefined {
@@ -36,6 +43,14 @@ export function validateTasks(tasks: AgentTask[]): string | undefined {
       if (!line.sku.trim()) return `${label} has a cart line without a SKU.`;
       if (!Number.isInteger(line.qty) || line.qty < 1) {
         return `${label} cart quantity must be an integer of at least 1.`;
+      }
+    }
+    for (const loan of task.setup.library?.loans ?? []) {
+      if (!loan.loan_id.trim()) return `${label} has a library loan without a loan id.`;
+      if (!loan.book_id.trim()) return `${label} has a library loan without a book id.`;
+      if (!loan.patron_id.trim()) return `${label} has a library loan without a patron id.`;
+      if (!Number.isInteger(loan.renewals) || loan.renewals < 0) {
+        return `${label} library loan renewals must be an integer of at least 0.`;
       }
     }
     if (task.success_test.checks.length === 0) return `${label} needs a check.`;
@@ -66,6 +81,11 @@ export function AgentTasksEditor({
   const [aiBusy, setAiBusy] = useState<Record<number, boolean>>({});
   const [aiError, setAiError] = useState<Record<number, string>>({});
   const [aiToast, setAiToast] = useState<Record<number, string>>({});
+  const domain = deriveTaskDomain(tasks);
+  const copy = domainSetupCopy(domain);
+  // Full lists so create can leave shop blanks and still add library loans/checks.
+  const permissionOptions = permissionsForDomain("mixed");
+  const checkOptions = checksForDomain("mixed");
   function patch(index: number, recipe: (task: AgentTask) => void) {
     onChange(
       tasks.map((task, taskIndex) => {
@@ -108,16 +128,14 @@ export function AgentTasksEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">Tasks ({tasks.length})</p>
-          <p className="text-xs text-muted-foreground/80 mt-1">
-            Setup runs before the agent. Checks are scored from shop state. An evalset helps Grok judge the Trace or Run and does not replace the verifier.
-          </p>
+          <p className="text-xs text-muted-foreground/80 mt-1">{copy.intro}</p>
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="gap-1.5"
-          onClick={() => onChange([...tasks, blankTask(nextTaskId(tasks))])}
+          onClick={() => onChange([...tasks, blankTask(nextTaskId(tasks, domain), domain)])}
         >
           <Plus className="h-3.5 w-3.5" />
           Add task
@@ -171,13 +189,17 @@ export function AgentTasksEditor({
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Granted permissions</p>
             <div className="flex flex-wrap gap-2">
-              {TASK_PERMISSIONS.map((permission) => {
+              {permissionOptions.map((permission) => {
                 const active = task.setup.permissions.includes(permission);
                 return (
                   <button
                     key={permission}
                     type="button"
-                    onClick={() => patch(index, (next) => { next.setup.permissions = togglePermission(next.setup.permissions, permission); })}
+                    onClick={() =>
+                      patch(index, (next) => {
+                        next.setup.permissions = togglePermission(next.setup.permissions, permission, domain);
+                      })
+                    }
                     className={
                       active
                         ? "px-2.5 py-1 rounded-full text-xs font-mono border border-foreground bg-foreground text-background"
@@ -191,72 +213,166 @@ export function AgentTasksEditor({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Cart seeded before the run</p>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                onClick={() => patch(index, (next) => { next.setup.cart = [...next.setup.cart, { sku: "", qty: 1 }]; })}
-              >
-                Add line
-              </Button>
+          {copy.setupShop ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Cart seeded before the run</p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => patch(index, (next) => { next.setup.cart = [...next.setup.cart, { sku: "", qty: 1 }]; })}
+                >
+                  Add line
+                </Button>
+              </div>
+              {task.setup.cart.length === 0 ? (
+                <p className="text-xs text-muted-foreground/70">No cart lines.</p>
+              ) : (
+                task.setup.cart.map((line, lineIndex) => (
+                  <div key={lineIndex} className="flex items-center gap-2">
+                    <Input
+                      value={line.sku}
+                      placeholder="SKU"
+                      className="font-mono text-xs"
+                      onChange={(event) =>
+                        patch(index, (next) => {
+                          const cartLine = next.setup.cart[lineIndex];
+                          if (cartLine) cartLine.sku = event.target.value;
+                        })
+                      }
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      value={line.qty}
+                      className="w-20 font-mono text-xs"
+                      onChange={(event) =>
+                        patch(index, (next) => {
+                          const cartLine = next.setup.cart[lineIndex];
+                          const qty = Number(event.target.value);
+                          if (cartLine && Number.isInteger(qty)) cartLine.qty = qty;
+                        })
+                      }
+                    />
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      title="Remove line"
+                      onClick={() => patch(index, (next) => { next.setup.cart = next.setup.cart.filter((_, i) => i !== lineIndex); })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))
+              )}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={task.setup.orders.some((order) => order.from_cart)}
+                  onChange={(event) =>
+                    patch(index, (next) => {
+                      next.setup.orders = event.target.checked ? [{ from_cart: true }] : [];
+                    })
+                  }
+                />
+                Check out that cart into an order before the agent runs
+              </label>
             </div>
-            {task.setup.cart.length === 0 ? (
-              <p className="text-xs text-muted-foreground/70">No cart lines.</p>
-            ) : (
-              task.setup.cart.map((line, lineIndex) => (
-                <div key={lineIndex} className="flex items-center gap-2">
-                  <Input
-                    value={line.sku}
-                    placeholder="SKU"
-                    className="font-mono text-xs"
-                    onChange={(event) =>
-                      patch(index, (next) => {
-                        const cartLine = next.setup.cart[lineIndex];
-                        if (cartLine) cartLine.sku = event.target.value;
-                      })
-                    }
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    value={line.qty}
-                    className="w-20 font-mono text-xs"
-                    onChange={(event) =>
-                      patch(index, (next) => {
-                        const cartLine = next.setup.cart[lineIndex];
-                        const qty = Number(event.target.value);
-                        if (cartLine && Number.isInteger(qty)) cartLine.qty = qty;
-                      })
-                    }
-                  />
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    title="Remove line"
-                    onClick={() => patch(index, (next) => { next.setup.cart = next.setup.cart.filter((_, i) => i !== lineIndex); })}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))
-            )}
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={task.setup.orders.some((order) => order.from_cart)}
-                onChange={(event) =>
-                  patch(index, (next) => {
-                    next.setup.orders = event.target.checked ? [{ from_cart: true }] : [];
-                  })
-                }
-              />
-              Check out that cart into an order before the agent runs
-            </label>
-          </div>
+          ) : null}
+
+          {copy.setupLibrary ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Library loans seeded before the run</p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() =>
+                    patch(index, (next) => {
+                      const loans = next.setup.library?.loans ?? [];
+                      next.setup.library = { loans: [...loans, blankLoan()] };
+                    })
+                  }
+                >
+                  Add loan
+                </Button>
+              </div>
+              {(task.setup.library?.loans.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground/70">No library loans.</p>
+              ) : (
+                (task.setup.library?.loans ?? []).map((loan, loanIndex) => (
+                  <div key={loanIndex} className="grid gap-2 sm:grid-cols-2 rounded-lg bg-background/70 px-3 py-3">
+                    <Input
+                      value={loan.loan_id}
+                      placeholder="loan_id"
+                      className="font-mono text-xs"
+                      onChange={(event) =>
+                        patch(index, (next) => {
+                          const current = next.setup.library?.loans[loanIndex];
+                          if (current) current.loan_id = event.target.value;
+                        })
+                      }
+                    />
+                    <Input
+                      value={loan.book_id}
+                      placeholder="book_id"
+                      className="font-mono text-xs"
+                      onChange={(event) =>
+                        patch(index, (next) => {
+                          const current = next.setup.library?.loans[loanIndex];
+                          if (current) current.book_id = event.target.value;
+                        })
+                      }
+                    />
+                    <Input
+                      value={loan.patron_id}
+                      placeholder="patron_id"
+                      className="font-mono text-xs"
+                      onChange={(event) =>
+                        patch(index, (next) => {
+                          const current = next.setup.library?.loans[loanIndex];
+                          if (current) current.patron_id = event.target.value;
+                        })
+                      }
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={loan.renewals}
+                        className="w-24 font-mono text-xs"
+                        onChange={(event) =>
+                          patch(index, (next) => {
+                            const current = next.setup.library?.loans[loanIndex];
+                            const renewals = Number(event.target.value);
+                            if (current && Number.isInteger(renewals)) current.renewals = renewals;
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        title="Remove loan"
+                        onClick={() =>
+                          patch(index, (next) => {
+                            const loans = (next.setup.library?.loans ?? []).filter((_, i) => i !== loanIndex);
+                            if (loans.length === 0) delete next.setup.library;
+                            else next.setup.library = { loans };
+                          })
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -267,7 +383,10 @@ export function AgentTasksEditor({
                 variant="ghost"
                 onClick={() =>
                   patch(index, (next) => {
-                    next.success_test.checks = [...next.success_test.checks, checkOf("catalog_read")];
+                    next.success_test.checks = [
+                      ...next.success_test.checks,
+                      checkOf(defaultCheckForDomain(domain)),
+                    ];
                   })
                 }
               >
@@ -275,7 +394,11 @@ export function AgentTasksEditor({
               </Button>
             </div>
             {task.success_test.checks.map((check, checkIndex) => {
-              const checkName = isCheckType(check.name) ? check.name : "catalog_read";
+              const fallback = defaultCheckForDomain(domain);
+              const checkName = isCheckType(check.name) ? check.name : fallback;
+              const optionNames = checkOptions.includes(checkName)
+                ? checkOptions
+                : ([checkName, ...checkOptions] as CheckType[]);
               const spec = CHECK_REGISTRY[checkName];
               return (
                 <div key={checkIndex} className="rounded-lg bg-background/70 px-3 py-3 space-y-2">
@@ -291,7 +414,7 @@ export function AgentTasksEditor({
                       }}
                       className="flex-1 bg-transparent text-xs font-mono border-b border-border/60 py-1 outline-none"
                     >
-                      {CHECK_TYPES.map((name) => (
+                      {optionNames.map((name) => (
                         <option key={name} value={name}>
                           {name}
                         </option>
@@ -489,7 +612,24 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function blankTask(taskId: string): AgentTask {
+function blankTask(taskId: string, domain: TaskDomain = "shop"): AgentTask {
+  if (domain === "library") {
+    return {
+      task_id: taskId,
+      title: "Renew a loan",
+      prompt: "Renew the seeded loan for the patron.",
+      setup: {
+        cart: [],
+        orders: [],
+        permissions: ["read", "write:loan"],
+        library: { loans: [blankLoan()] },
+      },
+      success_test: {
+        type: "verifier_checks",
+        checks: [checkOf("loan_renewed")],
+      },
+    };
+  }
   return {
     task_id: taskId,
     title: "Search and open a product",
@@ -505,12 +645,25 @@ function blankTask(taskId: string): AgentTask {
   };
 }
 
+function blankLoan(): LibrarySeedLoan {
+  return { loan_id: "loan-1042", book_id: "BK-OWL", patron_id: "patron-ada", renewals: 0 };
+}
+
 function checkOf(name: CheckType): AgentTaskCheck {
   const spec = CHECK_REGISTRY[name];
   const params: Record<string, unknown> = {};
   for (const field of spec.params) {
     if (!field.required) continue;
-    params[field.name] = field.type === "integer" ? 1 : name === "product_viewed" && field.name === "product_id" ? "SKU-MUG-01" : "";
+    if (field.type === "integer") {
+      params[field.name] = 1;
+      continue;
+    }
+    if (name === "product_viewed" && field.name === "product_id") params[field.name] = "SKU-MUG-01";
+    else if (name === "loan_renewed" && field.name === "loan_id") params[field.name] = "loan-1042";
+    else if (name === "loan_returned" && field.name === "loan_id") params[field.name] = "loan-1042";
+    else if (name === "hold_placed" && field.name === "book_id") params[field.name] = "BK-OWL";
+    else if (name === "hold_placed" && field.name === "patron_id") params[field.name] = "patron-ada";
+    else params[field.name] = "";
   }
   const check: AgentTaskCheck = {
     name,
@@ -520,22 +673,23 @@ function checkOf(name: CheckType): AgentTaskCheck {
   return check;
 }
 
-function nextTaskId(tasks: AgentTask[]): string {
+function nextTaskId(tasks: AgentTask[], domain: TaskDomain): string {
   const used = new Set(tasks.map((task) => task.task_id));
+  const prefix = domain === "library" ? "loan-task" : "task";
   let index = tasks.length + 1;
-  let id = `task-${index}`;
+  let id = `${prefix}-${index}`;
   while (used.has(id)) {
     index += 1;
-    id = `task-${index}`;
+    id = `${prefix}-${index}`;
   }
   return id;
 }
 
-function togglePermission(current: string[], permission: string): string[] {
+function togglePermission(current: string[], permission: string, domain: TaskDomain): string[] {
   const next = new Set(current);
   if (next.has(permission)) next.delete(permission);
   else next.add(permission);
-  return TASK_PERMISSIONS.filter((entry) => next.has(entry));
+  return permissionsForDomain(domain).filter((entry) => next.has(entry));
 }
 
 function paramIssue(label: string, check: AgentTaskCheck): string | undefined {
