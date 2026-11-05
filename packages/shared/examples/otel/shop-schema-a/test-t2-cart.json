@@ -1,0 +1,58 @@
+{
+  "schema_id": "mesa.otel.shop.a",
+  "shop_export": {
+    "channel": "test",
+    "service": "reference-shop",
+    "task": "T2",
+    "run": "run-shop-a-test-t2",
+    "verdict": {
+      "success": true,
+      "verifier": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "cart_contains",
+            "passed": true,
+            "detail": "Supplied with the shop A fixture. Not computed from spans."
+          }
+        ],
+        "mock_state_snapshot": {
+          "carts": [{ "sku": "SKU-MUG-01", "qty": 2 }],
+          "orders": [],
+          "inventory": [],
+          "observations": []
+        }
+      },
+      "agent_claimed_success": true
+    }
+  },
+  "spans": [
+    {
+      "shop_trace_id": "shop-a-test-t2",
+      "shop_span_id": "shop-add",
+      "op": "add_to_cart",
+      "opened_ms": 1793715200000,
+      "closed_ms": 1793715200400,
+      "shop_attrs": {
+        "shop.step.kind": "tool_call",
+        "shop.step.actor": "assistant",
+        "shop.tool.args": { "sku": "SKU-MUG-01", "qty": 2 },
+        "shop.step.tokens_in": 12,
+        "shop.step.tokens_out": 3,
+        "shop.step.cost_usd": 0.00001
+      }
+    },
+    {
+      "shop_trace_id": "shop-a-test-t2",
+      "shop_span_id": "shop-add-result",
+      "op": "add_to_cart",
+      "opened_ms": 1793715200100,
+      "closed_ms": 1793715200180,
+      "shop_attrs": {
+        "shop.step.kind": "tool_result",
+        "shop.step.actor": "tool",
+        "shop.tool.result": { "sku": "SKU-MUG-01", "qty": 2 }
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json",
   "title": "Agent",
-  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks, and may carry an optional evalset. The evalset is user-supplied material for a later Grok judgment of that task's Run or Trace. It is not a verifier check and it does not write outcome.verifier. An optional otel object names an OpenTelemetry source. The importer does not call that endpoint and does not invent fault.labels or outcome.verifier. The reference shop agent is seeded with five tasks (T1–T5). T1 includes one evalset case; T2–T5 omit the field. The shop and library seeds omit otel. The library desk agent is seeded with three tasks that use library checks and omit evalset. Other agents may register a different non-empty task list.",
+  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks, and may carry an optional evalset. The evalset is user-supplied material for a later Grok judgment of that task's Run or Trace. It is not a verifier check and it does not write outcome.verifier. An optional otel object names an OpenTelemetry source. The importer does not call that endpoint and does not invent fault.labels or outcome.verifier. An optional otel_mock object names dual fixture sources and schema remap A for the shop demo. The library seed omits otel and otel_mock. The shop seed omits otel and may carry otel_mock. The reference shop agent is seeded with five tasks (T1–T5). T1 includes one evalset case; T2–T5 omit the field. The library desk agent is seeded with three tasks that use library checks and omit evalset. Other agents may register a different non-empty task list.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -183,9 +183,69 @@
           "minLength": 1
         }
       }
+    },
+    "otel_mock": {
+      "description": "Optional dual fixture sources and schema remap A for reference-shop. mode is fixture. The lab does not dial endpoint. fixture_path is the file readShopOtelMock loads. schema_id is mesa.otel.shop.a. Library mapping B is a different id and is not stored here.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "schema_id", "schema_path", "sources"],
+      "properties": {
+        "mode": {
+          "const": "fixture"
+        },
+        "schema_id": {
+          "const": "mesa.otel.shop.a"
+        },
+        "schema_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prod", "test"],
+          "properties": {
+            "prod": { "$ref": "#/$defs/otelMockSource" },
+            "test": { "$ref": "#/$defs/otelMockSource" }
+          }
+        }
+      }
     }
   },
   "$defs": {
+    "otelMockSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "endpoint", "auth", "service_name", "fixture_path"],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "endpoint": {
+          "description": "Documented URL. readShopOtelMock does not call it. Use a fixtures.invalid host for mock mode.",
+          "type": "string",
+          "format": "uri"
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "const": "none"
+            }
+          }
+        },
+        "service_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixture_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "task": {
       "type": "object",
       "additionalProperties": false,

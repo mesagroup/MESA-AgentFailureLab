@@ -256,6 +256,38 @@ export interface OtelSourceConfig {
   service_name?: string;
 }
 
+export const SHOP_OTEL_SCHEMA_A_ID = "mesa.otel.shop.a" as const;
+
+export type ShopOtelSchemaAId = typeof SHOP_OTEL_SCHEMA_A_ID;
+
+export type OtelMockChannel = "prod" | "test";
+
+/**
+ * One fixture-backed OTel source on `Agent.otel_mock`.
+ * `endpoint` is documented. `readShopOtelMock` reads `fixture_path` and does not call it.
+ */
+export interface OtelMockSource {
+  version: 1;
+  endpoint: string;
+  auth: { type: "none" };
+  service_name: string;
+  fixture_path: string;
+}
+
+/**
+ * Dual fixture sources and schema remap A for `reference-shop`.
+ * Absent on agents that do not use shop mapping A.
+ */
+export interface OtelMockConfig {
+  mode: "fixture";
+  schema_id: ShopOtelSchemaAId;
+  schema_path: string;
+  sources: {
+    prod: OtelMockSource;
+    test: OtelMockSource;
+  };
+}
+
 export type TaskEvalsetVersion = typeof TASK_EVALSET_VERSION;
 
 /**
@@ -340,6 +372,11 @@ export interface Agent {
    * Not a Trace, and not a verifier.
    */
   otel?: OtelSourceConfig;
+  /**
+   * Dual fixture sources and schema remap A. Absent when the agent has no shop mock pull.
+   * The shop seed may set this and still omit `otel`.
+   */
+  otel_mock?: OtelMockConfig;
   tasks: AgentTask[];
 }
 
