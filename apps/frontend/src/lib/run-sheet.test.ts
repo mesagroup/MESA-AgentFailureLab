@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { JURY_LAUNCH_COPY, LAUNCH_PHASE_COPY, LAUNCH_PHASES } from "./run-launch.ts";
+import { INJECTED_LAUNCH_COPY, JURY_LAUNCH_COPY, LAUNCH_PHASE_COPY, LAUNCH_PHASES } from "./run-launch.ts";
 
 const sheet = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../pages/AgentsPage.tsx"),
@@ -48,6 +48,20 @@ test("RunSheet jury UI collects note, permissions, reference run, and in-flight 
   assert.match(JURY_LAUNCH_COPY.helper, /not a stored run phase/i);
   assert.match(JURY_LAUNCH_COPY.helper, /permission guard/i);
   assert.match(JURY_LAUNCH_COPY.noteLabel, /Malicious juror note/);
+});
+
+test("RunSheet injected phase shows an accessible info tooltip next to the baseline picker heading", () => {
+  assert.match(sheet, /InjectedPhaseInfo/);
+  assert.match(sheet, /phase === "injected" \? <InjectedPhaseInfo/);
+  assert.match(sheet, /Baseline run to inject/);
+  assert.match(INJECTED_LAUNCH_COPY.buttonLabel, /About inject fault/);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /previous completed baseline/i);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /malicious prompt/i);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /automatic platform service/i);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /transparent to the agent's end user/i);
+  assert.match(sheet, /parentRunId/);
+  assert.match(sheet, /PromptLaunchEditor/);
+  assert.match(sheet, /launchPromptOverride/);
 });
 
 test("RunSheet jury phase reuses Prompt for this launch from the reference task", () => {
