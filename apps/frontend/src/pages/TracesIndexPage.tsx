@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { Agent, Trace } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listAgents, listTraceIndex } from "@/lib/api";
+import { importTrace, listAgents, listTraceIndex } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { tracesIndexEmptyCopy } from "@/lib/trace-analysis";
 import {
@@ -36,6 +37,159 @@ function formatStarted(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function TraceImportPanel({ onImported }: { onImported?: () => void }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [json, setJson] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function reset() {
+    setJson("");
+    setError(null);
+    setWarn(null);
+    setSubmitting(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function handleClose() {
+    reset();
+    setOpen(false);
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setJson((e.target?.result as string) ?? "");
+      setError(null);
+      setWarn(null);
+    };
+    reader.readAsText(file);
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setWarn(null);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      setError("Invalid JSON");
+      return;
+    }
+
+    if (typeof parsed === "object" && parsed !== null) {
+      const record = parsed as Record<string, unknown>;
+      const fault = record.fault as Record<string, unknown> | undefined;
+      if (fault) {
+        const labels = Array.isArray(fault.labels) ? fault.labels : [];
+        if (fault.injected === true || labels.length > 0) {
+          setWarn("This trace has fault.injected true or fault.labels set — the server will reject it as a production trace.");
+        }
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      const trace = await importTrace(parsed);
+      onImported?.();
+      await navigate(`/traces/${encodeURIComponent(trace.trace_id)}`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          const body = err.body as Record<string, unknown> | null;
+          const traceId = typeof body?.trace_id === "string" ? body.trace_id : null;
+          if (traceId) {
+            setError("This trace is already imported. Opening it…");
+            setTimeout(() => void navigate(`/traces/${encodeURIComponent(traceId)}`), 800);
+          } else {
+            setError("This trace is already imported.");
+          }
+        } else if (err.status === 413) {
+          setError("File too large (max 1 MiB)");
+        } else if (err.status === 400) {
+          const body = err.body as Record<string, unknown> | null;
+          const errors = Array.isArray(body?.errors) ? (body.errors as string[]) : null;
+          setError(errors ? errors.join("\n") : err.message);
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError("Unexpected error. Try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl bg-card shadow-island px-5 py-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">Import trace</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Paste or upload a production Trace JSON to store it in the lab.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="rounded-full"
+          variant={open ? "outline" : "default"}
+          onClick={() => { if (open) { handleClose(); } else { setOpen(true); } }}
+        >
+          {open ? "Cancel" : "Import trace"}
+        </Button>
+      </div>
+
+      {open && (
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Upload .json file</span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
+              className="block text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-muted file:text-foreground hover:file:bg-muted/80"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Or paste JSON</span>
+            <textarea
+              value={json}
+              onChange={(e) => { setJson(e.target.value); setError(null); setWarn(null); }}
+              placeholder="Paste a production Trace JSON…"
+              rows={8}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs font-mono resize-y outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+            />
+          </label>
+          <div aria-live="polite" className="space-y-1">
+            {warn && <p className="text-xs text-amber-500">{warn}</p>}
+            {error && (
+              <p className="text-sm text-destructive whitespace-pre-wrap">{error}</p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" className="rounded-full" disabled={submitting || !json.trim()}>
+              {submitting ? "Importing…" : "Import"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={handleClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
 }
 
 export function TracesIndexPage() {
@@ -179,6 +333,8 @@ export function TracesIndexPage() {
           setLoadError(null);
         }}
       />
+
+      <TraceImportPanel onImported={() => setReloadKey((value) => value + 1)} />
 
       {loadError && (
         <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 px-5 py-4 space-y-2">
