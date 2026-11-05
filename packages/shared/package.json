@@ -27,7 +27,12 @@
     "./schemas/otel-shop-schema-a.schema.json": "./schemas/otel-shop-schema-a.schema.json",
     "./schemas/otel-library-schema-b.schema.json": "./schemas/otel-library-schema-b.schema.json",
     "./examples/agent-reference-shop.json": "./examples/agent-reference-shop.json",
-    "./examples/agent-library-desk.json": "./examples/agent-library-desk.json"
+    "./examples/agent-library-desk.json": "./examples/agent-library-desk.json",
+    "./robot-lab": {
+      "types": "./dist/robot-lab.d.ts",
+      "import": "./dist/robot-lab.js",
+      "default": "./dist/robot-lab.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,3 +1,4 @@
+import { FEATURES } from "@mesa/shared/robot-lab";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -58,7 +59,7 @@ test("primary nav has no standalone Jury/Giuria entry", () => {
   assert.equal(PRIMARY_NAV.some((item) => ITALIAN_USER_COPY.test(item.label)), false);
   assert.deepEqual(
     PRIMARY_NAV.map((item) => item.label),
-    ["Dashboard", "Agents", "Runs", "Traces", "Eval"],
+    ["Dashboard", "Agents", "Runs", "Traces", "Eval", ...(FEATURES.robotLab ? ["Robot Lab"] : [])],
   );
 });
 

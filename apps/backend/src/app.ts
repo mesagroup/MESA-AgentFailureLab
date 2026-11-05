@@ -1,3 +1,5 @@
+import { FEATURES } from "@mesa/shared/robot-lab";
+import { registerRobotRuns } from "./robot-lab/routes.js";
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS, type Agent, type RunPhase } from "@mesa/shared";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { describeJuryCase } from "./attacker/jury-note.js";
@@ -60,6 +62,7 @@ export interface BuildAppOptions {
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? true });
   registerFrontendCors(app);
+  if (FEATURES.robotLab) registerRobotRuns(app);
   const store = options.store ?? new MemoryStore();
   const agents = options.agents ?? new MemoryAgentStore();
   const mockBaseUrl = options.mockBaseUrl ?? process.env.MOCK_SHOP_URL ?? "http://127.0.0.1:8787";

@@ -17,6 +17,7 @@ const NAV_ICONS: Record<(typeof PRIMARY_NAV)[number]["to"], LucideIcon> = {
   "/agents": Bot,
   "/runs": Play,
   "/traces": Activity,
+  "/robot-lab": Bot,
   "/eval": BarChart2,
 };
 

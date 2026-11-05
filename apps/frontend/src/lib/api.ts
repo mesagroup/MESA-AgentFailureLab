@@ -43,7 +43,7 @@ export class ApiError extends Error {
   }
 }
 
-async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
