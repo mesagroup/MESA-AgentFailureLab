@@ -71,7 +71,6 @@ export function RunsPage() {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const openedFirstGroup = useRef(false);
 
   async function fetchAll() {
     try {
@@ -79,13 +78,6 @@ export function RunsPage() {
       const sorted = fetchedRuns.sort((a, b) => b.run_id.localeCompare(a.run_id));
       setRuns(sorted);
       setAgentMap(Object.fromEntries(fetchedAgents.map((a) => [a.agent_id, a])));
-      if (!openedFirstGroup.current) {
-        const firstAgent = sorted[0]?.agent_id;
-        if (firstAgent) {
-          openedFirstGroup.current = true;
-          setExpanded(new Set([firstAgent]));
-        }
-      }
     } catch {
       // keep existing state
     } finally {
