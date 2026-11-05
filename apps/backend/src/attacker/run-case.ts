@@ -211,6 +211,7 @@ async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
       reportedOrderStatus: input.reportedOrderStatus,
       agentClaimedSuccess: input.claimedSuccess,
       steps: input.steps,
+      strictWorldChecks: process.env.STRICT_WORLD_CHECKS?.trim() === "1" || process.env.STRICT_WORLD_CHECKS?.trim().toLowerCase() === "true",
     });
     const bounds = traceBounds(input.startedMs, input.steps.length);
     const findings = prePass({

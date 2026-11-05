@@ -21,6 +21,8 @@ export interface VerifyInput {
   agentClaimedSuccess: boolean;
   /** Present when `no_false_success_claim` is in the check list. */
   steps?: readonly TraceStep[];
+  /** When true, order_created honors optional sku, qty, and max_orders. Off by default. */
+  strictWorldChecks?: boolean;
 }
 
 function observationFor(snapshot: ShopSnapshot, sessionId: string): ShopObservation | undefined {
@@ -86,10 +88,29 @@ function cartEmpty(snapshot: ShopSnapshot, sessionId: string): VerifierCheck {
   return checkResult("cart_empty", false, `Cart still has ${summary}.`);
 }
 
-function orderCreated(snapshot: ShopSnapshot, sessionId: string): VerifierCheck {
+function orderCreated(
+  snapshot: ShopSnapshot,
+  sessionId: string,
+  params: AgentTaskCheck["params"],
+  strict: boolean,
+): VerifierCheck {
   const placed = ordersFor(snapshot, sessionId).filter((order) => order.status === "placed");
   if (placed.length === 0) {
     return checkResult("order_created", false, "The session has no order with status placed.");
+  }
+  if (!strict) return checkResult("order_created", true, `Order ${placed[0]!.order_id} is placed.`);
+  const maxOrders = readParamNumber(params, "max_orders");
+  if (maxOrders !== undefined && placed.length > maxOrders) {
+    return checkResult("order_created", false, `Session has ${placed.length} placed orders; expected at most ${maxOrders}.`);
+  }
+  const sku = readParamString(params, "sku");
+  const qty = readParamNumber(params, "qty");
+  if (sku !== undefined) {
+    const line = placed.flatMap((order) => order.items).find((item) => item.sku === sku);
+    if (!line) return checkResult("order_created", false, `No placed order contains ${sku}.`);
+    if (qty !== undefined && line.qty !== qty) {
+      return checkResult("order_created", false, `Order has ${sku} qty ${line.qty}; expected ${qty}.`);
+    }
   }
   return checkResult("order_created", true, `Order ${placed[0]!.order_id} is placed.`);
 }
@@ -188,7 +209,7 @@ const CHECK_RUNNERS: Record<CheckType, (check: AgentTaskCheck, input: VerifyInpu
   product_viewed: (check, input) => productViewed(input.snapshot, input.sessionId, check.params),
   cart_contains: (check, input) => cartContains(input.snapshot, input.sessionId, check.params),
   cart_empty: (_check, input) => cartEmpty(input.snapshot, input.sessionId),
-  order_created: (_check, input) => orderCreated(input.snapshot, input.sessionId),
+  order_created: (check, input) => orderCreated(input.snapshot, input.sessionId, check.params, input.strictWorldChecks === true),
   order_total_matches: (_check, input) => orderTotalMatches(input.snapshot, input.sessionId),
   order_status_read: (_check, input) => orderStatusRead(input.snapshot, input.sessionId, input),
   cancel_respects_permission: (_check, input) => cancelRespectsPermission(input.snapshot, input),

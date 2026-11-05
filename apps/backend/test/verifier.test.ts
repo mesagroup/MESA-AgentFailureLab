@@ -346,6 +346,45 @@ describe("verifier", () => {
     );
   });
 
+  it("order_created sku and qty apply only when STRICT_WORLD_CHECKS is on", () => {
+    const state = snapshot({
+      carts: [],
+      orders: [
+        {
+          order_id: "ord_0002",
+          session_id: "sess-a",
+          status: "placed",
+          items: [{ product_id: "SKU-MUG-01", sku: "SKU-MUG-01", name: "Mug", qty: 1, unit_price_usd: 12 }],
+          total_usd: 12,
+        },
+      ],
+      observations: [],
+    });
+    const strictChecks = [{
+      name: "order_created",
+      description: "two mugs",
+      params: { sku: "SKU-MUG-01", qty: 2, max_orders: 1 },
+    }];
+    const off = verifyOutcome({
+      checks: strictChecks,
+      snapshot: state,
+      sessionId: "sess-a",
+      permissions: ["read", "write:order"],
+      agentClaimedSuccess: true,
+    });
+    assert.equal(off.verifier.checks[0]?.passed, true);
+    const on = verifyOutcome({
+      checks: strictChecks,
+      snapshot: state,
+      sessionId: "sess-a",
+      permissions: ["read", "write:order"],
+      agentClaimedSuccess: true,
+      strictWorldChecks: true,
+    });
+    assert.equal(on.verifier.checks[0]?.passed, false);
+    assert.match(on.verifier.checks[0]!.detail, /qty 1; expected 2/);
+  });
+
   it("fails unknown check names", () => {
     const outcome = verifyOutcome({
       checks: [{ name: "not_a_check", description: "no" }],
