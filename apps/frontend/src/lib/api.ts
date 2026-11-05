@@ -16,18 +16,30 @@ import { parseCreateRunResults, type HarnessTaskResult } from "./after-fix";
 import type { EvalsetGenerateBody } from "./evalset";
 import { isEvalsetProposal } from "./evalset";
 import { isJuryReport, type JuryCaseDescription, type JuryCaseReport, type JuryRequestBody } from "./jury";
+import {
+  parseOtelPullCursors,
+  parseTraceList,
+  parseTracePullResult,
+  traceListPath,
+  type OtelPullCursors,
+  type OtelPullResponse,
+  type TraceListFilters,
+  type TracePullBody,
+} from "./traces";
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL ?? "/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
+  readonly body: unknown;
 
-  constructor(status: number, message: string, code: string | null) {
+  constructor(status: number, message: string, code: string | null, body: unknown = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.body = body;
   }
 }
 
@@ -37,29 +49,30 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!res.ok) {
-    const { message, code } = await errorBody(res);
-    throw new ApiError(res.status, message, code);
+    const { message, code, body } = await errorBody(res);
+    throw new ApiError(res.status, message, code, body);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-async function errorBody(res: Response): Promise<{ message: string; code: string | null }> {
+async function errorBody(res: Response): Promise<{ message: string; code: string | null; body: unknown }> {
   try {
     const body: unknown = await res.json();
     if (typeof body === "object" && body !== null) {
       const record = body as { message?: unknown; errors?: unknown; error?: unknown };
       const code = typeof record.error === "string" ? record.error : null;
       if (Array.isArray(record.errors) && record.errors.every((entry) => typeof entry === "string")) {
-        return { message: record.errors.join("; "), code };
+        return { message: record.errors.join("; "), code, body };
       }
-      if (typeof record.message === "string" && record.message.length > 0) return { message: record.message, code };
-      return { message: `${res.status} ${res.statusText}`, code };
+      if (typeof record.message === "string" && record.message.length > 0) return { message: record.message, code, body };
+      return { message: `${res.status} ${res.statusText}`, code, body };
     }
+    return { message: `${res.status} ${res.statusText}`, code: null, body };
   } catch {
     // The error body was not JSON.
   }
-  return { message: `${res.status} ${res.statusText}`, code: null };
+  return { message: `${res.status} ${res.statusText}`, code: null, body: null };
 }
 
 // --- Agents ---
@@ -265,9 +278,41 @@ export type { HarnessTaskResult };
 
 // --- Traces ---
 
+/** `GET /traces` with optional `agent_id`, `source`, `since`, and `until`. */
+export async function listTraceIndex(filters: TraceListFilters): Promise<Trace[]> {
+  const built = traceListPath(filters);
+  if (!built.ok) throw new ApiError(400, built.message, "invalid_request");
+  const data = await backendFetch<unknown>(built.path);
+  const parsed = parseTraceList(data);
+  if (!parsed.ok) throw new ApiError(502, parsed.message, "invalid_trace_list", data);
+  return parsed.traces;
+}
+
 export async function listTraces(): Promise<Trace[]> {
-  const data = await backendFetch<{ traces: Trace[] }>("/traces");
-  return data.traces;
+  return listTraceIndex({ agentId: "", source: "", from: "", to: "" });
+}
+
+/**
+ * `POST /agents/:agentId/traces/pull`.
+ * Omit `since` so the lab uses `last_pull_at`, or the full seed on the first pull.
+ * HTTP 200 still carries `failed` and `errors`.
+ */
+export async function pullAgentTraces(agentId: string, body: TracePullBody): Promise<OtelPullResponse> {
+  const data = await backendFetch<unknown>(`/agents/${encodeURIComponent(agentId)}/traces/pull`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const parsed = parseTracePullResult(data);
+  if (!parsed.ok) throw new ApiError(502, parsed.message, "invalid_pull_response", data);
+  return parsed.value;
+}
+
+/** `GET /agents/:agentId/otel/cursors`. Does not fetch telemetry. */
+export async function getOtelPullCursors(agentId: string): Promise<OtelPullCursors> {
+  const data = await backendFetch<unknown>(`/agents/${encodeURIComponent(agentId)}/otel/cursors`);
+  const parsed = parseOtelPullCursors(data);
+  if (!parsed.ok) throw new ApiError(502, parsed.message, "invalid_cursor_response", data);
+  return parsed.value;
 }
 
 export async function getTrace(id: string): Promise<Trace> {

@@ -11,6 +11,7 @@ import { RUNS_DETAIL_ROUTE, RUNS_LIST_ROUTE } from "@/lib/run-detail";
 import { RunDetailPage } from "@/pages/RunDetailPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { TracePage } from "@/pages/TracePage";
+import { TracesIndexPage } from "@/pages/TracesIndexPage";
 
 function AppShell() {
   const { dark, toggle } = useTheme();
@@ -36,7 +37,7 @@ function AppShell() {
             <Route path={RUNS_LIST_ROUTE} element={<RunsPage />} />
             <Route path={RUNS_DETAIL_ROUTE} element={<RunDetailPage />} />
             <Route path="/traces/:traceId" element={<TracePage />} />
-            <Route path="/traces" element={<TracePage />} />
+            <Route path="/traces" element={<TracesIndexPage />} />
           </Routes>
         </main>
       </SidebarInset>

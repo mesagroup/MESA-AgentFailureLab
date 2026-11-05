@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Pencil, Play, PlusCircle, Search, Trash2, Upload } from "lucide-react";
+import { Pencil, Play, PlusCircle, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +31,7 @@ import {
 import type { Agent, AgentInstanceKind, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 import { OtelImportPanel } from "@/pages/OtelImportPanel";
+import { TracePullPanel } from "@/pages/TracePullPanel";
 
 interface FormState {
   name: string;
@@ -83,6 +84,7 @@ export function AgentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [runAgent, setRunAgent] = useState<Agent | null>(null);
   const [importAgent, setImportAgent] = useState<Agent | null>(null);
+  const [pullAgent, setPullAgent] = useState<Agent | null>(null);
 
   async function reload() {
     setAgents(await listAgents());
@@ -259,6 +261,9 @@ export function AgentsPage() {
                   </span>
 
                   <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon-sm" variant="ghost" onClick={() => setPullAgent(agent)} title="Pull traces">
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="icon-sm" variant="ghost" onClick={() => setImportAgent(agent)} title="Import OTel spans">
                       <Upload className="h-3.5 w-3.5" />
                     </Button>
@@ -463,6 +468,20 @@ export function AgentsPage() {
           </div>
           <div className="flex-1 overflow-y-auto px-8 py-6">
             {importAgent ? <OtelImportPanel agentId={importAgent.agent_id} /> : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!pullAgent} onOpenChange={(open) => { if (!open) setPullAgent(null); }}>
+        <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">
+          <div className="shrink-0 px-8 pt-6 pb-4 border-b border-border/40">
+            <p className="text-xs text-muted-foreground mb-0.5">Pull traces</p>
+            <SheetTitle className="font-mono text-base font-medium tracking-tight">
+              {pullAgent?.name ?? ""}
+            </SheetTitle>
+          </div>
+          <div className="flex-1 overflow-y-auto px-8 py-6">
+            {pullAgent ? <TracePullPanel agent={pullAgent} /> : null}
           </div>
         </SheetContent>
       </Sheet>

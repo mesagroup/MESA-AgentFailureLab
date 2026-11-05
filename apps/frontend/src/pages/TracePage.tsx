@@ -18,6 +18,8 @@ import {
 import { isWorldBusy } from "@/lib/jury";
 import { adrFixForCategory, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
 import { AfterFixPanel } from "@/pages/AfterFixPanel";
+import { TraceSourceBadge } from "@/pages/TraceSourceBadge";
+import { traceListSource } from "@/lib/traces";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -350,7 +352,10 @@ export function TracePage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="min-w-0">
-          <h1 className="text-sm font-mono font-medium truncate">{trace.trace_id}</h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm font-mono font-medium truncate">{trace.trace_id}</h1>
+            <TraceSourceBadge source={traceListSource(trace)} />
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {trace.agent_id} · {trace.task_id}
           </p>
