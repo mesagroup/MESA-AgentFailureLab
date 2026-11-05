@@ -87,7 +87,7 @@ function errorMessage(err: unknown): { type: "configured" | "not_found" | "gener
   return { type: "generic", text: err instanceof Error ? err.message : "Failed to load eval results." };
 }
 
-export function EvalScoreboardPage() {
+export function EvalSection() {
   const [results, setResults] = useState<EvalResults | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -116,26 +116,28 @@ export function EvalScoreboardPage() {
   const errInfo = loadError ? errorMessage(loadError) : null;
 
   return (
-    <div className="px-5 pb-8 max-w-4xl mx-auto space-y-4">
-      <div className="pt-2 pb-2">
-        <h1 className="text-xl font-semibold">Eval Scoreboard</h1>
-        {results ? (
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {formatTs(results.generated_at)} · {results.dataset.scored_count} traces scored
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground mt-0.5">Baseline (rules-only) vs. Grok diagnosis quality.</p>
-        )}
+    <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
+        <div>
+          <h2 className="text-sm font-semibold">Eval scoreboard</h2>
+          {results ? (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatTs(results.generated_at)} · {results.dataset.scored_count} traces scored
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">Baseline (rules-only) vs. Grok diagnosis quality.</p>
+          )}
+        </div>
       </div>
 
       {errInfo && (
         <div
           role="alert"
           className={cn(
-            "rounded-2xl px-5 py-4",
+            "px-5 py-4",
             errInfo.type === "not_found"
               ? "bg-muted/50"
-              : "border border-destructive/30 bg-destructive/5",
+              : "border-t border-destructive/30 bg-destructive/5",
           )}
         >
           <p
@@ -150,31 +152,29 @@ export function EvalScoreboardPage() {
       )}
 
       {!errInfo && (
-        <div className="rounded-2xl bg-card shadow-island overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Metric
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Baseline (rules only)
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Grok
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  &Delta;
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading
-                ? [...Array(4)].map((_, i) => <SkeletonRow key={i} />)
-                : results?.metrics.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
-            </tbody>
-          </table>
-        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border/40 bg-muted/30">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Metric
+              </th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Baseline (rules only)
+              </th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Grok
+              </th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                &Delta;
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading
+              ? [...Array(4)].map((_, i) => <SkeletonRow key={i} />)
+              : results?.metrics.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
+          </tbody>
+        </table>
       )}
     </div>
   );

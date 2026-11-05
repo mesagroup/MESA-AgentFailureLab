@@ -13,7 +13,6 @@ import { RUNS_DETAIL_ROUTE, RUNS_LIST_ROUTE } from "@/lib/run-detail";
 import { JURY_LEGACY_PATH, juryLegacyRedirectTo } from "@/lib/security-runs";
 import { RunDetailPage } from "@/pages/RunDetailPage";
 import { RunsPage } from "@/pages/RunsPage";
-import { EvalScoreboardPage } from "@/pages/EvalScoreboardPage";
 import { TracePage } from "@/pages/TracePage";
 import { TracesIndexPage } from "@/pages/TracesIndexPage";
 
@@ -45,7 +44,6 @@ function AppShell() {
             <Route path="/traces/:traceId" element={<TracePage />} />
             <Route path="/traces" element={<TracesIndexPage />} />
             <Route path="/robot-lab" element={RobotLab ? <Suspense fallback={<p>Loading Robot Lab…</p>}><RobotLab /></Suspense> : <Navigate to="/" replace />} />
-            <Route path="/eval" element={<EvalScoreboardPage />} />
           </Routes>
         </main>
       </SidebarInset>

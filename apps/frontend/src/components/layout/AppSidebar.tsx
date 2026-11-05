@@ -1,4 +1,4 @@
-import { Activity, BarChart2, Bot, LayoutDashboard, Play, Zap, type LucideIcon } from "lucide-react";
+import { Activity, Bot, LayoutDashboard, Play, Zap, type LucideIcon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -18,7 +18,6 @@ const NAV_ICONS: Record<(typeof PRIMARY_NAV)[number]["to"], LucideIcon> = {
   "/runs": Play,
   "/traces": Activity,
   "/robot-lab": Bot,
-  "/eval": BarChart2,
 };
 
 export function AppSidebar() {
