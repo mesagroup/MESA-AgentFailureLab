@@ -81,6 +81,7 @@ export interface AgentDraft {
   description: string;
   instance_base_url: string;
   test_instance_base_url: string;
+  github_repo_url?: string;
   tasks?: AgentTask[];
   /**
    * Source to store. `null` drops a stored source on PUT.
@@ -125,6 +126,8 @@ export async function updateAgent(id: string, draft: AgentDraft): Promise<Agent>
   };
   if (draft.otel) body.otel = draft.otel;
   else if (draft.otel === null) delete body.otel;
+  if (draft.github_repo_url?.trim()) body.github_repo_url = draft.github_repo_url.trim();
+  else delete body.github_repo_url;
   return backendFetch<Agent>(`/agents/${id}`, {
     method: "PUT",
     body: JSON.stringify(body),
@@ -147,6 +150,7 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
     tasks: draft.tasks ?? [],
   };
   if (draft.otel) body.otel = draft.otel;
+  if (draft.github_repo_url?.trim()) body.github_repo_url = draft.github_repo_url.trim();
   return body;
 }
 

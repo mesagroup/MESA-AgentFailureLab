@@ -165,6 +165,10 @@
         "test": { "$ref": "#/$defs/otelSourceEndpoint" }
       }
     },
+    "github_repo_url": {
+      "type": "string",
+      "format": "uri"
+    },
     "otel_mock": {
       "description": "Optional dual fixture sources for a demo remap. mode is fixture. The lab does not dial endpoint. fixture_path is the file readShopOtelMock or readLibraryOtelMock loads. schema_id is mesa.otel.shop.a or mesa.otel.library.b.",
       "type": "object",
