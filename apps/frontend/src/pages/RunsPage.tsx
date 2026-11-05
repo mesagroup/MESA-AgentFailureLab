@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
 import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
 import { runListClickHref } from "@/lib/run-detail";
-import { formatRunDuration, taskForRun, taskTitleForRun } from "@/lib/run-launch";
+import { formatRunDuration, RUN_PHASE_LABELS, taskForRun, taskTitleForRun } from "@/lib/run-launch";
 import {
   SECURITY_BADGE_LABEL,
   SECURITY_FILTER_COPY,
@@ -24,10 +24,9 @@ function PhaseBadge({ phase }: { phase: RunPhase }) {
     injected: "bg-amber-500/15 text-amber-500 border-amber-500/20",
     after_fix: "bg-emerald-500/15 text-emerald-500 border-emerald-500/20",
   };
-  const labels: Record<RunPhase, string> = { baseline: "baseline", injected: "injected", after_fix: "after fix" };
   return (
-    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", styles[phase])}>
-      {labels[phase]}
+    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs", styles[phase])}>
+      {RUN_PHASE_LABELS[phase]}
     </span>
   );
 }

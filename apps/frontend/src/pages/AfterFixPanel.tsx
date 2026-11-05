@@ -12,6 +12,7 @@ import {
   type BeforeAfterView,
   type RunResultLinks,
 } from "@/lib/after-fix";
+import { runPhaseLabel } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
 import type { FixKind, Run, TraceOutcome, TraceTotals } from "@mesa/shared";
 
@@ -217,11 +218,11 @@ function LineageCard({
         />
       </dl>
       {childRun?.fix_kinds?.length ? (
-        <p className="text-xs font-mono text-muted-foreground">
-          {childRun.phase} · fix_kinds {childRun.fix_kinds.join(", ")}
+        <p className="text-xs text-muted-foreground">
+          {runPhaseLabel(childRun.phase)} · fix_kinds {childRun.fix_kinds.join(", ")}
         </p>
       ) : parentRun?.phase ? (
-        <p className="text-xs font-mono text-muted-foreground">{parentRun.phase}</p>
+        <p className="text-xs text-muted-foreground">{runPhaseLabel(parentRun.phase)}</p>
       ) : null}
       {extras.length > 0 && (
         <ul className="space-y-1">

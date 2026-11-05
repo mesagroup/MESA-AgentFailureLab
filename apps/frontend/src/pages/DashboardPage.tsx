@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
 import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink } from "@/lib/api";
+import { RUN_PHASE_LABELS } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
 
 type LoadState =
@@ -56,14 +57,9 @@ function PhaseBadge({ phase }: { phase: RunPhase }) {
     injected: "bg-amber-500/15 text-amber-400 border-amber-500/20",
     after_fix: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   };
-  const labels: Record<RunPhase, string> = {
-    baseline: "baseline",
-    injected: "injected",
-    after_fix: "after fix",
-  };
   return (
-    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", styles[phase])}>
-      {labels[phase]}
+    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs", styles[phase])}>
+      {RUN_PHASE_LABELS[phase]}
     </span>
   );
 }
