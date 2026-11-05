@@ -222,6 +222,7 @@ async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
         attacker: input.attacker,
       },
       diagnosis: null,
+      source: "harness",
     };
     const savedTrace = await input.store.saveTrace(trace);
     const savedRun = await input.store.saveRun({

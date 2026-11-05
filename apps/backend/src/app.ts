@@ -17,7 +17,8 @@ import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/routes.js";
 import { registerEvalsetRoutes, type EvalsetGenerateOptions } from "./evalset/routes.js";
-import { registerOtelImportRoutes } from "./otel/routes.js";
+import { filterTraces, parseTraceListQuery } from "./otel/present.js";
+import { registerOtelImportRoutes, type OtelRouteOptions } from "./otel/routes.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -33,6 +34,10 @@ export interface BuildAppOptions {
   afterWorldSetup?: () => void | Promise<void>;
   diagnosis?: DiagnosisOptions;
   evalset?: EvalsetGenerateOptions;
+  /** Test double for `POST /agents/:agentId/traces/pull`. Production uses global fetch. */
+  otelFetch?: OtelRouteOptions["fetchImpl"];
+  /** Clock for the pull cursor. Production uses the current time. */
+  now?: () => Date;
 }
 
 /**
@@ -93,7 +98,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   registerAgentRoutes(app, agents);
-  registerOtelImportRoutes(app, agents, store);
+  registerOtelImportRoutes(app, agents, store, { fetchImpl: options.otelFetch, now: options.now });
   registerDiagnosisRoutes(app, store, agents, options.diagnosis);
   registerEvalsetRoutes(app, options.evalset);
 
@@ -123,7 +128,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return run;
   });
 
-  app.get("/traces", async () => ({ traces: await store.listTraces() }));
+  app.get("/traces", async (request, reply) => {
+    const parsed = parseTraceListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    const traces = filterTraces(await store.listTraces(), parsed.value);
+    return { traces };
+  });
 
   app.get<{ Params: { traceId: string } }>("/traces/:traceId", async (request, reply) => {
     const trace = await store.getTrace(request.params.traceId);

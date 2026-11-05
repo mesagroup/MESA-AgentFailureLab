@@ -111,9 +111,6 @@ export function RunDetailPage() {
             {PHASE_LABELS[run.phase]}
           </span>
           <span className={cn("text-xs font-mono", STATUS_STYLES[run.status])}>{run.status}</span>
-          <span className="font-mono text-xs text-muted-foreground break-all" title={run.run_id}>
-            {run.run_id}
-          </span>
         </div>
         <div>
           <h1 className="text-xl font-semibold">{view.agent_name}</h1>
@@ -149,21 +146,31 @@ export function RunDetailPage() {
 
       <VerifierChecks verifier={view.verifier} empty={view.verifier_empty} />
 
-      <section className="rounded-2xl bg-card shadow-island p-5 space-y-3">
-        <h2 className="text-sm font-semibold">Task and prompt</h2>
-        <p className="text-sm">
-          <span className="text-muted-foreground">Task · </span>
-          {view.task.title}
-          <span className="font-mono text-xs text-muted-foreground ml-2">{view.task.task_id}</span>
-        </p>
-        {view.task.prompt ? (
-          <pre className="text-sm whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-3 leading-relaxed">
-            {view.task.prompt}
-          </pre>
-        ) : (
-          <p className="text-sm text-muted-foreground">No prompt is stored on the agent task for this run.</p>
+      <section className="rounded-2xl bg-card shadow-island p-5 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <span className="font-mono text-xs font-semibold bg-muted px-2 py-0.5 rounded">
+            {view.task.task_id}
+          </span>
+          <h2 className="text-sm font-semibold">{view.task.title}</h2>
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Prompt</p>
+          {view.task.prompt ? (
+            <pre className="text-sm whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-3 leading-relaxed">
+              {view.task.prompt}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">No prompt is stored on the agent task for this run.</p>
+          )}
+        </div>
+
+        {view.task.setup_summary && (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Setup</p>
+            <p className="text-xs text-muted-foreground">{view.task.setup_summary}</p>
+          </div>
         )}
-        <p className="text-xs text-muted-foreground">{view.task.setup_summary}</p>
       </section>
 
       {view.notes && (

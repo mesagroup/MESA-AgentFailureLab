@@ -73,6 +73,11 @@
           "$ref": "#/$defs/diagnosis"
         }
       ]
+    },
+    "source": {
+      "description": "Where this trace was written. Optional: a document saved before the field still validates. harness is a harness or attacker run. demo_seed is a startup demo pair. otel_prod and otel_test are a telemetry pull. The pull copies outcome from the export and does not invent fault.labels.",
+      "type": "string",
+      "enum": ["harness", "demo_seed", "otel_prod", "otel_test"]
     }
   },
   "$defs": {

@@ -6,7 +6,7 @@
  * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
-export const CONTRACT_VERSION = "0.3.0";
+export const CONTRACT_VERSION = "0.4.0";
 
 /**
  * Demo agents inserted at startup.
@@ -43,6 +43,7 @@ export {
   SHOP_OTEL_SCHEMA_A_ID,
   LIBRARY_OTEL_SCHEMA_B_ID,
   TASK_EVALSET_VERSION,
+  TRACE_SOURCES,
   TRACE_STATUSES,
   TRACE_STORE_KINDS,
   adrFixForCategory,
@@ -103,6 +104,7 @@ export type {
   Trace,
   TraceFault,
   TraceOutcome,
+  TraceSource,
   TraceStatus,
   TraceStep,
   TraceStoreKind,

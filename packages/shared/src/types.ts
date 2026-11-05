@@ -49,6 +49,14 @@ export const TRACE_STATUSES = ["completed", "failed", "timeout", "error"] as con
 
 export type TraceStatus = (typeof TRACE_STATUSES)[number];
 
+/**
+ * Where a Trace was written.
+ * Absent on documents saved before the field. A missing value is not a fifth source.
+ */
+export const TRACE_SOURCES = ["harness", "demo_seed", "otel_prod", "otel_test"] as const;
+
+export type TraceSource = (typeof TRACE_SOURCES)[number];
+
 export const STEP_TYPES = ["message", "tool_call", "tool_result", "system"] as const;
 
 export type StepType = (typeof STEP_TYPES)[number];
@@ -166,6 +174,12 @@ export interface Trace {
   totals: TraceTotals;
   fault: TraceFault;
   diagnosis: Diagnosis | null;
+  /**
+   * Writer of this document. Omit on traces saved before the field.
+   * `otel_prod` and `otel_test` are a telemetry pull. That pull does not invent
+   * `outcome.verifier` or `fault.labels`.
+   */
+  source?: TraceSource;
 }
 
 export interface AgentToolDoc {
