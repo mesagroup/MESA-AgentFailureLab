@@ -126,7 +126,7 @@ export function bannersFor(run: Run, traceError: string | null): RunDetailBanner
   } else if (run.status === "failed") {
     banners.push({
       kind: "failed",
-      message: run.error_message?.trim() || "The run finished as failed. Verifier checks are below when a trace exists.",
+      message: run.error_message?.trim() || "The run finished as failed. Checks are below when a trace exists.",
     });
   } else if (run.status === "running") {
     banners.push({ kind: "running", message: "This run is still running. The page will refresh until it finishes." });
@@ -155,12 +155,12 @@ export function buildRunDetailView(input: {
   let trace_empty: string | null = null;
   if (!listedTraceId) {
     trace_empty = "No trace is stored for this run.";
-    verifier_empty = "Verifier results appear when a trace is stored. This run has none.";
+    verifier_empty = "Checks appear when a trace is stored. This run has none.";
   } else if (!trace) {
     trace_empty = input.traceError ?? "A trace id is listed, but the trace document was not loaded.";
-    verifier_empty = "Verifier checks live on the trace. They are unavailable until GET /traces succeeds.";
+    verifier_empty = "Checks live on the trace. They are unavailable until the trace loads.";
   } else if (verifier && verifier.checks.length === 0) {
-    verifier_empty = "The trace has an outcome.verifier object, but it lists no individual checks.";
+    verifier_empty = "The trace has a checks outcome, but it lists no individual checks.";
   }
 
   return {

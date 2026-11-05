@@ -44,7 +44,7 @@ export type LaunchPhase = (typeof LAUNCH_PHASES)[number];
 export const LAUNCH_PHASE_COPY: Record<LaunchPhase, { label: string; subtitle: string }> = {
   baseline: { label: "Clean run", subtitle: "Measure normal behavior" },
   injected: { label: "Inject fault", subtitle: "Replay a baseline with a fault" },
-  jury: { label: "Security attack", subtitle: "Malicious note + permission guard" },
+  jury: { label: "Security attack", subtitle: "Attack note + permission check" },
   after_fix: { label: "Verify fix", subtitle: "Replay after the owner fixed the agent" },
 };
 
@@ -69,18 +69,18 @@ export function phaseNeedsReferenceRun(phase: LaunchPhase): boolean {
 
 export const JURY_LAUNCH_COPY = {
   helper:
-    "Security launch mode (not a stored run phase): malicious note and permission guard via /attacker/jury-case.",
-  referenceLabel: "Reference run",
-  referenceAttack: "Baseline run to attack",
-  referenceReplay: "Injected or after_fix run to replay",
-  noteLabel: "Malicious juror note",
-  permissionsLabel: "Session permissions",
-  includeBaselineLabel: "Include a clean baseline (same task and grant, no note)",
+    "Security launch mode (not a stored run phase): attack note plus a permission check on the agent.",
+  referenceLabel: "Run to attack",
+  referenceAttack: "Run to attack",
+  referenceReplay: "Run to replay",
+  noteLabel: "Attack note",
+  permissionsLabel: "Allowed permissions",
+  includeBaselineLabel: "Also run a clean control (same task and grant, no note)",
   replayHint:
-    "Replay stores the attack as after_fix with parent_run_id and fix_kinds (permission_guard).",
+    "Replay stores the attack as Verify fix with the earlier run and a permission check.",
   attackHint:
-    "The attacker appends the note to this task. The stored run has injection_plan.ground_truth.category Security.",
-  emptyReferences: "No completed runs for this agent. Launch a baseline first.",
+    "The attacker appends the note to this task. The stored run is tagged as a security case.",
+  emptyReferences: "No completed runs for this agent. Launch a clean run first.",
   loadingCase: "Loading the security case…",
   promptLabel: "Prompt for this launch",
   promptHelper: "Starts from the reference task. Edit before launch.",
@@ -296,7 +296,7 @@ export function buildJuryLaunchParams(input: {
   }
   const note = input.note.trim();
   const maxChars = input.maxChars ?? JURY_NOTE_MAX;
-  if (note.length === 0) return { ok: false, message: "The malicious juror note cannot be empty." };
+  if (note.length === 0) return { ok: false, message: "The attack note cannot be empty." };
   if (note.length > maxChars) return { ok: false, message: `The note can be at most ${maxChars} characters.` };
   if (reference.task_id.trim().length === 0) return { ok: false, message: "Choose a task." };
 
@@ -312,7 +312,7 @@ export function buildJuryLaunchParams(input: {
     if (kinds.length === 0 || !kinds.includes("permission_guard")) {
       return {
         ok: false,
-        message: "Select permission_guard (and any other fix kinds) to replay the security case.",
+        message: "Select Permission check (and any other fixes) to replay the security case.",
       };
     }
     body.fix_kinds = kinds;
@@ -347,7 +347,7 @@ export function buildLaunchRequest(input: {
   };
 }): LaunchRequest {
   if (input.phase === "jury") {
-    if (!input.jury) return { ok: false, message: "Security launch is missing the juror note form." };
+    if (!input.jury) return { ok: false, message: "Security launch is missing the attack note form." };
     const built = buildJuryLaunchParams({
       note: input.jury.note,
       referenceRun: input.jury.referenceRun,

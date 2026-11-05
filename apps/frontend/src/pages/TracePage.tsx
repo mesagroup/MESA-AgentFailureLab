@@ -138,7 +138,7 @@ function StepRow({ step, culpritIds, diagnosisStepIds }: { step: TraceStep; culp
             <span className="text-xs font-mono bg-muted/60 px-1.5 py-0.5 rounded">{step.tool_name}</span>
           )}
           {isCulprit && (
-            <span className="text-xs font-mono text-amber-500 font-medium">culprit</span>
+            <span className="text-xs font-mono text-amber-500 font-medium">Failing step</span>
           )}
           {isDiagnosis && (
             <span className="text-xs font-mono text-indigo-400 font-medium">diagnosis</span>
@@ -416,7 +416,7 @@ export function TracePage() {
               <>
                 {" · "}
                 <Link to={runLink} className="underline-offset-2 hover:underline">
-                  Open parent run
+                  From run
                 </Link>
               </>
             )}
@@ -431,7 +431,7 @@ export function TracePage() {
       {/* Fault banner */}
       {trace.fault.injected && trace.fault.labels.length > 0 && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-2.5 flex items-center gap-3">
-          <span className="text-xs text-amber-500 font-medium">Fault injected</span>
+          <span className="text-xs text-amber-500 font-medium">Fault applied</span>
           <FaultCategoryBadge category={trace.fault.labels[0].category} />
           <span className="text-xs font-mono text-amber-500/70">{trace.fault.labels[0].code}</span>
         </div>
@@ -440,7 +440,7 @@ export function TracePage() {
       {/* Verifier failure banner */}
       {!trace.outcome.verifier.passed && failedChecks.length > 0 && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-2.5 space-y-1">
-          <span className="text-xs text-red-400 font-medium">Verifier failed</span>
+          <span className="text-xs text-red-400 font-medium">Checks failed</span>
           <ul className="space-y-0.5">
             {failedChecks.map((c) => (
               <li key={c.name} className="text-xs font-mono text-red-400/70">
@@ -573,7 +573,7 @@ export function TracePage() {
           {/* Verifier outcome */}
           <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">Verifier</span>
+              <span className="text-xs font-medium">Checks</span>
               <span className={cn(
                 "text-xs font-mono",
                 trace.outcome.verifier.passed ? "text-green-500" : "text-red-400"

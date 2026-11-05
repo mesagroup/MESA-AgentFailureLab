@@ -141,7 +141,7 @@ export function DashboardPage() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "The harness session did not load.";
+        const message = error instanceof Error ? error.message : "Could not load this session.";
         setState({ phase: "error", message });
       });
     return () => {
@@ -154,7 +154,7 @@ export function DashboardPage() {
       <div className="flex items-center justify-between pt-2 pb-2 gap-3">
         <div>
           <h1 className="text-xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">MESA lab · harness session</p>
+          <p className="text-sm text-muted-foreground mt-0.5">MESA lab · Lab session</p>
         </div>
         <Button
           onClick={() => setLoadId((value) => value + 1)}
@@ -171,7 +171,7 @@ export function DashboardPage() {
       {state.phase === "loading" && <DashboardSkeleton />}
       {state.phase === "error" && (
         <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
-          <p className="text-sm font-medium">The harness session did not load.</p>
+          <p className="text-sm font-medium">Could not load this session.</p>
           <p className="text-xs font-mono text-muted-foreground break-all">{state.message}</p>
           <Button size="sm" variant="outline" className="rounded-full" onClick={() => setLoadId((value) => value + 1)}>
             Retry
@@ -275,16 +275,16 @@ function DashboardBody({
           </div>
         </div>
         {rows.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-muted-foreground">No runs in this harness session.</p>
+          <p className="px-5 py-8 text-sm text-muted-foreground">No runs in this lab session.</p>
         ) : (
           <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[26%] text-xs">Task</TableHead>
                   <TableHead className="w-[20%] text-xs">Agent</TableHead>
-                  <TableHead className="w-[12%] text-xs">Phase</TableHead>
+                  <TableHead className="w-[12%] text-xs">Run type</TableHead>
                   <TableHead className="w-[12%] text-xs">Status</TableHead>
-                  <TableHead className="w-[14%] text-xs">Verifier</TableHead>
+                  <TableHead className="w-[14%] text-xs">Checks</TableHead>
                   <TableHead className="w-[8%] text-xs text-right">Latency</TableHead>
                   <TableHead className="w-[8%] text-xs text-right">When</TableHead>
                 </TableRow>

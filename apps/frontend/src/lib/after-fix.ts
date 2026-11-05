@@ -16,9 +16,9 @@ export const STORYBOARD_AFTER_FIX = {
 } as const;
 
 export const FIX_KIND_LABELS: Record<FixKind, string> = {
-  controlled_retry: "controlled retry",
-  pre_response_check: "pre-response check",
-  permission_guard: "permission guard",
+  controlled_retry: "Safe retry",
+  pre_response_check: "Check before reply",
+  permission_guard: "Permission check",
 };
 
 /** Paths on `POST /runs` `results[i].links`. */
@@ -103,12 +103,12 @@ export function afterFixRunBody(input: {
 }): { ok: true; body: AfterFixRunBody } | { ok: false; message: string } {
   const fix_kinds = selectableFixKinds(input.fixKinds);
   if (fix_kinds.length === 0) {
-    return { ok: false, message: "Select at least one proposed fix. after_fix requires fix_kinds." };
+    return { ok: false, message: "Select at least one proposed fix." };
   }
   const parent_run_id = input.parentRunId.trim();
-  if (!parent_run_id) return { ok: false, message: "parent_run_id is required." };
+  if (!parent_run_id) return { ok: false, message: "An earlier run is required." };
   const agent_id = input.agentId.trim();
-  if (!agent_id) return { ok: false, message: "agent_id is required." };
+  if (!agent_id) return { ok: false, message: "An agent is required." };
   const body: AfterFixRunBody = {
     agent_id,
     phase: AFTER_FIX_PHASE,
@@ -319,13 +319,13 @@ export function passedWord(value: boolean | null): string {
 export function beforeAfterHeadline(view: BeforeAfterView): string | null {
   if (view.beforePassed === null || view.afterPassed === null) return null;
   if (view.beforePassed === false && view.afterPassed === true) {
-    return "Verifier recovered: failed → passed";
+    return "Checks recovered: failed → passed";
   }
   if (view.beforePassed === true && view.afterPassed === true) {
-    return "Verifier passed before and after";
+    return "Checks passed before and after";
   }
   if (view.beforePassed === true && view.afterPassed === false) {
-    return "Verifier regressed: passed → failed";
+    return "Checks regressed: passed → failed";
   }
-  return "Verifier still failed after replay";
+  return "Checks still failed after replay";
 }

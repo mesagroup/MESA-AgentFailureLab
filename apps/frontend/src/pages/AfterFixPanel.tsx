@@ -89,11 +89,11 @@ export function AfterFixPanel({
         <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium">Select fixes</span>
-            <span className="text-xs font-mono text-muted-foreground">diagnosis.proposed_fixes</span>
+            <span className="text-xs text-muted-foreground">From analysis</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Choose a proposed fix and replay on the test instance. The harness copies the parent fault
-            unless Clean treated is on. Success is the verifier, not the agent claim.
+            Choose a proposed fix and replay on the test agent. The earlier fault is reused unless
+            you re-run without the fault. Success is the checks, not the agent claim.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {proposed.map((kind) => {
@@ -110,10 +110,11 @@ export function AfterFixPanel({
                     active
                       ? "border-foreground bg-foreground text-background"
                       : "border-border text-muted-foreground hover:text-foreground",
+                    "font-sans",
                   )}
                 >
                   {FIX_KIND_LABELS[kind]}
-                  {adr ? " · ADR-002" : ""}
+                  {adr ? " · suggested" : ""}
                 </button>
               );
             })}
@@ -126,18 +127,20 @@ export function AfterFixPanel({
               onChange={(event) => onCleanTreated(event.target.checked)}
             />
             <span>
-              Clean treated
+              Re-run without the fault
               <span className="block text-xs text-muted-foreground">
-                Sends injection: null. Leave unchecked to omit injection and replay the parent fault.
+                Control run with no fault applied. Leave unchecked to replay the earlier fault.
               </span>
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" size="sm" onClick={onReplay} disabled={pending || selected.length === 0}>
-              {pending ? "Replaying…" : "Replay after_fix"}
+              {pending ? "Replaying…" : "Verify fix"}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {selected.length === 0 ? "Select at least one fix." : `fix_kinds ${selected.join(", ")}`}
+              {selected.length === 0
+                ? "Select at least one fix."
+                : selected.map((kind) => FIX_KIND_LABELS[kind]).join(", ")}
             </span>
           </div>
         </div>
@@ -201,26 +204,27 @@ function LineageCard({
 
   return (
     <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
-      <span className="text-xs font-medium">Parent / child runs</span>
+      <span className="text-xs font-medium">Earlier / follow-up runs</span>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
         <Fact
-          label="parent_run_id"
+          label="Earlier run"
           value={links.parent_run_id ?? "—"}
           href={parentTo}
           extraHref={parentTraceTo}
-          extraLabel="parent trace"
+          extraLabel="From trace"
         />
         <Fact
-          label="after_fix run"
+          label="Follow-up run"
           value={links.child_run_id ?? "—"}
           href={childTo}
           extraHref={childTraceTo}
-          extraLabel="after_fix trace"
+          extraLabel="Follow-up trace"
         />
       </dl>
       {childRun?.fix_kinds?.length ? (
         <p className="text-xs text-muted-foreground">
-          {runPhaseLabel(childRun.phase)} · fix_kinds {childRun.fix_kinds.join(", ")}
+          {runPhaseLabel(childRun.phase)} ·{" "}
+          {childRun.fix_kinds.map((kind) => FIX_KIND_LABELS[kind as FixKind] ?? kind).join(", ")}
         </p>
       ) : parentRun?.phase ? (
         <p className="text-xs text-muted-foreground">{runPhaseLabel(parentRun.phase)}</p>
@@ -271,7 +275,7 @@ function BeforeAfterCard({
     <div className="rounded-2xl bg-card shadow-island p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-medium">Before / after</span>
-        <span className="text-xs font-mono text-muted-foreground">outcome.verifier</span>
+        <span className="text-xs text-muted-foreground">Pass checks</span>
       </div>
       {beforeAfterHeadline(view) && (
         <p
@@ -291,8 +295,8 @@ function BeforeAfterCard({
         <p className="text-xs text-green-500">Recovered: {view.recovered.join(", ")}</p>
       )}
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Injected parent (before) versus after_fix on the test instance. A regression is a check
-        that passed before and failed after.
+        Earlier run with the fault (before) versus verify-fix on the test agent. A regression is a
+        check that passed before and failed after.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -305,7 +309,7 @@ function BeforeAfterCard({
           </thead>
           <tbody className="font-mono text-xs">
             <CompareRow
-              label="verifier"
+              label="checks"
               before={passedWord(view.beforePassed)}
               after={passedWord(view.afterPassed)}
               beforeTone={view.beforePassed}

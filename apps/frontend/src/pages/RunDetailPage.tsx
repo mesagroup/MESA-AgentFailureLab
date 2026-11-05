@@ -133,7 +133,7 @@ export function RunDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-muted-foreground">Parent run</dt>
+            <dt className="text-xs text-muted-foreground">From run</dt>
             <dd className="font-mono text-xs mt-0.5 break-all">{run.parent_run_id ?? "—"}</dd>
           </div>
         </dl>

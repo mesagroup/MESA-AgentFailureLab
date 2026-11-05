@@ -12,10 +12,10 @@ const STYLES: Record<TraceSource, string> = {
 export function TraceSourceBadge({ source }: { source: TraceSource }) {
   return (
     <span
-      title={TRACE_SOURCE_LABELS[source]}
-      className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", STYLES[source])}
+      title={source}
+      className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs", STYLES[source])}
     >
-      {source}
+      {TRACE_SOURCE_LABELS[source]}
     </span>
   );
 }

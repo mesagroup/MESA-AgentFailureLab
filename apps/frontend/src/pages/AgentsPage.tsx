@@ -26,6 +26,7 @@ import {
   type OtelSourceDraft,
   type OtelSourceFieldError,
 } from "@/lib/otel";
+import { FIX_KIND_LABELS } from "@/lib/after-fix";
 import {
   FIX_KINDS,
   JURY_LAUNCH_COPY,
@@ -92,7 +93,7 @@ const EMPTY_FORM: FormState = {
 
 const EDIT_TABS: { id: AgentEditTab; label: string }[] = [
   { id: "endpoints", label: "Endpoints" },
-  { id: "otel", label: "OTel" },
+  { id: "otel", label: "Trace import" },
   { id: "tasks", label: "Tasks" },
 ];
 
@@ -197,7 +198,7 @@ export function AgentsPage() {
   function validate(): boolean {
     const errs: FormErrors = {};
     if (!form.name.trim()) errs.name = "Name is required";
-    if (!form.instance_base_url.trim()) errs.instance_base_url = "Instance URL is required";
+    if (!form.instance_base_url.trim()) errs.instance_base_url = "Production agent URL is required";
     const taskError = validateTasks(form.tasks);
     if (taskError) errs.tasks = taskError;
     const nextOtelErrors = otelSourceErrors(form.otel);
@@ -328,9 +329,9 @@ export function AgentsPage() {
                   </span>
 
                   <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" onClick={() => setPullAgent(agent)} title="Pull traces">
+                    <Button size="sm" variant="ghost" onClick={() => setPullAgent(agent)} title="Import traces">
                       <RefreshCw className="h-3.5 w-3.5" />
-                      <span className="hidden md:inline">Pull</span>
+                      <span className="hidden md:inline">Import</span>
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
                       <Play className="h-3.5 w-3.5" />
@@ -427,7 +428,7 @@ export function AgentsPage() {
               <div className="flex-1 overflow-y-auto px-8 py-6">
                 <div className={cn("space-y-2", editTab !== "endpoints" && "hidden")}>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Instance</span>
+                    <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">Production agent URL</span>
                     <div className="flex-1">
                       <Input
                         value={form.instance_base_url}
@@ -439,12 +440,12 @@ export function AgentsPage() {
                     </div>
                   </div>
                   {isLoopback(form.instance_base_url) && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[76px]">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[124px]">
                       Loopback addresses are unreachable from the lab server in production. Use a public URL (e.g. https://…onrender.com).
                     </p>
                   )}
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Test</span>
+                    <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">Test agent URL</span>
                     <div className="flex-1">
                       <Input
                         value={form.test_instance_base_url}
@@ -455,16 +456,16 @@ export function AgentsPage() {
                     </div>
                   </div>
                   {isLoopback(form.test_instance_base_url) && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[76px]">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[124px]">
                       Loopback addresses are unreachable from the lab server in production. Use a public URL (e.g. https://…onrender.com).
                     </p>
                   )}
                   {errors.instance_base_url && (
-                    <p className="text-xs text-destructive pl-[76px]">{errors.instance_base_url}</p>
+                    <p className="text-xs text-destructive pl-[124px]">{errors.instance_base_url}</p>
                   )}
-                  <p className="text-xs text-muted-foreground pl-[76px]">Test defaults to instance URL if empty.</p>
+                  <p className="text-xs text-muted-foreground pl-[124px]">Test defaults to production URL if empty.</p>
                   <div className="flex items-center gap-3 pt-2">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">GitHub</span>
+                    <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">GitHub</span>
                     <div className="flex-1">
                       <Input
                         value={form.github_repo_url}
@@ -474,7 +475,7 @@ export function AgentsPage() {
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground pl-[76px]">Optional. Used to open diagnoses as GitHub issues.</p>
+                  <p className="text-xs text-muted-foreground pl-[124px]">Optional. Used to open diagnoses as GitHub issues.</p>
                 </div>
 
                 <div className={cn("space-y-7", editTab !== "otel" && "hidden")}>
@@ -578,7 +579,7 @@ export function AgentsPage() {
       <Sheet open={!!pullAgent} onOpenChange={(open) => { if (!open) setPullAgent(null); }}>
         <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">
           <div className="shrink-0 px-8 pt-6 pb-4 border-b border-border/40">
-            <p className="text-xs text-muted-foreground mb-0.5">Pull traces</p>
+            <p className="text-xs text-muted-foreground mb-0.5">Import traces</p>
             <SheetTitle className="font-mono text-base font-medium tracking-tight">
               {pullAgent?.name ?? ""}
             </SheetTitle>
@@ -613,15 +614,15 @@ function OtelSourceFields({
           onChange={(event) => onChange("enabled", event.target.checked)}
         />
         <span>
-          <span className="font-medium">OTel source</span>
+          <span className="font-medium">Trace import source</span>
           <span className="mt-1 block text-xs text-muted-foreground">
-            Dual prod and test traces URLs. Open lab: sources use auth none. Schema remap stays on the agent (ADR-001: remap does not invent verifier or fault labels). Version 1.
+            Dual production and test traces URLs. Open lab: sources use auth none. Schema remap stays on the agent (ADR-001: remap does not invent check or fault labels). Version 1.
           </span>
         </span>
       </label>
       {draft.enabled && (
         <div className="space-y-3">
-          <FormField label="Prod traces URL" error={showErrors ? errors.prod_endpoint : undefined} required>
+          <FormField label="Production traces" error={showErrors ? errors.prod_endpoint : undefined} required>
             <Input
               value={draft.prodEndpoint}
               onChange={(event) => onChange("prodEndpoint", event.target.value)}
@@ -630,7 +631,7 @@ function OtelSourceFields({
               aria-invalid={showErrors && Boolean(errors.prod_endpoint)}
             />
           </FormField>
-          <FormField label="Test traces URL" error={showErrors ? errors.test_endpoint : undefined} required>
+          <FormField label="Test traces" error={showErrors ? errors.test_endpoint : undefined} required>
             <Input
               value={draft.testEndpoint}
               onChange={(event) => onChange("testEndpoint", event.target.value)}
@@ -932,7 +933,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
 
         <div className="flex flex-1 overflow-hidden">
           <div className="w-[32%] shrink-0 border-r border-border/40 px-8 py-6">
-            <p className="text-sm font-medium mb-3">Phase</p>
+            <p className="text-sm font-medium mb-3">Run type</p>
             <div className="flex flex-col gap-2" role="radiogroup" aria-label="Launch phase">
               {LAUNCH_PHASES.map((p) => {
                 const phaseLocked = !hasTestRun && p !== "baseline";
@@ -1193,7 +1194,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
 
             {phase === "after_fix" && (
               <div>
-                <p className="text-sm font-medium mb-3">Fix kinds</p>
+                <p className="text-sm font-medium mb-3">Fixes</p>
                 <div className="flex flex-wrap gap-2">
                   {FIX_KINDS.map((kind) => {
                     const active = fixKinds.includes(kind);
@@ -1204,13 +1205,13 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                         aria-pressed={active}
                         onClick={() => setFixKinds((prev) => toggleLaunchFixKind(prev, kind))}
                         className={cn(
-                          "px-2.5 py-1 rounded-full text-xs font-mono border transition-colors",
+                          "px-2.5 py-1 rounded-full text-xs border transition-colors",
                           active
                             ? "border-foreground bg-foreground text-background"
                             : "border-border text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        {kind}
+                        {FIX_KIND_LABELS[kind]}
                       </button>
                     );
                   })}
@@ -1308,7 +1309,9 @@ function JuryLaunchFields({
 
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
-          <p className="text-sm font-medium">{JURY_LAUNCH_COPY.referenceLabel}</p>
+          <p className="text-sm font-medium">
+            {mode === "replay" ? JURY_LAUNCH_COPY.referenceReplay : JURY_LAUNCH_COPY.referenceAttack}
+          </p>
           <span className="text-xs text-muted-foreground">{references.length}/{totalReferences}</span>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
@@ -1488,7 +1491,7 @@ function JuryLaunchFields({
 
       {mode === "replay" && (
         <div>
-          <p className="text-sm font-medium mb-3">Fix kinds</p>
+          <p className="text-sm font-medium mb-3">Fixes</p>
           <p className="text-xs text-muted-foreground mb-2">{JURY_LAUNCH_COPY.replayHint}</p>
           <div className="flex flex-wrap gap-2">
             {FIX_KINDS.map((kind) => {
@@ -1501,13 +1504,13 @@ function JuryLaunchFields({
                   disabled={launching}
                   onClick={() => onToggleFixKind(kind)}
                   className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-mono border transition-colors disabled:opacity-50",
+                    "px-2.5 py-1 rounded-full text-xs border transition-colors disabled:opacity-50",
                     active
                       ? "border-foreground bg-foreground text-background"
                       : "border-border text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {kind}
+                  {FIX_KIND_LABELS[kind]}
                 </button>
               );
             })}
