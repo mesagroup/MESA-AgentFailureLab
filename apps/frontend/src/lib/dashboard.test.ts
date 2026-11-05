@@ -21,8 +21,8 @@ test("a run with no trace opens the run", () => {
 
 test("trace links stay aligned with the run at the same index", () => {
   const links = [
-    { run_id: "run-new", first_trace_id: "trace-new", traces: [] },
-    { run_id: "run-old", first_trace_id: null, traces: [] },
+    { run_id: "run-new", first_trace_id: "trace-new", traces: [], parent_run_id: null, child_run_ids: [] },
+    { run_id: "run-old", first_trace_id: null, traces: [], parent_run_id: null, child_run_ids: [] },
   ];
   assert.equal(linkFor(links, { run_id: "run-new" }, 0)?.first_trace_id, "trace-new");
   assert.equal(linkFor(links, { run_id: "run-old" }, 1)?.first_trace_id, null);

@@ -172,6 +172,8 @@ describe("harness session snapshot", () => {
       const errorLink = body.trace_links[0];
       assert.equal(errorLink.first_trace_id, null);
       assert.deepEqual(errorLink.traces, []);
+      assert.equal(errorLink.parent_run_id, null);
+      assert.deepEqual(errorLink.child_run_ids, []);
 
       const failedLink = body.trace_links[1];
       assert.equal(failedLink.first_trace_id, "trace-fail");
@@ -249,8 +251,37 @@ describe("harness session snapshot", () => {
     assert.equal(view.runs[0]?.run_id, "run-second");
     assert.equal(view.trace_links[0]?.first_trace_id, null);
     assert.equal(view.trace_links[1]?.first_trace_id, "trace-first");
+    assert.equal(view.trace_links[0]?.parent_run_id, null);
+    assert.deepEqual(view.trace_links[1]?.child_run_ids, []);
     assert.equal(view.counts.passed, 1);
     assert.equal(view.counts.queued, 1);
     assert.equal(view.counts.scope, HARNESS_SESSION_SCOPE);
+  });
+
+  it("pairs after_fix children with the parent run id", () => {
+    const parent = injectedFailure();
+    const child: Run = {
+      run_id: "run-after",
+      agent_id: parent.agent_id,
+      task_id: parent.task_id,
+      parent_run_id: parent.run_id,
+      phase: "after_fix",
+      status: "passed",
+      trace_ids: [],
+      injection_plan: parent.injection_plan,
+      fix_kinds: ["pre_response_check"],
+    };
+    const checked = validateRun(child);
+    assert.equal(checked.ok, true, checked.ok ? "" : checked.errors.join("; "));
+    const view = sessionView({
+      runs: [parent, child],
+      traces: [],
+      agentCount: 1,
+    });
+    assert.equal(view.runs[0]?.run_id, "run-after");
+    assert.equal(view.trace_links[0]?.parent_run_id, "run-failed");
+    assert.deepEqual(view.trace_links[0]?.child_run_ids, []);
+    assert.deepEqual(view.trace_links[1]?.child_run_ids, ["run-after"]);
+    assert.equal(view.trace_links[1]?.parent_run_id, null);
   });
 });

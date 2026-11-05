@@ -1,10 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { FIX_KINDS, type AgentRunRequest, type FixKind } from "../src/index.js";
+import {
+  ADR_FIX_BY_CATEGORY,
+  adrFixForCategory,
+  FIX_KINDS,
+  isFixKind,
+  type AgentRunRequest,
+  type FixKind,
+} from "../src/index.js";
 
 describe("AgentRunRequest", () => {
   it("keeps fix_kinds optional and limited to the three ADR-002 ids", () => {
     assert.deepEqual([...FIX_KINDS], ["controlled_retry", "pre_response_check", "permission_guard"]);
+    assert.equal(isFixKind("permission_guard"), true);
+    assert.equal(isFixKind("fault_kinds"), false);
+    assert.equal(adrFixForCategory("Execution"), "controlled_retry");
+    assert.equal(adrFixForCategory("Verification"), "pre_response_check");
+    assert.equal(adrFixForCategory("Security"), "permission_guard");
+    assert.equal(adrFixForCategory("Plan"), undefined);
+    assert.deepEqual(ADR_FIX_BY_CATEGORY, {
+      Execution: "controlled_retry",
+      Verification: "pre_response_check",
+      Security: "permission_guard",
+    });
 
     const seeded: AgentRunRequest = {
       agent_id: "reference-shop",

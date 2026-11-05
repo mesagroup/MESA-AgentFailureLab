@@ -625,6 +625,11 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 </button>
               ))}
             </div>
+            {phase === "after_fix" && (
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                after_fix needs fix_kinds from a diagnosis. Select proposed fixes on the trace timeline, then replay.
+              </p>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-8 py-6">

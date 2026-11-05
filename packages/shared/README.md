@@ -10,7 +10,7 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`) and `planShopTask`.
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`), `planShopTask`, `FIX_KINDS`, `isFixKind`, and `ADR_FIX_BY_CATEGORY` / `adrFixForCategory` (ADR-002 MVP map: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`).
 - `@mesa/shared/otel` — `mapOtelImport`. This entry loads Ajv. It maps an OTel import batch onto Traces and validates each one with `validateTrace`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
@@ -60,7 +60,7 @@ Phase rules:
 - `diagnosis` stays `null` until Grok runs. Fault labels and the diagnosis category need not match.
 - Every step requires `latency_ms`, `token_usage` (`input`, `output`), and `cost_usd`. `totals` is required too.
 
-`diagnosis.step_id` is the culprit step. `diagnosis.proposed_fixes` uses the same `FixKind` values the Run stores in `fix_kinds` once a fix is applied.
+`diagnosis.step_id` is the culprit step. `diagnosis.proposed_fixes` uses the same `FixKind` values the Run stores in `fix_kinds` once a fix is applied. There is no `fault_kinds` field. To highlight the ADR-002 default for `diagnosis.category`, use `adrFixForCategory`. That map is not a diagnosis and does not write `Run.fix_kinds`.
 
 Trace `status`: `completed` when the attempt finished and the verifier passed; `failed` when it finished and the verifier did not; `timeout` when the harness hit a time limit; `error` when a runtime or harness error stopped the attempt.
 

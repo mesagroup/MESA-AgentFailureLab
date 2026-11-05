@@ -58,7 +58,7 @@ On `main` today:
 | Dashboard counts — Failed includes runs in `error` | Open ([#107](https://github.com/mesagroup/MESA-AgentFailureLab/issues/107)). |
 | No localhost on a public deploy | Open ([#108](https://github.com/mesagroup/MESA-AgentFailureLab/issues/108)). Block agent endpoints that a public deploy cannot call. |
 | Open the fix as a GitHub issue | Planned ([#52](https://github.com/mesagroup/MESA-AgentFailureLab/issues/52)). Agent has no destination repository field yet. |
-| **Fix → replay → before/after** — choose a proposed fix, start `after_fix`, compare `outcome.verifier` | Planned ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). `POST /runs` with `phase: after_fix` and `fix_kinds` is on main ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40), [#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). The screen is not. The run is a new call to the owner's deploy, not an in-lab patch. |
+| **Fix → replay → before/after** — choose a proposed fix, start `after_fix`, compare `outcome.verifier` | Open ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). Harness: `POST /runs` `phase: after_fix` with `parent_run_id` and `fix_kinds` (inherits the parent injection plan when `injection` is omitted; response includes `parent` and `links`). The UI screen is not built. The run is a new call to the owner's deploy, not an in-lab patch. |
 
 ## Under evaluation
 

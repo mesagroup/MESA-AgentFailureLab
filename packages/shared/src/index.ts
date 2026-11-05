@@ -30,6 +30,7 @@ export const GROK_FORBIDDEN_WRITE_PATHS = [
 
 export {
   AGENT_INSTANCE_KINDS,
+  ADR_FIX_BY_CATEGORY,
   FAULT_CATEGORIES,
   FIX_KINDS,
   RUN_PHASES,
@@ -41,6 +42,8 @@ export {
   TASK_EVALSET_VERSION,
   TRACE_STATUSES,
   TRACE_STORE_KINDS,
+  adrFixForCategory,
+  isFixKind,
 } from "./types.js";
 
 export {
