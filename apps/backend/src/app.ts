@@ -16,6 +16,7 @@ import { sessionView } from "./harness/session.js";
 import { registerFrontendCors } from "./cors.js";
 import { isRecord } from "./util.js";
 import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/routes.js";
+import { registerEvalResultsRoutes } from "./eval/routes.js";
 import { registerEvalsetRoutes, type EvalsetGenerateOptions } from "./evalset/routes.js";
 import { filterTraces, parseTraceListQuery } from "./otel/present.js";
 import { registerOtelImportRoutes, type OtelRouteOptions } from "./otel/routes.js";
@@ -102,6 +103,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOtelImportRoutes(app, agents, store, { fetchImpl: options.otelFetch, now: options.now });
   registerDiagnosisRoutes(app, store, agents, options.diagnosis);
   registerEvalsetRoutes(app, options.evalset);
+  registerEvalResultsRoutes(app, options.evalset);
   // Production Trace import (#192). Isolated from POST /runs and jury-case.
   registerTraceImportRoutes(app, store);
 

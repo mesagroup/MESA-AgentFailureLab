@@ -85,7 +85,7 @@ not this MVP.
   budget. Invalid configuration fails startup. The backend does not retry the
   provider request automatically or fall back to a fake diagnosis.
 - `XAI_API_KEY` remains on agentservice. The backend never needs it.
-- `EVALSET_TIMEOUT_MS`: total deadline for `POST /evalset/generate` (default `45000`). That route proxies `AGENTSERVICE_URL/evalset/generate` and does not persist an Agent.
+- `EVALSET_TIMEOUT_MS`: total deadline for `POST /evalset/generate` and `GET /eval/results` (default `45000`). Both proxy `AGENTSERVICE_URL`. Generate does not persist an Agent. Results is a read of committed eval files on agentservice.
 - `x-diagnosis-cached`: `false` on a newly saved diagnosis, `true` for an existing
   diagnosis. Cached responses do not claim original-call timing or usage.
 - `x-diagnosis-duration-ms`: on a new successful diagnosis only, backend wall
@@ -174,6 +174,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces. After a fresh boot this is the seven demo traces (four shop including `trace-t3-forged-checkout`, three library). Filter `source` includes `production` |
 | `POST` | `/traces` | Production import. Body is one Trace. 201 stored document with `source: production`. 400 `invalid_trace` / `fault_forbidden`, 409 `conflict`, 413 `payload_too_large`. See [production-import.md](../../docs/production-import.md) |
+| `GET` | `/eval/results` | Proxy to agentservice. Scoreboard JSON (`metrics[]` plus `report` and optional `baseline`). 503 when `AGENTSERVICE_URL` is unset, 404 when upstream has no `latest.json`, 502 on upstream failure |
 
 ### POST /runs
 
@@ -359,6 +360,7 @@ The demo seeds are `reference-shop` (`instance.kind` `reference`, five tasks) an
 - `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
 - `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, `003_traces.sql`, and `004_otel_pull_cursors.sql`. Shipped files stay unchanged. Backup does not add a migration
 - `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`. `cli.ts` is `db:export`, `db:import`, and `db:reset`
+- `src/eval/` — `GET /eval/results` proxy to agentservice (same `AGENTSERVICE_URL` / `EVALSET_TIMEOUT_MS` as evalset generate)
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
 
 ## Persistence
