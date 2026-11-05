@@ -11,7 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch } from "@/lib/agents-page";
+import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch, isLoopback } from "@/lib/agents-page";
 import { createRun, deleteAgent, getJuryCase, listAgents, listRuns, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
 import {
   emptyOtelDraft,
@@ -284,8 +284,11 @@ export function AgentsPage() {
                     </p>
                   </div>
 
-                  <span className="hidden sm:block font-mono text-xs text-muted-foreground/60 truncate max-w-[260px]">
-                    {agent.instance.base_url}
+                  <span className="hidden sm:flex items-center gap-1.5 min-w-0 max-w-[260px]">
+                    <span className="font-mono text-xs text-muted-foreground/60 truncate">{agent.instance.base_url}</span>
+                    {isLoopback(agent.instance.base_url) && (
+                      <span className="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">local</span>
+                    )}
                   </span>
 
                   <span className="text-xs text-muted-foreground/60 shrink-0 text-right">
@@ -399,23 +402,33 @@ export function AgentsPage() {
                       <Input
                         value={form.instance_base_url}
                         onChange={(e) => setField("instance_base_url", e.target.value)}
-                        placeholder="http://127.0.0.1:3002"
+                        placeholder="https://your-agent.onrender.com"
                         className="font-mono text-xs"
                         aria-invalid={!!errors.instance_base_url}
                       />
                     </div>
                   </div>
+                  {isLoopback(form.instance_base_url) && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[76px]">
+                      Loopback addresses are unreachable from the lab server in production. Use a public URL (e.g. https://…onrender.com).
+                    </p>
+                  )}
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Test</span>
                     <div className="flex-1">
                       <Input
                         value={form.test_instance_base_url}
                         onChange={(e) => setField("test_instance_base_url", e.target.value)}
-                        placeholder={form.instance_base_url || "http://127.0.0.1:3002"}
+                        placeholder={form.instance_base_url || "https://your-agent.onrender.com"}
                         className="font-mono text-xs"
                       />
                     </div>
                   </div>
+                  {isLoopback(form.test_instance_base_url) && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pl-[76px]">
+                      Loopback addresses are unreachable from the lab server in production. Use a public URL (e.g. https://…onrender.com).
+                    </p>
+                  )}
                   {errors.instance_base_url && (
                     <p className="text-xs text-destructive pl-[76px]">{errors.instance_base_url}</p>
                   )}
@@ -570,7 +583,7 @@ function OtelSourceFields({
             <Input
               value={draft.prodEndpoint}
               onChange={(event) => onChange("prodEndpoint", event.target.value)}
-              placeholder="http://127.0.0.1:8787/internal/otel/traces?source=prod"
+              placeholder="https://your-agent.onrender.com/internal/otel/traces?source=prod"
               className="font-mono text-xs"
               aria-invalid={showErrors && Boolean(errors.prod_endpoint)}
             />
@@ -579,7 +592,7 @@ function OtelSourceFields({
             <Input
               value={draft.testEndpoint}
               onChange={(event) => onChange("testEndpoint", event.target.value)}
-              placeholder="http://127.0.0.1:8787/internal/otel/traces?source=test"
+              placeholder="https://your-agent.onrender.com/internal/otel/traces?source=test"
               className="font-mono text-xs"
               aria-invalid={showErrors && Boolean(errors.test_endpoint)}
             />

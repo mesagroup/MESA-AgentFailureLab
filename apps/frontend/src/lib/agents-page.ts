@@ -1,5 +1,14 @@
 import { isSeededAgentId } from "@mesa/shared";
 
+export function isLoopback(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return /localhost|127\.0\.0\.1|::1/.test(url);
+  }
+}
+
 /**
  * Demo seeds use the same edit form as an agent someone registered.
  * Name, description, and tasks go through PUT.
