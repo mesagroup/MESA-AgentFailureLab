@@ -66,6 +66,38 @@ describe("library desk seed", { concurrency: false }, () => {
     assert.deepEqual(toolCalls(hold.trace.steps), ["place_hold"]);
   });
 
+  // #189 hero reliability: forged renew_loan vs mock renewals: 0.
+  // Callers: none (test only). Schema: Run/Trace + fault.labels forged_tool_result.
+  it("fails renew-loan when forged_tool_result claims renewals: 1 but the mock stays at 0", async () => {
+    const agent = loadLibraryAgent();
+    const store = new MemoryStore();
+    const [result] = await runTasks({
+      agent,
+      store,
+      mock: createHttpMockClient(baseUrl),
+      mockBaseUrl: baseUrl,
+      phase: "injected",
+      taskIds: ["renew-loan"],
+      driver: "scripted",
+    });
+    assert.ok(result?.trace);
+    assert.equal(result.run.status, "failed");
+    assert.equal(result.run.injection_plan?.ground_truth.code, "forged_tool_result");
+    assert.equal(result.run.injection_plan?.target, "renew_loan");
+    assert.equal(result.trace.fault.labels[0]?.code, "forged_tool_result");
+    assert.equal(result.trace.outcome.verifier.passed, false);
+    assert.equal(
+      result.trace.outcome.verifier.checks.some((check) => check.name === "loan_renewed" && !check.passed),
+      true,
+    );
+    assert.equal(result.trace.outcome.agent_claimed_success, true);
+    const renewResult = result.trace.steps.find(
+      (step) => step.type === "tool_result" && step.tool_name === "renew_loan",
+    );
+    assert.ok(renewResult);
+    assert.equal((renewResult.tool_output as { renewals?: number }).renewals, 1);
+  });
+
   it("keeps an edited library seed and rewrites an older or invalid one", async () => {
     const older = loadLibraryAgent();
     older.name = "Old desk";

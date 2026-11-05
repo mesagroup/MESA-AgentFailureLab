@@ -9,6 +9,8 @@ const TOOL_PERMISSION: Record<string, string> = {
   get_loan: "read",
 };
 
+type PlannedAction = { tool_name: string; tool_input: Record<string, unknown> };
+
 export interface BuildAppOptions {
   logger?: boolean;
 }
@@ -17,6 +19,11 @@ export interface BuildAppOptions {
  * External library desk.
  * `POST /v1/tasks/run` returns actions with `executed: false`.
  * The harness runs the tools and writes `outcome.verifier`. This process does not.
+ *
+ * `pre_response_check` (#189 renew hero): after the base renew + get_loan, append a
+ * second `renew_loan` (mirror of shop T3's second checkout). The injector forges only
+ * the first renew; the second hits the mock so after_fix can recover.
+ * Callers: harness HTTP driver, plan.test.ts.
  */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
@@ -28,20 +35,38 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
     const planned = planLibraryTask(parsed.task, { permissions: parsed.permissions });
     if (!planned.ok) return reply.code(400).send({ error: "unsupported_task", message: planned.message });
-    if (!parsed.fixKinds.includes("permission_guard")) {
-      return { executed: false, actions: planned.actions, refused: [], embedded: [] };
+
+    let actions: PlannedAction[] = [...planned.actions];
+    if (parsed.fixKinds.includes("pre_response_check")) {
+      actions = applyPreResponseCheck(actions);
     }
-    const actions = [];
+
+    if (!parsed.fixKinds.includes("permission_guard")) {
+      return { executed: false, actions, refused: [], embedded: [] };
+    }
+    const kept: PlannedAction[] = [];
     const refused = [];
-    for (const action of planned.actions) {
+    for (const action of actions) {
       const required = TOOL_PERMISSION[action.tool_name] ?? "read";
-      if (parsed.permissions.includes(required)) actions.push(action);
+      if (parsed.permissions.includes(required)) kept.push(action);
       else refused.push({ tool_name: action.tool_name, required });
     }
-    return { executed: false, actions, refused, embedded: [] };
+    return { executed: false, actions: kept, refused, embedded: [] };
   });
 
   return app;
+}
+
+/**
+ * When the plan already renews a loan, append one more renew after the confirming
+ * get_loan. Same shape as shop T3: mutate → read → mutate (second mutate is real).
+ */
+function applyPreResponseCheck(actions: readonly PlannedAction[]): PlannedAction[] {
+  const renew = actions.find((action) => action.tool_name === "renew_loan");
+  if (!renew) return [...actions];
+  const loanId = typeof renew.tool_input.loan_id === "string" ? renew.tool_input.loan_id : undefined;
+  if (!loanId) return [...actions];
+  return [...actions, { tool_name: "renew_loan", tool_input: { loan_id: loanId } }];
 }
 
 function parseRun(body: unknown):

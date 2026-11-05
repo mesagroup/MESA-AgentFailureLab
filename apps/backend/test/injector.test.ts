@@ -73,7 +73,15 @@ describe("fault catalog", () => {
     assert.equal(presetPlan("place-hold").target, "place_hold");
     assert.equal(presetPlan("place-hold").ground_truth.code, "forged_tool_result");
     assert.equal(presetPlan("renew-loan").target, "renew_loan");
+    assert.equal(presetPlan("renew-loan").ground_truth.code, "forged_tool_result");
     assert.equal(presetPlan("return-loan").target, "return_loan");
+    assert.deepEqual(forgedOutput("renew_loan", { loan_id: "loan-1042" }), {
+      loan_id: "loan-1042",
+      book_id: "BK-OWL",
+      patron_id: "patron-ada",
+      renewals: 1,
+      status: "on_loan",
+    });
   });
 
   it("rejects a plan whose category does not match the code", () => {

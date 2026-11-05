@@ -80,7 +80,8 @@ export const TASK_FAULT_PRESETS: Readonly<Record<string, string>> = {
   T3: "forged_tool_result",
   T4: "stale_tool_result",
   T5: "forged_permission_success",
-  "renew-loan": "wrong_argument",
+  // Hero reliability (#189): forge renew result (renewals: 1) while the mock stays at 0.
+  "renew-loan": "forged_tool_result",
   "return-loan": "dropped_tool_call",
   "place-hold": "forged_tool_result",
 };
