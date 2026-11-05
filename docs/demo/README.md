@@ -1,9 +1,12 @@
-# Video demo narrato (provvisorio)
+# CHAOS.AI demo
 
-Questo è il video demo narrato **provvisorio** di CHAOS.AI / Agent Failure Lab: [`demo-chaos-ai-it-v2.mp4`](demo-chaos-ai-it-v2.mp4) (voce e sottotitoli in italiano, circa 1:40, 1920×1080).
+There is no demo video checked into this folder.
 
-- Basato su [`docs/demo-script.md`](../demo-script.md) §E allo stato di `main` `603ff7b`.
-- Le scene 6–8 sono slide finché [#185](https://github.com/mesagroup/MESA-AgentFailureLab/issues/185) non è sul deploy.
-- sha256: `b9151c5989eab0a7c954bd40f59b6dfd16afa033b672742ab16e30289b667038`
+Any earlier narrated cut was only a brief recap of a much larger idea. That idea still needs to be brought to completion.
 
-Yuri dirà quando sostituirlo. Un aggiornamento successivo rimpiazza questo file.
+Live frontend (hackathon deploy): [https://mesa-frontend-rleq.onrender.com](https://mesa-frontend-rleq.onrender.com)
+
+During the team’s hackathon work, features already shipped. They are meant to evolve further after the hackathon — post-hackathon roadmap and follow-on work — and are not a finished product.
+
+- Storyboard and live-demo notes: [docs/demo-script.md](../demo-script.md)
+- Deploy: [docs/deploy.md](../deploy.md)
