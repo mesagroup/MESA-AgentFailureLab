@@ -1,13 +1,6 @@
 import type { Agent, Run } from "@mesa/shared";
 import type { RunTraceLink } from "@/lib/api";
 
-export const DASHBOARD_DESTINATIONS = [
-  { to: "/runs?type=security", title: "Security", detail: "Attacker · permission guard" },
-  { to: "/agents", title: "Agents", detail: "Registered agents" },
-  { to: "/runs", title: "Runs", detail: "Test history" },
-  { to: "/traces", title: "Traces", detail: "Inspect traces" },
-] as const;
-
 /**
  * A run with a stored trace opens that trace.
  * `first_trace_id` is the id to open. A run id is never placed under `/traces`.
