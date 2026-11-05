@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
+  AFTER_FIX_SECTION_ID,
   FIX_KIND_LABELS,
+  beforeAfterHeadline,
   compareBeforeAfter,
   formatCostUsd,
   formatDurationMs,
@@ -82,7 +84,7 @@ export function AfterFixPanel({
   if (proposed.length === 0 && !comparison && !hasLineage && !error && !worldBusy) return null;
 
   return (
-    <div className="space-y-4">
+    <div id={AFTER_FIX_SECTION_ID} className="space-y-4">
       {proposed.length > 0 && (
         <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -90,9 +92,8 @@ export function AfterFixPanel({
             <span className="text-xs font-mono text-muted-foreground">diagnosis.proposed_fixes</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Same FixKind ids as Run.fix_kinds: controlled_retry, pre_response_check, permission_guard.
-            There is no fault_kinds field. POST /runs with phase after_fix, parent_run_id, and fix_kinds.
-            Omit injection to replay the parent fault.
+            Choose a proposed fix and replay on the test instance. The harness copies the parent fault
+            unless Clean treated is on. Success is the verifier, not the agent claim.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {proposed.map((kind) => {
@@ -272,9 +273,26 @@ function BeforeAfterCard({
         <span className="text-xs font-medium">Before / after</span>
         <span className="text-xs font-mono text-muted-foreground">outcome.verifier</span>
       </div>
+      {beforeAfterHeadline(view) && (
+        <p
+          className={cn(
+            "text-sm font-medium",
+            view.beforePassed === false && view.afterPassed === true
+              ? "text-green-500"
+              : view.afterPassed === false
+                ? "text-red-400"
+                : "text-foreground",
+          )}
+        >
+          {beforeAfterHeadline(view)}
+        </p>
+      )}
+      {view.recovered.length > 0 && (
+        <p className="text-xs text-green-500">Recovered: {view.recovered.join(", ")}</p>
+      )}
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Success is verifier.passed. A regression is a check that passed before and failed after.
-        Timing is Trace.totals.latency_ms and Run.duration_ms. Cost is Trace.totals.cost_usd.
+        Injected parent (before) versus after_fix on the test instance. A regression is a check
+        that passed before and failed after.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

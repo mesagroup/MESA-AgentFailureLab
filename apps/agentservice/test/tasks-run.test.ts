@@ -186,6 +186,22 @@ describe("POST /v1/tasks/run", () => {
         { tool_name: "get_cart", tool_input: {} },
       ]);
       assert.deepEqual(retried.json().refused, []);
+
+      const t3 = await app.inject({
+        method: "POST",
+        url: "/v1/tasks/run",
+        payload: {
+          ...base,
+          task_id: "T3",
+          task: seedTask("T3"),
+          permissions: ["read", "write:order"],
+          fix_kinds: ["pre_response_check"],
+        },
+      });
+      assert.deepEqual(
+        t3.json().actions.map((action: { tool_name: string }) => action.tool_name),
+        ["get_cart", "checkout", "get_cart", "checkout"],
+      );
     } finally {
       await app.close();
     }
@@ -332,7 +348,11 @@ describe("POST /v1/tasks/run", () => {
           });
           const read = confirmingRead(taskId, orderId);
           assert.ok(read, taskId);
-          assert.deepEqual(checked.json().actions, [...omitted.json().actions, read], `${taskId} pre_response_check`);
+          const treated =
+            taskId === "T3"
+              ? [...omitted.json().actions, read, { tool_name: "checkout", tool_input: {} }]
+              : [...omitted.json().actions, read];
+          assert.deepEqual(checked.json().actions, treated, `${taskId} pre_response_check`);
 
           for (const fixKinds of lists) {
             const response = await postRun(app, {

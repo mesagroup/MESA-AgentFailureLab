@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { ApiError, createRun, diagnoseTrace, getAgent, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
 import {
+  AFTER_FIX_SECTION_ID,
   FIX_KIND_LABELS,
   afterFixRunBody,
   childRunsOf,
@@ -321,6 +322,9 @@ export function TracePage() {
       const afterId = child?.trace?.trace_id ?? firstTraceId(child?.run ?? null);
       if (afterId) setSearchParams({ after: afterId });
       await load(trace.trace_id, true);
+      requestAnimationFrame(() => {
+        document.getElementById(AFTER_FIX_SECTION_ID)?.scrollIntoView({ block: "start" });
+      });
     } catch (e) {
       setReplayBusy(isWorldBusy(e, e instanceof ApiError ? e.code : null));
       setReplayError(e instanceof Error ? e.message : "Replay failed.");

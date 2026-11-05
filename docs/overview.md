@@ -58,7 +58,7 @@ On `main` today:
 | Dashboard counts — Failed includes runs in `error` | Open ([#107](https://github.com/mesagroup/MESA-AgentFailureLab/issues/107)). |
 | No localhost on a public deploy | Open ([#108](https://github.com/mesagroup/MESA-AgentFailureLab/issues/108)). Block agent endpoints that a public deploy cannot call. |
 | Open the fix as a GitHub issue | Planned ([#52](https://github.com/mesagroup/MESA-AgentFailureLab/issues/52)). Agent has no destination repository field yet. |
-| **Fix → replay → before/after** — choose a proposed fix, start `after_fix`, compare `outcome.verifier` | Open ([#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). Harness: `POST /runs` `phase: after_fix` with `parent_run_id` and `fix_kinds` (inherits the parent injection plan when `injection` is omitted; response includes `parent` and `links`). The UI screen is not built. The run is a new call to the owner's deploy, not an in-lab patch. |
+| **Fix → replay → before/after** — choose a proposed fix, start `after_fix`, compare `outcome.verifier` | Shipped ([#186](https://github.com/mesagroup/MESA-AgentFailureLab/issues/186), harness [#53](https://github.com/mesagroup/MESA-AgentFailureLab/issues/53)). On `/traces/:traceId` choose `diagnosis.proposed_fixes`, **Replay after_fix**, stay on the parent and compare `outcome.verifier` (injected vs child). `POST /runs` `phase: after_fix` with `parent_run_id` and `fix_kinds` (omit `injection` to copy the parent plan). Storyboard: `trace-t3-forged-checkout` / `run-t3-injected-001` / `pre_response_check`. |
 
 ## Under evaluation
 
@@ -71,7 +71,7 @@ These areas are still being shaped. Some lab machinery already exists. The scree
 
 ## Open points
 
-- UX for choosing proposed fixes (#53): one fix or several, who confirms.
+- Multi-run aggregation of after_fix results is out of scope ([#186](https://github.com/mesagroup/MESA-AgentFailureLab/issues/186)).
 - Jury form. The harness fields are in [demo-jury.md](demo-jury.md#frontend-contract-issue-55). The trace page already loads `GET /traces/:traceId`.
 - Regression content: the demo task list versus a custom suite.
 - Extra screens beyond Agent CRUD, Testa agente, and Ispeziona traccia.
