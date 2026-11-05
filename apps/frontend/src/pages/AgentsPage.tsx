@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Pencil, Play, PlusCircle, RefreshCw, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetContent,
@@ -97,6 +99,7 @@ function agentToForm(agent: Agent): FormState {
 
 export function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
@@ -115,7 +118,14 @@ export function AgentsPage() {
     setAgents(await listAgents());
   }
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => {
+    void listAgents().then((data) => {
+      setAgents(data);
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -256,17 +266,23 @@ export function AgentsPage() {
       </div>
 
       {/* Count */}
-      <div className="flex justify-end px-1">
-        <span className="text-xs text-muted-foreground">
-          {query
-            ? `${filtered.length} of ${agents.length} agent${agents.length !== 1 ? "s" : ""}`
-            : `${agents.length} agent${agents.length !== 1 ? "s" : ""}`}
-        </span>
-      </div>
+      {!loading && (
+        <div className="flex justify-end px-1">
+          <span className="text-xs text-muted-foreground">
+            {query
+              ? `${filtered.length} of ${agents.length} agent${agents.length !== 1 ? "s" : ""}`
+              : `${agents.length} agent${agents.length !== 1 ? "s" : ""}`}
+          </span>
+        </div>
+      )}
 
       {/* List island */}
       <div className="rounded-2xl bg-card shadow-island overflow-hidden">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="p-5 space-y-3">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             {query ? <>No agents match <span className="font-mono">"{query}"</span></> : "No agents registered yet."}
           </div>
@@ -862,15 +878,19 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         navigate(hrefAfterJuryLaunch(report));
       } else {
         const results = await createRun(built.params);
+        const taskIds = results.map((r) => r.run.task_id).join(", ");
+        toast.success(`Run launched — ${taskIds}`);
         onClose();
         navigate(hrefAfterCreateRun(results));
       }
     } catch (e) {
       const busyCode = juryDescription?.frontend?.http_409?.jury_and_runs;
+      const msg = e instanceof Error ? e.message : "Launch failed.";
       if (phase === "jury" && isWorldBusy(e, busyCode)) {
         setError("The mock world is busy with another run. Retry when it finishes. This is not a verifier failure.");
       } else {
-        setError(e instanceof Error ? e.message : "Launch failed.");
+        setError(msg);
+        toast.error(msg);
       }
     } finally {
       setLaunching(false);

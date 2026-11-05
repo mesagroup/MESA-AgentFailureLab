@@ -1,5 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
@@ -49,6 +50,7 @@ export function App() {
   return (
     <BrowserRouter>
       <AppShell />
+      <Toaster position="bottom-right" richColors />
     </BrowserRouter>
   );
 }
