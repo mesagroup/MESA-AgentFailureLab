@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { CONTRACT_VERSION, FIX_KINDS, type Agent, type FixKind, type InjectionPlan, type Run, type RunPhase, type Trace } from "@mesa/shared";
+import { CONTRACT_VERSION, FIX_KINDS, GROK_POLL_INTERVAL_MS, type Agent, type FixKind, type InjectionPlan, type Run, type RunPhase, type Trace } from "@mesa/shared";
 import { validateAgent, validateRun, validateTrace } from "@mesa/shared/validate";
 import { verifyFix, type FixVerdict } from "../replay/verification.js";
 import { record, type ShopScenario } from "./scenario.js";
@@ -154,13 +154,33 @@ export async function runShopDemo(options: DemoOptions, fetchImpl: typeof fetch 
       if (!record(now) || now.contract_version !== initialHealth.contract_version || now.mock_base_url !== initialHealth.mock_base_url) throw new DemoError("backend_configuration_changed");
     }
 
+    async function followAgentJob(
+      post: typeof request,
+      url: string,
+      body: unknown,
+      waitMs: number,
+    ): Promise<{ data: unknown; response: Response }> {
+      const first = await post(url, body);
+      if (!record(first.data) || first.data.status !== "accepted" || typeof first.data.poll !== "string") return first;
+      const deadline = Date.now() + (typeof first.data.deadline_ms === "number" ? first.data.deadline_ms : waitMs);
+      const pollUrl = first.data.poll.startsWith("http") ? first.data.poll : `${backendUrl}${first.data.poll}`;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, GROK_POLL_INTERVAL_MS));
+        const polled = await post(pollUrl);
+        if (!record(polled.data) || polled.data.status === "running") continue;
+        if (polled.data.status === "done") return { data: polled.data.body, response: polled.response };
+        throw new DemoError(typeof polled.data.error === "string" ? polled.data.error : "grok_run_failed");
+      }
+      throw new DemoError("grok_job_timeout");
+    }
+
     async function attempt(role: DemoAttempt["role"], taskId: string, phase: RunPhase, injection: InjectionPlan | null, treatment: FixKind[] = [], parent?: string) {
       const row: DemoAttempt = { role, task_id: taskId, status: "error", passed: null, error: null, run: null, trace: null, permissions: [], driver: "http" };
       report.attempts.push(row);
       try {
         await assertFrozen();
-        const { data } = await request(`${backendUrl}/runs`, { agent_id: agent.agent_id, task_ids: [taskId], phase,
-          driver: "http", injection, ...(treatment.length ? { fix_kinds: treatment } : {}), ...(parent ? { parent_run_id: parent } : {}) });
+        const { data } = await followAgentJob(request, `${backendUrl}/runs`, { agent_id: agent.agent_id, task_ids: [taskId], phase,
+          driver: "http", injection, ...(treatment.length ? { fix_kinds: treatment } : {}), ...(parent ? { parent_run_id: parent } : {}) }, timeoutMs);
         if (!record(data) || !Array.isArray(data.results) || data.results.length !== 1 || !record(data.results[0])) throw new DemoError("invalid_run_response");
         const result = data.results[0];
         const run = validateRun(result.run);

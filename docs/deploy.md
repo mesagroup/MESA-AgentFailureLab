@@ -27,6 +27,7 @@ Nothing in git has a real secret. `XAI_API_KEY=` in the agent service example is
 | Variable | Where it is read | Secret | Local value | Render value |
 | --- | --- | --- | --- | --- |
 | `XAI_API_KEY` | agent service, runtime | yes | `apps/agentservice/.env` only | Dashboard prompt, `sync: false` |
+| `JURY_AGENT`, `LAB_AGENT`, `ATTACKER_AGENT`, `FIX_AGENT` | backend and agent service, runtime | no | unset (scripted) | `grok` in `render.yaml` |
 | `XAI_BASE_URL` | agent service, runtime | no | `https://api.x.ai/v1` | same, in `render.yaml` |
 | `GROK_MODEL` | agent service, runtime | no | `grok-3` | same, in `render.yaml` |
 | `VITE_BACKEND_URL` | frontend, **build time** | no | `http://127.0.0.1:3001` | `https://mesa-backend-itm4.onrender.com` |

@@ -1,12 +1,13 @@
 import OpenAI, { APIConnectionError, APIError } from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
-import { FAULT_CATEGORIES, FIX_KINDS } from "@mesa/shared";
+import { FAULT_CATEGORIES, FIX_KINDS, GROK_REASONING_EFFORT } from "@mesa/shared";
 import type {
   DiagnosisModel,
   ModelCompletion,
   ModelCompletionRequest,
   ModelUsage,
 } from "../diagnosis/diagnose.js";
+import type { GrokToolCaller, GrokToolCompletion, GrokToolRequest } from "../reference-agent/grok-agent.js";
 
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const USD_TICKS = 10_000_000_000;
@@ -182,4 +183,108 @@ function readCost(usage: Record<string, unknown>): number | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export interface GrokToolModelOptions {
+  apiKey: string;
+  baseUrl: string;
+  /** Per-attempt cap. Jury and lab pass 90s. The attacker passes the same cap, up to three times. */
+  timeoutMs: number;
+  /**
+   * Sequential tries on a retryable failure. 1 for jury and lab so the public
+   * proxy can still read the response. 3 for the in-process attacker.
+   */
+  maxAttempts?: number;
+  /** Test double. When omitted, the OpenAI SDK calls the xAI chat completions endpoint. */
+  send?: (request: GrokToolRequest) => Promise<GrokToolCompletion>;
+}
+
+/**
+ * One shop planning turn with tool calling.
+ * Does not loop on tool results. A retryable failure is tried again only
+ * while `maxAttempts` allows it, each try using `timeoutMs`.
+ */
+export function createGrokToolModel(options: GrokToolModelOptions): GrokToolCaller {
+  const send = options.send ?? createOpenAiToolSend(options);
+  const maxAttempts = options.maxAttempts ?? 1;
+  return {
+    async complete(request) {
+      let last: unknown;
+      const attempts = Math.max(1, request.maxAttempts || maxAttempts);
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+          return await onceTool(send, request);
+        } catch (error) {
+          last = error;
+          if (!(error instanceof RetryableModelError) || attempt === attempts) throw error;
+        }
+      }
+      throw last instanceof Error ? last : new TerminalModelError();
+    },
+  };
+}
+
+/** Body of the single tool-calling completion. Exported so tests can read the model and tools. */
+export function buildGrokToolRequest(request: GrokToolRequest): ChatCompletionCreateParamsNonStreaming & {
+  reasoning_effort: typeof GROK_REASONING_EFFORT;
+} {
+  return {
+    model: request.model,
+    messages: [
+      { role: "system", content: request.system },
+      { role: "user", content: request.user },
+    ],
+    tools: request.tools.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters as unknown as Record<string, unknown>,
+      },
+    })),
+    tool_choice: "auto",
+    reasoning_effort: request.reasoningEffort,
+  };
+}
+
+function createOpenAiToolSend(options: GrokToolModelOptions): (request: GrokToolRequest) => Promise<GrokToolCompletion> {
+  const client = new OpenAI({
+    apiKey: options.apiKey,
+    baseURL: options.baseUrl,
+    timeout: options.timeoutMs,
+    maxRetries: 0,
+  });
+  return async (request) => {
+    const completion = await client.chat.completions.create(buildGrokToolRequest(request), {
+      timeout: request.timeoutMs,
+      maxRetries: 0,
+    });
+    const message = completion.choices[0]?.message;
+    const content = typeof message?.content === "string" ? message.content : "";
+    const toolCalls = (message?.tool_calls ?? []).flatMap((call) => {
+      if (call.type !== "function") return [];
+      return [{ name: call.function.name, arguments: call.function.arguments ?? "" }];
+    });
+    const usage = readProviderUsage(completion.usage);
+    return {
+      content,
+      toolCalls,
+      usage: usage
+        ? { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: usage.cost_usd }
+        : null,
+    };
+  };
+}
+
+async function onceTool(
+  send: (request: GrokToolRequest) => Promise<GrokToolCompletion>,
+  request: GrokToolRequest,
+): Promise<GrokToolCompletion> {
+  try {
+    return await send(request);
+  } catch (error) {
+    if (error instanceof RetryableModelError || error instanceof TerminalModelError) throw error;
+    if (isRetryableProviderError(error)) throw new RetryableModelError();
+    throw new TerminalModelError();
+  }
 }

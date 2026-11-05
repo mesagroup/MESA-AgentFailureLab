@@ -1,4 +1,4 @@
-import type { AgentRunRequest, AgentTask, FixKind } from "@mesa/shared";
+import { GROK_AGENT_HTTP_TIMEOUT_MS, type AgentRunRequest, type AgentTask, type FixKind } from "@mesa/shared";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "./scripted.js";
 
@@ -52,11 +52,33 @@ export interface RemoteStep {
  * which is what lets the injector rewrite a call before it hits the shop.
  * `executed: true` means the agent already called the mock; `steps` is the transcript.
  */
+export interface AgentUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  latency_ms: number;
+}
+
+export interface RefusedAction {
+  tool_name: string;
+  required: string;
+}
+
+/**
+ * `executed: false` means the harness must perform `actions` against the mock.
+ * `agent` and `fallback` are planner metadata. They are not part of the shared
+ * AgentRunRequest contract. A missing key is `fallback: "no_key"`, not an error.
+ */
 export interface AgentRunResponse {
   executed: boolean;
   claimed_success?: boolean;
   actions?: PlannedAction[];
   steps?: RemoteStep[];
+  refused?: RefusedAction[];
+  answer?: string;
+  usage?: AgentUsage;
+  agent?: "scripted" | "grok";
+  fallback?: "no_key";
 }
 
 function trimBase(baseUrl: string): string {
@@ -88,7 +110,7 @@ export async function runRemoteAgent(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(request),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(agentHttpTimeoutMs(request)),
   });
   if (!response.ok) {
     throw new Error(`Agent ${baseUrl} returned ${response.status}.`);
@@ -112,7 +134,18 @@ export function parseAgentResponse(value: unknown): AgentRunResponse {
     claimed_success: claimed,
     actions,
     steps,
+    refused: value.executed ? undefined : parseRefused(value.refused),
+    answer: typeof value.answer === "string" ? value.answer : undefined,
+    usage: parseUsage(value.usage),
+    agent: value.agent === "grok" || value.agent === "scripted" ? value.agent : undefined,
+    fallback: value.fallback === "no_key" ? "no_key" : undefined,
   };
+}
+
+/** Scripted posts stay at 10s. A grok planner post waits for one model call. */
+export function agentHttpTimeoutMs(request: AgentRunRequest): number {
+  const agent = (request as AgentRunRequest & { agent?: unknown }).agent;
+  return agent === "grok" ? GROK_AGENT_HTTP_TIMEOUT_MS : 10_000;
 }
 
 function parseActions(value: unknown): PlannedAction[] {
@@ -126,6 +159,35 @@ function parseActions(value: unknown): PlannedAction[] {
     if (!isRecord(toolInput)) throw new Error(`Action ${entry.tool_name} tool_input must be an object.`);
     return { tool_name: entry.tool_name, tool_input: toolInput };
   });
+}
+
+function parseRefused(value: unknown): RefusedAction[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error("Agent response refused must be an array.");
+  return value.map((entry) => {
+    if (!isRecord(entry) || typeof entry.tool_name !== "string" || typeof entry.required !== "string") {
+      throw new Error("Each refused action needs tool_name and required.");
+    }
+    return { tool_name: entry.tool_name, required: entry.required };
+  });
+}
+
+function parseUsage(value: unknown): AgentUsage | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error("Agent response usage must be an object.");
+  const input = numberField(value.input_tokens);
+  const output = numberField(value.output_tokens);
+  const cost = numberField(value.cost_usd);
+  const latency = numberField(value.latency_ms);
+  if (input === null || output === null || cost === null || latency === null) {
+    throw new Error("Agent response usage needs input_tokens, output_tokens, cost_usd, and latency_ms.");
+  }
+  return { input_tokens: input, output_tokens: output, cost_usd: cost, latency_ms: latency };
+}
+
+function numberField(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+  return value;
 }
 
 function parseSteps(value: unknown): RemoteStep[] {

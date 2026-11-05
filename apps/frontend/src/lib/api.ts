@@ -1,15 +1,18 @@
-import type {
-  Agent,
-  AgentTask,
-  FixKind,
-  InjectionPlan,
-  OtelSourceConfig,
-  Run,
-  RunPhase,
-  TaskEvalset,
-  Trace,
-  TraceOutcome,
-  TraceTotals,
+import {
+  GROK_POLL_INTERVAL_MS,
+  GROK_POLL_REQUEST_TIMEOUT_MS,
+  type Agent,
+  type AgentRuntimeLabel,
+  type AgentTask,
+  type FixKind,
+  type InjectionPlan,
+  type OtelSourceConfig,
+  type Run,
+  type RunPhase,
+  type TaskEvalset,
+  type Trace,
+  type TraceOutcome,
+  type TraceTotals,
 } from "@mesa/shared";
 import { parseCreateRunResults, type HarnessTaskResult } from "./after-fix";
 import type { EvalsetGenerateBody } from "./evalset";
@@ -279,7 +282,7 @@ export async function createRun(params: RunParams): Promise<HarnessTaskResult[]>
     method: "POST",
     body: JSON.stringify(body),
   });
-  return parseCreateRunResults(data);
+  return parseCreateRunResults(await followAgentJob(data));
 }
 
 export type { HarnessTaskResult };
@@ -388,12 +391,60 @@ export async function getJuryCase(): Promise<JuryCaseDescription> {
 
 /** Launch or replay. `outcome.verifier` is the verdict. `diagnosis` stays null. */
 export async function postJuryCase(body: JuryRequestBody): Promise<JuryCaseReport> {
-  const report = await backendFetch<unknown>("/attacker/jury-case", {
+  const report = await followAgentJob(await backendFetch<unknown>("/attacker/jury-case", {
     method: "POST",
     body: JSON.stringify(body),
-  });
+  }));
   if (!isJuryReport(report)) {
     throw new Error("The response is missing outcome.verifier. It is not a verifier result.");
   }
   return report;
+}
+
+export interface AgentRuntimeSnapshot {
+  lab: AgentRuntimeLabel;
+  jury: AgentRuntimeLabel;
+  attacker: AgentRuntimeLabel;
+  fix: AgentRuntimeLabel;
+}
+
+/** Which planner the harness will use. A failed read leaves the page on Scripted. */
+export async function getAgentRuntimes(): Promise<AgentRuntimeSnapshot | null> {
+  try {
+    return await backendFetch<AgentRuntimeSnapshot>("/agent-runtimes");
+  } catch {
+    return null;
+  }
+}
+
+interface AcceptedAgentJob {
+  status: "accepted";
+  poll: string;
+  deadline_ms: number;
+}
+
+async function followAgentJob(body: unknown): Promise<unknown> {
+  if (!isAcceptedJob(body)) return body;
+  const deadline = Date.now() + body.deadline_ms + GROK_POLL_REQUEST_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await delay(GROK_POLL_INTERVAL_MS);
+    const polled = await backendFetch<unknown>(body.poll, { signal: AbortSignal.timeout(GROK_POLL_REQUEST_TIMEOUT_MS) });
+    if (!polled || typeof polled !== "object") continue;
+    const status = (polled as { status?: unknown }).status;
+    if (status === "running") continue;
+    if (status === "done") return (polled as { body?: unknown }).body;
+    const message = (polled as { message?: unknown }).message;
+    throw new Error(typeof message === "string" && message.length > 0 ? message : "Grok run failed.");
+  }
+  throw new Error("Grok run exceeded its time limit.");
+}
+
+function isAcceptedJob(value: unknown): value is AcceptedAgentJob {
+  if (!value || typeof value !== "object") return false;
+  const record = value as { status?: unknown; poll?: unknown; deadline_ms?: unknown };
+  return record.status === "accepted" && typeof record.poll === "string" && typeof record.deadline_ms === "number";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

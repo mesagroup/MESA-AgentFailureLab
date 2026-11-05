@@ -35,6 +35,8 @@ export async function startOfflineShop(
     backend = buildHarness({
       logger: false, agent, store, agents, mockBaseUrl: mockUrl, diagnosis: { baseUrl: serviceUrl },
       afterWorldSetup: harness?.afterWorldSetup,
+      // Flags in the parent shell must not turn this stack onto xAI.
+      agentEnv: {},
     });
     const backendUrl = await backend.listen({ host: "127.0.0.1", port: 0 });
     const registration = await fetch(`${backendUrl}/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(agent) });

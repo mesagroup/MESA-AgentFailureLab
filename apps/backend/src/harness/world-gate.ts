@@ -63,7 +63,10 @@ function release(owner: symbol): void {
  * `WorldBusyError` immediately. `finally` releases on return, throw, or a failed save.
  * This lock does not span processes, replicas, or a direct `POST /internal/reset` on the shop.
  */
-export async function withWorldGate<T>(fn: () => Promise<T>): Promise<T> {
+export async function withWorldGate<T>(
+  fn: () => Promise<T>,
+  hooks?: { onAcquired?: () => void },
+): Promise<T> {
   const current = owners.getStore();
   const active = hold;
   if (current !== undefined && active?.owner === current) {
@@ -81,6 +84,7 @@ export async function withWorldGate<T>(fn: () => Promise<T>): Promise<T> {
 
   const owner = Symbol("mock-world");
   hold = { owner, depth: 1 };
+  hooks?.onAcquired?.();
   try {
     return await owners.run(owner, fn);
   } finally {

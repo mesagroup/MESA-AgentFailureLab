@@ -106,6 +106,19 @@ projects:
               # See docs/deploy.md.
               - key: AGENTSERVICE_URL
                 value: https://mesa-agentservice.onrender.com
+              # Planner switches. Explicit grok so a Blueprint sync turns the
+              # deployed harness onto the real model when the agent service
+              # has XAI_API_KEY. Unset in local/CI stays scripted. A missing
+              # key falls back to scripted and the UI shows "Scripted (no key)".
+              # These values are not secrets.
+              - key: JURY_AGENT
+                value: grok
+              - key: LAB_AGENT
+                value: grok
+              - key: ATTACKER_AGENT
+                value: grok
+              - key: FIX_AGENT
+                value: grok
               - key: FRONTEND_URL
                 value: https://mesa-frontend-rleq.onrender.com
               # Intended public host for service name mesa-mock-shop.
@@ -162,6 +175,17 @@ projects:
                 value: 3002
               - key: XAI_API_KEY
                 sync: false
+              # Same switches as mesa-backend. The in-process security attacker
+              # reads ATTACKER_AGENT and FIX_AGENT here. XAI_API_KEY above is
+              # the key that actually calls xAI. Not secrets except that key.
+              - key: JURY_AGENT
+                value: grok
+              - key: LAB_AGENT
+                value: grok
+              - key: ATTACKER_AGENT
+                value: grok
+              - key: FIX_AGENT
+                value: grok
               - key: XAI_BASE_URL
                 value: https://api.x.ai/v1
               - key: GROK_MODEL

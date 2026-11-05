@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch, isLoopback } from "@/lib/agents-page";
-import { createRun, deleteAgent, getHarnessSnapshot, getJuryCase, listAgents, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
+import { createRun, deleteAgent, getAgentRuntimes, getHarnessSnapshot, getJuryCase, listAgents, postJuryCase, saveAgent, updateAgent, type AgentDraft, type AgentRuntimeSnapshot } from "@/lib/api";
+import { launchAgentLabel } from "@/lib/agent-runtime";
 import { InjectedPhaseInfo } from "@/lib/injected-phase-info";
 import { JuryRunPicker } from "@/lib/jury-run-picker";
 import { PromptLaunchEditor, launchPromptOverride } from "@/lib/prompt-launch-editor";
@@ -660,6 +661,7 @@ function OtelSourceFields({
 function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<LaunchPhase>("baseline");
+  const [agentRuntimes, setAgentRuntimes] = useState<AgentRuntimeSnapshot | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [parentRunId, setParentRunId] = useState<string | null>(null);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
@@ -804,6 +806,19 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       return next;
     });
   }
+
+  useEffect(() => {
+    if (!agent) return;
+    let cancelled = false;
+    getAgentRuntimes().then((next) => {
+      if (!cancelled) setAgentRuntimes(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent]);
+
+  const agentLabel = launchAgentLabel(agentRuntimes, phase);
 
   useEffect(() => {
     if (!agent || phase !== "jury") return;
@@ -978,6 +993,9 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 {JURY_LAUNCH_COPY.helper}
               </p>
             )}
+            <p data-testid="launch-agent-runtime" className="text-xs text-muted-foreground mt-3">
+              Agent: {agentLabel}
+            </p>
           </div>
 
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
@@ -1210,14 +1228,14 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         <div className="shrink-0 flex items-center gap-3 px-8 py-4 border-t border-border/40">
           {launching && (
             <span role="status" className="text-xs text-muted-foreground flex-1">
-              Launching run…
+              {agentLabel === "Grok 4.6" ? "Waiting for Grok 4.6…" : "Launching run…"}
             </span>
           )}
           {error && <span className="text-xs text-destructive flex-1">{error}</span>}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={onClose} disabled={launching}>Cancel</Button>
             <Button onClick={handleLaunch} disabled={launching || !launchReady} aria-busy={launching}>
-              {launching ? "Launching…" : "Launch run"}
+              {launching ? (agentLabel === "Grok 4.6" ? "Waiting for Grok 4.6…" : "Launching…") : "Launch run"}
             </Button>
           </div>
         </div>

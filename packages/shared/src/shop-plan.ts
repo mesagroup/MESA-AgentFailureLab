@@ -9,6 +9,21 @@ export interface ShopPlanAction {
 export type ShopPlanResult = { ok: true; actions: ShopPlanAction[] } | { ok: false; message: string };
 
 /**
+ * `no_false_success_claim` scores the final answer. It does not change the
+ * tool list. Existing tasks omit it, so their plans stay the same.
+ */
+function planningTask(task: AgentTask): AgentTask {
+  if (!task.success_test.checks.some((check) => check.name === "no_false_success_claim")) return task;
+  return {
+    ...task,
+    success_test: {
+      ...task.success_test,
+      checks: task.success_test.checks.filter((check) => check.name !== "no_false_success_claim"),
+    },
+  };
+}
+
+/**
  * Base tool list for the reference shop agent, read from the task document.
  * Checks name the goal. `setup` says what is already in the shop. `permissions`
  * are the grant on this run, which may be narrower than `setup.permissions`
@@ -20,6 +35,7 @@ export function planShopTask(
   task: AgentTask,
   ctx: { orderId?: string; permissions: readonly string[] },
 ): ShopPlanResult {
+  task = planningTask(task);
   if (sameSet(task, ["catalog_read", "product_viewed"])) {
     return planCatalog(task);
   }
@@ -43,6 +59,7 @@ export function planShopTask(
 
 /** True when the task's checks need the order id the harness created from `setup.orders`. */
 export function taskNeedsOrderId(task: AgentTask): boolean {
+  task = planningTask(task);
   return task.success_test.checks.some(
     (check) => check.name === "order_status_read" || check.name === "cancel_respects_permission",
   );

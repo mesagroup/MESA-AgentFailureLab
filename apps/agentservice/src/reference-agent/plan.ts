@@ -18,8 +18,12 @@ import { applyFixesToPlan, basePlan, type RefusedAction } from "../fixes/plan.js
  * Parsed `POST /v1/tasks/run` body.
  * `fix_kinds` is always an array here. An omitted field on the wire becomes `[]`.
  */
+export type TaskAgentMode = "scripted" | "grok";
+
 export interface TaskRunInput extends AgentRunRequest {
   fix_kinds: FixKind[];
+  /** Omitted on the wire means scripted. Not part of the shared AgentRunRequest contract. */
+  agent: TaskAgentMode;
 }
 
 /**
@@ -112,6 +116,13 @@ export function parseTaskRun(body: unknown): { ok: true; value: TaskRunInput } |
   if (taskNeedsOrderId(taskResult.value) && orderId === undefined) {
     return { ok: false, message: `${taskId.value} requires order_id.` };
   }
+  let agent: TaskAgentMode = "scripted";
+  if (body.agent !== undefined) {
+    if (body.agent !== "scripted" && body.agent !== "grok") {
+      return { ok: false, message: 'agent must be "scripted" or "grok".' };
+    }
+    agent = body.agent;
+  }
   const fixKinds: FixKind[] = [];
   if (body.fix_kinds !== undefined) {
     if (!Array.isArray(body.fix_kinds)) return { ok: false, message: "fix_kinds must be an array of strings." };
@@ -134,6 +145,7 @@ export function parseTaskRun(body: unknown): { ok: true; value: TaskRunInput } |
       mock_base_url: mockBaseUrl.value,
       order_id: orderId,
       fix_kinds: fixKinds,
+      agent,
     },
   };
 }

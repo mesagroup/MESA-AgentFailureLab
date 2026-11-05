@@ -17,6 +17,10 @@ import { createGrokModel } from "./grok/client.js";
 import { parseDiagnosisConfig } from "./grok/config.js";
 import type { DiagnosisConfig } from "./grok/config.js";
 import { loadEvalResults, type EvalResultsFiles } from "./eval/http.js";
+import { createGrokToolModel } from "./grok/client.js";
+import type { GrokToolCaller } from "./reference-agent/grok-agent.js";
+import { proposeGrokTaskRun } from "./reference-agent/grok-agent.js";
+import { GROK_MODEL_TIMEOUT_MS } from "@mesa/shared";
 import { UnsupportedTaskError, parseTaskRun, planTaskRun } from "./reference-agent/plan.js";
 
 export interface AppDeps {
@@ -25,6 +29,11 @@ export interface AppDeps {
   model?: DiagnosisModel | null;
   /** Separate from diagnosis: evalset completions use a TaskEvalset JSON schema. */
   evalsetModel?: DiagnosisModel | null;
+  /**
+   * Shop planner. Omit to build one when `XAI_API_KEY` is set.
+   * Pass `null` to force the no-key fallback even if a key is present.
+   */
+  grokTools?: GrokToolCaller | null;
   evalsetStub?: boolean;
   /** Test override for GET /eval/results file paths. */
   evalResults?: EvalResultsFiles;
@@ -41,6 +50,22 @@ export interface AppDeps {
  * plus `refused` and `embedded` from the shared plan.
  * The harness executes `actions`, injects faults, and writes `outcome.verifier`.
  */
+/**
+ * The HTTP route uses one attempt. A second 90s window would sit on the
+ * public proxy between the harness and this process. The in-process attacker
+ * calls `proposeGrokTaskRun` itself and may use three attempts.
+ */
+function grokCaller(deps: AppDeps, config: DiagnosisConfig): GrokToolCaller | null {
+  if (deps.grokTools !== undefined) return deps.grokTools;
+  if (!config.apiKey) return null;
+  return createGrokToolModel({
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    timeoutMs: GROK_MODEL_TIMEOUT_MS,
+    maxAttempts: 1,
+  });
+}
+
 export function buildApp(deps: AppDeps = {}) {
   const config = deps.config ?? parseDiagnosisConfig(process.env);
   const model =
@@ -92,12 +117,27 @@ export function buildApp(deps: AppDeps = {}) {
       return reply.code(400).send({ error: "invalid_request", message: parsed.message });
     }
     try {
-      return planTaskRun(parsed.value);
+      if (parsed.value.agent !== "grok") return planTaskRun(parsed.value);
+      const caller = grokCaller(deps, config);
+      if (caller === null) {
+        const plan = planTaskRun(parsed.value);
+        return {
+          ...plan,
+          agent: "scripted" as const,
+          fallback: "no_key" as const,
+          answer: "",
+        };
+      }
+      return await proposeGrokTaskRun(parsed.value, caller, {
+        timeoutMs: GROK_MODEL_TIMEOUT_MS,
+        maxAttempts: 1,
+      });
     } catch (error) {
       if (error instanceof UnsupportedTaskError) {
         return reply.code(400).send({ error: "unsupported_task", message: error.message });
       }
-      throw error;
+      request.log.error({ code: "grok_agent_failed" }, "grok planner failed");
+      return reply.code(502).send({ error: "grok_agent_failed", message: "The Grok planner did not return a tool plan." });
     }
   });
 
