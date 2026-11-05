@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
-import { createRun, deleteAgent, listAgents, saveAgent, updateAgent, type AgentDraft, type RunParams } from "@/lib/api";
+import { createRun, deleteAgent, listAgents, listRuns, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
 import {
   emptyOtelDraft,
   otelDraftFromAgent,
@@ -21,7 +21,14 @@ import {
   type OtelSourceDraft,
   type OtelSourceFieldError,
 } from "@/lib/otel";
-import type { Agent, AgentInstanceKind, AgentTask, OtelSourceAuthType, RunPhase } from "@mesa/shared";
+import {
+  FIX_KINDS,
+  baselineRunsForAgent,
+  buildLaunchParams,
+  phaseNeedsBaselineParent,
+  toggleLaunchFixKind,
+} from "@/lib/run-launch";
+import type { Agent, AgentInstanceKind, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 import { OtelImportPanel } from "@/pages/OtelImportPanel";
 
@@ -561,17 +568,50 @@ function OtelSourceFields({
 function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
   const [phase, setPhase] = useState<RunPhase>("baseline");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [parentRunId, setParentRunId] = useState<string | null>(null);
+  const [fixKinds, setFixKinds] = useState<FixKind[]>([]);
+  const [agentRuns, setAgentRuns] = useState<Run[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [runsError, setRunsError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (agent) {
-      setPhase("baseline");
-      setSelectedTasks(new Set(agent.tasks.map((t) => t.task_id)));
-      setError(null);
-      setLaunching(false);
-    }
+    if (!agent) return;
+    setPhase("baseline");
+    setSelectedTasks(new Set(agent.tasks.map((t) => t.task_id)));
+    setParentRunId(null);
+    setFixKinds([]);
+    setError(null);
+    setRunsError(null);
+    setLaunching(false);
+    let cancelled = false;
+    setLoadingRuns(true);
+    listRuns()
+      .then((runs) => {
+        if (!cancelled) {
+          setAgentRuns(runs);
+          setRunsError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAgentRuns([]);
+          setRunsError(err instanceof Error ? err.message : "Could not load runs.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRuns(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [agent]);
+
+  const baselines = useMemo(
+    () => (agent ? baselineRunsForAgent(agentRuns, agent.agent_id) : []),
+    [agent, agentRuns],
+  );
 
   function toggleTask(id: string) {
     setSelectedTasks((prev) => {
@@ -581,14 +621,29 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     });
   }
 
+  function selectPhase(next: RunPhase) {
+    setPhase(next);
+    setError(null);
+    if (!phaseNeedsBaselineParent(next)) setParentRunId(null);
+  }
+
   async function handleLaunch() {
     if (!agent) return;
-    if (selectedTasks.size === 0) { setError("Select at least one task."); return; }
+    const built = buildLaunchParams({
+      agentId: agent.agent_id,
+      phase,
+      taskIds: [...selectedTasks],
+      parentRunId,
+      fixKinds,
+    });
+    if (!built.ok) {
+      setError(built.message);
+      return;
+    }
     setLaunching(true);
     setError(null);
     try {
-      const params: RunParams = { agent_id: agent.agent_id, phase, task_ids: [...selectedTasks] };
-      await createRun(params);
+      await createRun(built.params);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Launch failed.");
@@ -596,6 +651,13 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       setLaunching(false);
     }
   }
+
+  const launchReady =
+    phase === "baseline"
+      ? selectedTasks.size > 0
+      : phase === "injected"
+        ? Boolean(parentRunId)
+        : Boolean(parentRunId) && fixKinds.length > 0;
 
   return (
     <Sheet open={!!agent} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -613,7 +675,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setPhase(p)}
+                  onClick={() => selectPhase(p)}
                   className={cn(
                     "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors",
                     phase === p
@@ -625,32 +687,108 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 </button>
               ))}
             </div>
+            {phase === "injected" && (
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                Pick a completed baseline run. Injection applies to that task.
+              </p>
+            )}
             {phase === "after_fix" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                after_fix needs fix_kinds from a diagnosis. Select proposed fixes on the trace timeline, then replay.
+                Owner already fixed the agent on their deploy. Pick one baseline row and at least one fix kind, then replay.
               </p>
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-8 py-6">
-            <p className="text-sm font-medium mb-3">Tasks</p>
-            <div className="space-y-2">
-              {(agent?.tasks ?? []).map((task) => (
-                <label
-                  key={task.task_id}
-                  className="flex items-center gap-3 rounded-xl border border-border/40 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedTasks.has(task.task_id)}
-                    onChange={() => toggleTask(task.task_id)}
-                    className="accent-primary shrink-0"
-                  />
-                  <span className="font-mono text-xs text-muted-foreground w-32 shrink-0 truncate">{task.task_id}</span>
-                  <span className="text-sm">{task.title}</span>
-                </label>
-              ))}
-            </div>
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+            {phase === "baseline" ? (
+              <div>
+                <p className="text-sm font-medium mb-3">Tasks</p>
+                <div className="space-y-2">
+                  {(agent?.tasks ?? []).map((task) => (
+                    <label
+                      key={task.task_id}
+                      className="flex items-center gap-3 rounded-xl border border-border/40 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTasks.has(task.task_id)}
+                        onChange={() => toggleTask(task.task_id)}
+                        className="accent-primary shrink-0"
+                      />
+                      <span className="font-mono text-xs text-muted-foreground w-32 shrink-0 truncate">{task.task_id}</span>
+                      <span className="text-sm">{task.title}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-medium mb-3">
+                  {phase === "injected" ? "Baseline run to inject" : "Baseline run to replay"}
+                </p>
+                {loadingRuns ? (
+                  <p className="text-xs text-muted-foreground">Loading baselines…</p>
+                ) : runsError ? (
+                  <p className="text-xs text-destructive">{runsError}</p>
+                ) : baselines.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No completed baseline runs for this agent. Launch a baseline first.
+                  </p>
+                ) : (
+                  <div className="space-y-2" role="radiogroup" aria-label="Baseline runs">
+                    {baselines.map((run) => (
+                      <label
+                        key={run.run_id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors",
+                          parentRunId === run.run_id ? "border-foreground bg-muted/20" : "border-border/40",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="baseline-parent"
+                          checked={parentRunId === run.run_id}
+                          onChange={() => setParentRunId(run.run_id)}
+                          className="accent-primary shrink-0"
+                        />
+                        <span className="font-mono text-xs text-muted-foreground w-28 shrink-0 truncate" title={run.run_id}>
+                          {run.run_id.slice(0, 12)}…
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground/70 w-24 shrink-0 truncate">{run.task_id}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{run.status}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {phase === "after_fix" && (
+              <div>
+                <p className="text-sm font-medium mb-3">Fix kinds</p>
+                <div className="flex flex-wrap gap-2">
+                  {FIX_KINDS.map((kind) => {
+                    const active = fixKinds.includes(kind);
+                    return (
+                      <button
+                        key={kind}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setFixKinds((prev) => toggleLaunchFixKind(prev, kind))}
+                        className={cn(
+                          "px-2.5 py-1 rounded-full text-xs font-mono border transition-colors",
+                          active
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {kind}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -658,7 +796,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
           {error && <span className="text-xs text-destructive flex-1">{error}</span>}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={onClose} disabled={launching}>Cancel</Button>
-            <Button onClick={handleLaunch} disabled={launching || selectedTasks.size === 0}>
+            <Button onClick={handleLaunch} disabled={launching || !launchReady}>
               {launching ? "Launching…" : "Launch run"}
             </Button>
           </div>

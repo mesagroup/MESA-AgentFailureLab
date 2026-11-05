@@ -22,11 +22,14 @@ export interface LinkedTaskRunResult extends TaskRunResult {
 }
 
 /**
- * Bind an `after_fix` POST /runs to a stored parent.
- * `parent_run_id` is only valid on `after_fix`. A missing parent is an error.
- * Omitted `task_ids` become the parent's task. Omitted `injection` copies the
- * parent's `injection_plan` (null for a baseline parent). Send `injection: null`
- * for a clean replay of the same task.
+ * Bind `POST /runs` to a stored parent when `parent_run_id` is set.
+ *
+ * - `after_fix`: parent may be baseline or injected. Omitted `task_ids` become
+ *   the parent's task. Omitted `injection` copies the parent's `injection_plan`
+ *   (null for a baseline parent). Send `injection: null` for a clean replay.
+ * - `injected`: parent must be a baseline run of the same agent. Task comes from
+ *   the parent; injection stays the request value (preset when omitted).
+ * - `baseline`: `parent_run_id` is rejected.
  */
 export async function resolveAfterFixParent(input: {
   store: RunStore;
@@ -39,11 +42,13 @@ export async function resolveAfterFixParent(input: {
   const parentRunId =
     input.parentRunId === undefined || input.parentRunId === null ? "" : input.parentRunId.trim();
   if (parentRunId.length === 0) {
-    if (input.phase !== "after_fix") return { ok: true, value: null };
     return { ok: true, value: null };
   }
-  if (input.phase !== "after_fix") {
-    return { ok: false, message: "parent_run_id is only valid when phase is after_fix." };
+  if (input.phase !== "after_fix" && input.phase !== "injected") {
+    return {
+      ok: false,
+      message: "parent_run_id is only valid when phase is injected or after_fix.",
+    };
   }
   const parent = await input.store.getRun(parentRunId);
   if (!parent) return { ok: false, message: `No run ${parentRunId}` };
@@ -51,6 +56,12 @@ export async function resolveAfterFixParent(input: {
     return {
       ok: false,
       message: `parent_run_id agent ${parent.agent_id} does not match agent_id ${input.agentId}.`,
+    };
+  }
+  if (input.phase === "injected" && parent.phase !== "baseline") {
+    return {
+      ok: false,
+      message: `injected parent_run_id must reference a baseline run (got phase ${parent.phase}).`,
     };
   }
   let taskIds = input.taskIds;
@@ -61,6 +72,9 @@ export async function resolveAfterFixParent(input: {
       ok: false,
       message: `task_ids must be omitted or [${parent.task_id}] to replay run ${parentRunId}.`,
     };
+  }
+  if (input.phase === "injected") {
+    return { ok: true, value: { taskIds, injection: input.injection, parentRunId } };
   }
   const injection =
     input.injection === undefined
