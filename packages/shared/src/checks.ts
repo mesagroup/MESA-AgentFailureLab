@@ -167,15 +167,19 @@ export function validateTaskChecks(task: AgentTask, taskIndex = 0): string[] {
  * The JSON Schema cannot express that conditional under Ajv's strict required check.
  */
 export function validateOtelSource(agent: Pick<Agent, "otel">): string[] {
-  const auth = agent.otel?.auth;
-  if (!auth) return [];
-  if (auth.type === "bearer" && (auth.token_env === undefined || auth.token_env.trim() === "")) {
-    return ["/otel/auth/token_env is required when auth.type is bearer."];
+  if (!agent.otel) return [];
+  const errors: string[] = [];
+  for (const channel of ["prod", "test"] as const) {
+    const auth = agent.otel[channel].auth;
+    const path = `/otel/${channel}/auth/token_env`;
+    if (auth.type === "bearer" && (auth.token_env === undefined || auth.token_env.trim() === "")) {
+      errors.push(`${path} is required when auth.type is bearer.`);
+    }
+    if (auth.type === "none" && auth.token_env !== undefined) {
+      errors.push(`${path} must be omitted when auth.type is none.`);
+    }
   }
-  if (auth.type === "none" && auth.token_env !== undefined) {
-    return ["/otel/auth/token_env must be omitted when auth.type is none."];
-  }
-  return [];
+  return errors;
 }
 
 /** Duplicate `case_id` values. `pathPrefix` is the JSON-pointer prefix for `cases`. */

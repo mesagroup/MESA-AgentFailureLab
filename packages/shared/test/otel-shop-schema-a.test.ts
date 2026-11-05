@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { SHOP_OTEL_SCHEMA_A_ID, type Agent } from "../src/index.js";
 import { mapOtelImport } from "../src/otel-import.js";
-import { readShopOtelMock, remapShopSchemaA } from "../src/otel-shop-schema-a.js";
+import { pullShopOtelMock, readShopOtelMock, remapShopSchemaA } from "../src/otel-shop-schema-a.js";
 import { validateAgent, validateTrace } from "../src/validate.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,7 +45,8 @@ describe("shop schema A mock pull", () => {
 
   it("maps the test T2 fixture through readShopOtelMock", () => {
     const agent = readJson("examples/agent-reference-shop.json") as Agent;
-    assert.equal(agent.otel, undefined);
+    assert.equal(agent.otel?.schema_id, SHOP_OTEL_SCHEMA_A_ID);
+    assert.match(agent.otel?.prod.endpoint ?? "", /\/internal\/otel\/traces\?source=prod$/);
     assert.equal(agent.otel_mock?.schema_id, SHOP_OTEL_SCHEMA_A_ID);
     assert.equal(
       agent.otel_mock?.sources.test.fixture_path,
@@ -100,16 +102,44 @@ describe("shop schema A mock pull", () => {
     assert.ok(result.errors.length > 0);
   });
 
-  it("accepts the shop seed with otel_mock and leaves the library seed without it", () => {
+  it("accepts the shop seed with otel HTTP sources and fixture fallback", () => {
     const shop = readJson("examples/agent-reference-shop.json") as Agent;
     const library = readJson("examples/agent-library-desk.json") as Agent;
     const shopResult = validateAgent(shop);
     const libraryResult = validateAgent(library);
     assert.equal(shopResult.ok, true, shopResult.ok ? "" : shopResult.errors.join("; "));
     assert.equal(libraryResult.ok, true, libraryResult.ok ? "" : libraryResult.errors.join("; "));
-    assert.equal(shop.otel, undefined);
+    assert.equal(shop.otel?.prod.auth.type, "none");
     assert.equal(shop.otel_mock?.mode, "fixture");
     assert.equal(shop.otel_mock?.schema_id, SHOP_OTEL_SCHEMA_A_ID);
+    assert.equal(library.otel, undefined);
     assert.equal(library.otel_mock, undefined);
+  });
+
+  it("pulls prod over HTTP and remaps without inventing a verdict", async () => {
+    const server = createServer((request, response) => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname !== "/internal/otel/traces" || url.searchParams.get("source") !== "prod") {
+        response.statusCode = 404;
+        response.end();
+        return;
+      }
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(prodT1));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    try {
+      const batch = await pullShopOtelMock("prod", { origin: `http://127.0.0.1:${address.port}` });
+      const result = remapShopSchemaA(batch, { agentId: "reference-shop" });
+      assert.equal(result.ok, true, result.ok ? "" : result.errors.join("; "));
+      if (!result.ok) return;
+      assert.equal(validateTrace(result.traces[0]).ok, true);
+      assert.equal(result.traces[0]?.fault.injected, false);
+      assert.deepEqual(result.traces[0]?.fault.labels, []);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
   });
 });

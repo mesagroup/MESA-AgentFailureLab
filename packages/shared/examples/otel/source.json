@@ -1,9 +1,19 @@
 {
   "version": 1,
-  "endpoint": "https://otel.example.com/v1/traces",
-  "auth": {
-    "type": "bearer",
-    "token_env": "OTEL_SOURCE_TOKEN"
+  "prod": {
+    "endpoint": "https://otel.example.com/v1/traces",
+    "auth": {
+      "type": "bearer",
+      "token_env": "OTEL_SOURCE_TOKEN"
+    },
+    "service_name": "reference-shop"
   },
-  "service_name": "reference-shop"
+  "test": {
+    "endpoint": "https://otel.example.com/v1/traces",
+    "auth": {
+      "type": "bearer",
+      "token_env": "OTEL_SOURCE_TOKEN"
+    },
+    "service_name": "reference-shop"
+  }
 }

@@ -46,6 +46,9 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY --from=build --chown=node:node /out /app
+COPY --from=build --chown=node:node /app/packages/shared/examples/otel/shop-schema-a /app/otel-shop-schema-a
+
+ENV OTEL_SHOP_A_DIR=/app/otel-shop-schema-a
 
 USER node
 

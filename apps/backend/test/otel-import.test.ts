@@ -29,8 +29,8 @@ describe("OTel import route", () => {
       agent.otel = readExample("source.json") as unknown as Agent["otel"];
       const created = await app.inject({ method: "POST", url: "/agents", payload: agent });
       assert.equal(created.statusCode, 201);
-      assert.equal(created.json().otel.service_name, "reference-shop");
-      assert.equal(created.json().otel.auth.token_env, "OTEL_SOURCE_TOKEN");
+      assert.equal(created.json().otel.prod.service_name, "reference-shop");
+      assert.equal(created.json().otel.prod.auth.token_env, "OTEL_SOURCE_TOKEN");
 
       const imported = await app.inject({
         method: "POST",
@@ -115,7 +115,8 @@ describe("OTel import route", () => {
       mismatched.name = "Mismatch";
       mismatched.description = "Source expects another service name.";
       mismatched.otel = readExample("source.json") as unknown as Agent["otel"];
-      mismatched.otel!.service_name = "other-service";
+      mismatched.otel!.prod.service_name = "other-service";
+      mismatched.otel!.test.service_name = "other-service";
       const mismatchCreated = await app.inject({ method: "POST", url: "/agents", payload: mismatched });
       assert.equal(mismatchCreated.statusCode, 201);
       const mismatch = await app.inject({

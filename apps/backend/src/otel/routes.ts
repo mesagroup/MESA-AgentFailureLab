@@ -5,7 +5,7 @@ import type { RunStore } from "../persistence/store.js";
 
 /**
  * Push import of an OTel batch for one agent.
- * Does not dial `Agent.otel.endpoint` and does not take the mock-world gate.
+ * Does not dial `Agent.otel.prod` or `Agent.otel.test` and does not take the mock-world gate.
  * A failed remap stores nothing.
  */
 export function registerOtelImportRoutes(app: FastifyInstance, agents: AgentStore, store: RunStore): void {
@@ -16,7 +16,7 @@ export function registerOtelImportRoutes(app: FastifyInstance, agents: AgentStor
     }
     const mapped = mapOtelImport(request.body, {
       agentId: agent.agent_id,
-      serviceName: agent.otel?.service_name,
+      serviceName: agent.otel?.prod.service_name,
     });
     if (!mapped.ok) {
       return reply.code(400).send({

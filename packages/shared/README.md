@@ -11,7 +11,7 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 Package exports:
 
 - `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`), `planShopTask`, `FIX_KINDS`, `isFixKind`, and `ADR_FIX_BY_CATEGORY` / `adrFixForCategory` (ADR-002 MVP map: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`).
-- `@mesa/shared/otel` — `mapOtelImport`, `remapShopSchemaA`, and `readShopOtelMock`. This entry loads Ajv. The generic mapper maps an OTel import batch onto Traces. Schema A maps shop fixtures under `examples/otel/shop-schema-a/` and validates each Trace with `validateTrace`.
+- `@mesa/shared/otel` — `mapOtelImport`, `remapShopSchemaA`, `readShopOtelMock`, and `pullShopOtelMock`. This entry loads Ajv. The generic mapper maps an OTel import batch onto Traces. Schema A maps shop fixtures under `examples/otel/shop-schema-a/` or a GET from mock-shop `GET /internal/otel/traces`, then `validateTrace`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-shop.json` — the reference shop agent (T1–T5). The harness loads this; it is not a second schema. Seed URLs are applied by the backend ([docs/seed-endpoints.md](../../docs/seed-endpoints.md)).
@@ -112,7 +112,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 
 ### OTel source
 
-`otel` on the agent is optional. It names an OpenTelemetry endpoint, an auth mode (`none` or `bearer` plus `token_env`), and an optional `service_name`. The token is not stored. The shop and library seeds omit `otel`. The shop seed sets `otel_mock` for schema remap A. The import batch, schema A fixtures, and the reserved library mapping B names are in [docs/otel.md](../../docs/otel.md). The mapper does not invent `fault.labels` or `outcome.verifier`. Production paste/upload of an already valid Trace stays [#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51).
+`otel` on the agent is optional. It names dual sources `prod` and `test`, each with an HTTP traces URL, plus optional `schema_id` for the lab remap. Auth is `none` or `bearer` plus `token_env`. The token is not stored. The shop seed points those URLs at mock-shop `GET /internal/otel/traces` and keeps `otel_mock` as a file fallback. The library seed omits both. Details are in [docs/otel.md](../../docs/otel.md). The mapper does not invent `fault.labels` or `outcome.verifier`. Production paste/upload of an already valid Trace stays [#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51).
 
 ## Examples
 

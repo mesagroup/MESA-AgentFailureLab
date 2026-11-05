@@ -105,14 +105,51 @@ export function remapShopSchemaA(data: unknown, ctx: OtelImportContext): OtelImp
  * Does not open a socket and does not call `endpoint`.
  */
 export function readShopOtelMock(channel: OtelMockChannel): unknown {
-  const agent = JSON.parse(
-    readFileSync(join(packageRoot, "examples", "agent-reference-shop.json"), "utf8"),
-  ) as Agent;
+  const agent = loadShopAgent();
   const fixturePath = agent.otel_mock?.sources[channel]?.fixture_path;
   if (typeof fixturePath !== "string" || fixturePath.trim() === "") {
     throw new Error(`agent-reference-shop.json otel_mock.sources.${channel}.fixture_path is missing.`);
   }
   return JSON.parse(readFileSync(resolveSharedPath(fixturePath), "utf8")) as unknown;
+}
+
+/**
+ * GET `Agent.otel.prod` or `Agent.otel.test`. `origin` replaces the documented host.
+ * `since` is forwarded as an ISO-8601 query when set. Does not rewrite `outcome.verifier` or `fault`.
+ */
+export async function pullShopOtelMock(
+  channel: OtelMockChannel,
+  options: { origin?: string; since?: string } = {},
+): Promise<unknown> {
+  const agent = loadShopAgent();
+  const endpoint = agent.otel?.[channel]?.endpoint;
+  if (typeof endpoint !== "string" || endpoint.trim() === "") {
+    throw new Error(`agent-reference-shop.json otel.${channel}.endpoint is missing.`);
+  }
+  const url = new URL(rewriteOrigin(endpoint, options.origin));
+  if (options.since !== undefined && options.since.trim() !== "") {
+    url.searchParams.set("since", options.since.trim());
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`GET ${url.toString()} returned ${response.status}.`);
+  }
+  return (await response.json()) as unknown;
+}
+
+function loadShopAgent(): Agent {
+  return JSON.parse(
+    readFileSync(join(packageRoot, "examples", "agent-reference-shop.json"), "utf8"),
+  ) as Agent;
+}
+
+function rewriteOrigin(endpoint: string, origin: string | undefined): string {
+  if (origin === undefined || origin.trim() === "") return endpoint;
+  const documented = new URL(endpoint);
+  const live = new URL(origin);
+  documented.protocol = live.protocol;
+  documented.host = live.host;
+  return documented.toString();
 }
 
 function resolveSharedPath(fixturePath: string): string {

@@ -61,27 +61,30 @@ describe("OTel import", () => {
   });
 
   it("accepts the source document on an agent and still accepts agents that omit it", () => {
-    const agent = readJson("examples/agent-reference-shop.json") as Agent;
-    assert.equal(agent.otel, undefined);
-    assert.equal(validateAgent(agent).ok, true);
-    const withSource = clone(agent);
+    const shop = readJson("examples/agent-reference-shop.json") as Agent;
+    assert.equal(shop.otel?.schema_id, "mesa.otel.shop.a");
+    assert.equal(validateAgent(shop).ok, true);
+    const library = readJson("examples/agent-library-desk.json") as Agent;
+    assert.equal(library.otel, undefined);
+    assert.equal(validateAgent(library).ok, true);
+    const withSource = clone(library);
     withSource.otel = source as Agent["otel"];
     const saved = validateAgent(withSource);
     assert.equal(saved.ok, true, saved.ok ? "" : saved.errors.join("; "));
     if (!saved.ok) return;
     assert.equal(saved.value.otel?.version, OTEL_SOURCE_VERSION);
-    assert.equal(saved.value.otel?.auth.token_env, "OTEL_SOURCE_TOKEN");
+    assert.equal(saved.value.otel?.prod.auth.token_env, "OTEL_SOURCE_TOKEN");
 
     const bearerWithoutEnv = clone(withSource);
-    delete bearerWithoutEnv.otel!.auth.token_env;
+    delete bearerWithoutEnv.otel!.prod.auth.token_env;
     assert.equal(validateAgent(bearerWithoutEnv).ok, false);
 
     const noneWithEnv = clone(withSource);
-    noneWithEnv.otel!.auth = { type: "none", token_env: "OTEL_SOURCE_TOKEN" };
+    noneWithEnv.otel!.prod.auth = { type: "none", token_env: "OTEL_SOURCE_TOKEN" };
     assert.equal(validateAgent(noneWithEnv).ok, false);
 
     const tokenInTheField = clone(withSource);
-    tokenInTheField.otel!.auth.token_env = "secret-token-value";
+    tokenInTheField.otel!.prod.auth.token_env = "secret-token-value";
     assert.equal(validateAgent(tokenInTheField).ok, false);
   });
 
