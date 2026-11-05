@@ -261,9 +261,9 @@ function DashboardBody({
       </p>
 
       {attention.length > 0 && (
-        <div className="rounded-2xl border border-border/50 bg-card/40 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/40">
-            <h2 className="text-sm font-medium text-muted-foreground">Needs attention</h2>
+        <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
+            <h2 className="text-sm font-semibold">Needs attention</h2>
           </div>
           {attention.map(({ run, link }) => {
             const href = dashboardRunHref(run, link);
