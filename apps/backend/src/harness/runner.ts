@@ -139,6 +139,11 @@ function agentBaseUrl(agent: Agent, phase: RunPhase): string {
   return phase === "baseline" ? agent.instance.base_url : agent.test_instance.base_url;
 }
 
+function strictWorldChecksEnabled(): boolean {
+  const value = process.env.STRICT_WORLD_CHECKS?.trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
 function sessionIdFor(taskId: string): string {
   return `s${taskId}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
@@ -248,6 +253,7 @@ async function runOne(
       reportedOrderStatus: execution.reportedOrderStatus,
       agentClaimedSuccess: execution.claimedSuccess,
       steps: execution.steps,
+      strictWorldChecks: strictWorldChecksEnabled(),
     });
     const bounds = traceBounds(startedMs, execution.steps.length);
     const findings = prePass({

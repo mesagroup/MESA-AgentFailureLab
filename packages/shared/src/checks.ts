@@ -94,7 +94,26 @@ export const CHECK_REGISTRY: Record<CheckType, CheckTypeSpec> = {
   order_created: {
     name: "order_created",
     summary: "The session has an order with status placed.",
-    params: [],
+    params: [
+      {
+        name: "sku",
+        type: "string",
+        required: false,
+        description: "When STRICT_WORLD_CHECKS is on, a placed order must contain this SKU.",
+      },
+      {
+        name: "qty",
+        type: "integer",
+        required: false,
+        description: "When STRICT_WORLD_CHECKS is on, that SKU must have this exact quantity.",
+      },
+      {
+        name: "max_orders",
+        type: "integer",
+        required: false,
+        description: "When STRICT_WORLD_CHECKS is on, the session may have at most this many placed orders.",
+      },
+    ],
   },
   order_total_matches: {
     name: "order_total_matches",
