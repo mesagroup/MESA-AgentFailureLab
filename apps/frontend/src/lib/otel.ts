@@ -1,22 +1,16 @@
-import { OTEL_SOURCE_VERSION, type OtelSourceAuthType, type OtelSourceConfig } from "@mesa/shared";
+import { OTEL_SOURCE_VERSION, type OtelSourceConfig } from "@mesa/shared";
 
-const TOKEN_ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
-
-/** Form fields for the optional `Agent.otel` source. `enabled` false omits the field on save. */
+/** Form fields for the optional `Agent.otel` dual source. `enabled` false omits the field on save. */
 export interface OtelSourceDraft {
   enabled: boolean;
   prodEndpoint: string;
   testEndpoint: string;
-  authType: OtelSourceAuthType;
-  /** Env var name. Never a bearer token. */
-  tokenEnv: string;
   serviceName: string;
 }
 
 export interface OtelSourceFieldError {
   prod_endpoint?: string;
   test_endpoint?: string;
-  token_env?: string;
   service_name?: string;
 }
 
@@ -25,8 +19,6 @@ export function emptyOtelDraft(): OtelSourceDraft {
     enabled: false,
     prodEndpoint: "",
     testEndpoint: "",
-    authType: "none",
-    tokenEnv: "",
     serviceName: "",
   };
 }
@@ -37,8 +29,6 @@ export function otelDraftFromAgent(otel: OtelSourceConfig | undefined): OtelSour
     enabled: true,
     prodEndpoint: otel.prod.endpoint,
     testEndpoint: otel.test.endpoint,
-    authType: otel.prod.auth.type,
-    tokenEnv: otel.prod.auth.token_env ?? "",
     serviceName: otel.prod.service_name ?? "",
   };
 }
@@ -52,13 +42,6 @@ export function otelSourceErrors(draft: OtelSourceDraft): OtelSourceFieldError {
   else if (!isHttpUrl(prodEndpoint)) error.prod_endpoint = "Enter an http or https URL.";
   if (!testEndpoint) error.test_endpoint = "Enter the test traces URL.";
   else if (!isHttpUrl(testEndpoint)) error.test_endpoint = "Enter an http or https URL.";
-  if (draft.authType === "bearer") {
-    const name = draft.tokenEnv.trim();
-    if (!name) error.token_env = "Enter the env var name that holds the bearer token. Do not paste the token.";
-    else if (!TOKEN_ENV_NAME.test(name)) {
-      error.token_env = "Use an env var name like OTEL_SOURCE_TOKEN. Do not paste the token.";
-    }
-  }
   if (draft.serviceName.length > 0 && draft.serviceName.trim().length === 0) {
     error.service_name = "Enter a service name, or leave it blank.";
   }
@@ -66,19 +49,19 @@ export function otelSourceErrors(draft: OtelSourceDraft): OtelSourceFieldError {
 }
 
 export function otelSourceHasErrors(errors: OtelSourceFieldError): boolean {
-  return Boolean(errors.prod_endpoint || errors.test_endpoint || errors.token_env || errors.service_name);
+  return Boolean(errors.prod_endpoint || errors.test_endpoint || errors.service_name);
 }
 
 /**
- * `version` is always 1. Bearer auth stores the env var name only.
- * `none` omits `token_env`. A blank service name omits `service_name`.
+ * Lab MVP writes `auth.type: none` only (no bearer UI).
+ * Keeps existing `schema_id` so Save does not strip the lab remap.
  */
-export function otelSourceFromDraft(draft: OtelSourceDraft): OtelSourceConfig | undefined {
+export function otelSourceFromDraft(
+  draft: OtelSourceDraft,
+  options?: { preserveSchemaId?: string },
+): OtelSourceConfig | undefined {
   if (!draft.enabled) return undefined;
-  const auth =
-    draft.authType === "bearer"
-      ? { type: "bearer" as const, token_env: draft.tokenEnv.trim() }
-      : { type: "none" as const };
+  const auth = { type: "none" as const };
   const serviceName = draft.serviceName.trim();
   const prod = { endpoint: draft.prodEndpoint.trim(), auth };
   const test = { endpoint: draft.testEndpoint.trim(), auth };
@@ -87,6 +70,8 @@ export function otelSourceFromDraft(draft: OtelSourceDraft): OtelSourceConfig | 
     prod: serviceName ? { ...prod, service_name: serviceName } : prod,
     test: serviceName ? { ...test, service_name: serviceName } : test,
   };
+  const schemaId = options?.preserveSchemaId?.trim();
+  if (schemaId) source.schema_id = schemaId;
   return source;
 }
 

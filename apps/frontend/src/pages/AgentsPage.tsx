@@ -46,7 +46,7 @@ import {
   permissionChoices,
   type JuryCaseDescription,
 } from "@/lib/jury";
-import type { Agent, AgentTask, FixKind, OtelSourceAuthType, Run } from "@mesa/shared";
+import type { Agent, AgentTask, FixKind, Run } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 import { OtelImportPanel } from "@/pages/OtelImportPanel";
 import { TracePullPanel } from "@/pages/TracePullPanel";
@@ -198,7 +198,9 @@ export function AgentsPage() {
       instance_base_url: form.instance_base_url.trim(),
       test_instance_base_url: form.test_instance_base_url.trim(),
       tasks: form.tasks,
-      otel: otelSourceFromDraft(form.otel) ?? null,
+      otel: otelSourceFromDraft(form.otel, {
+        preserveSchemaId: editing?.otel?.schema_id,
+      }) ?? null,
     };
     try {
       if (editing) {
@@ -560,7 +562,7 @@ function OtelSourceFields({
         <span>
           <span className="font-medium">OTel source</span>
           <span className="mt-1 block text-xs text-muted-foreground">
-            Dual prod and test traces URLs. Schema remap stays on the agent. A bearer token stays in the named env var and is not stored here. Version 1.
+            Dual prod and test traces URLs. Open lab: sources use auth none. Schema remap stays on the agent (ADR-001: remap does not invent verifier or fault labels). Version 1.
           </span>
         </span>
       </label>
@@ -584,47 +586,6 @@ function OtelSourceFields({
               aria-invalid={showErrors && Boolean(errors.test_endpoint)}
             />
           </FormField>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Auth</label>
-            <div className="flex gap-1">
-              {(["none", "bearer"] as OtelSourceAuthType[]).map((authType) => {
-                const active = draft.authType === authType;
-                return (
-                  <button
-                    key={authType}
-                    type="button"
-                    onClick={() => onChange("authType", authType)}
-                    className={cn(
-                      "px-3 py-1 rounded-full text-sm border transition-colors",
-                      active
-                        ? "bg-foreground text-background border-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
-                    )}
-                  >
-                    {authType === "bearer" ? "Bearer env var" : "None"}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {draft.authType === "bearer" && (
-            <FormField
-              label="Token env var"
-              error={showErrors ? errors.token_env : undefined}
-              required
-            >
-              <Input
-                value={draft.tokenEnv}
-                onChange={(event) => onChange("tokenEnv", event.target.value)}
-                placeholder="OTEL_SOURCE_TOKEN"
-                autoComplete="off"
-                spellCheck={false}
-                className="font-mono text-xs"
-                aria-invalid={showErrors && Boolean(errors.token_env)}
-              />
-              <p className="text-xs text-muted-foreground">Name only, such as OTEL_SOURCE_TOKEN. Do not paste the token.</p>
-            </FormField>
-          )}
           <FormField label="Service name" error={showErrors ? errors.service_name : undefined}>
             <Input
               value={draft.serviceName}

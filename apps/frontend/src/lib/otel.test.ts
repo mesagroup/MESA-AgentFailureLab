@@ -21,14 +21,12 @@ import {
   parseOtelBatch,
 } from "./otel.ts";
 
-test("a disabled source is omitted and stores no token", () => {
+test("a disabled source is omitted; enabled sources always use auth none", () => {
   assert.equal(otelSourceFromDraft(emptyOtelDraft()), undefined);
   const none = otelSourceFromDraft({
     enabled: true,
     prodEndpoint: " https://otel.example.com/v1/traces ",
     testEndpoint: " https://otel.example.com/v1/traces ",
-    authType: "none",
-    tokenEnv: "SHOULD_NOT_BE_SENT",
     serviceName: "  ",
   });
   assert.deepEqual(none, {
@@ -37,35 +35,31 @@ test("a disabled source is omitted and stores no token", () => {
     test: { endpoint: "https://otel.example.com/v1/traces", auth: { type: "none" } },
   });
   assert.equal(JSON.stringify(none).includes("token"), false);
-  assert.equal(JSON.stringify(none).includes("SHOULD_NOT_BE_SENT"), false);
+  assert.equal(JSON.stringify(none).includes("bearer"), false);
 });
 
-test("bearer auth stores the env var name and rejects a pasted token", () => {
+test("save preserves schema_id and does not invent verifier or fault labels", () => {
   const draft = {
     enabled: true,
-    prodEndpoint: "https://otel.example.com/v1/traces",
-    testEndpoint: "https://otel.example.com/v1/traces",
-    authType: "bearer" as const,
-    tokenEnv: "OTEL_SOURCE_TOKEN",
+    prodEndpoint: "https://otel.example.com/v1/traces?source=prod",
+    testEndpoint: "https://otel.example.com/v1/traces?source=test",
     serviceName: "reference-shop",
   };
-  assert.deepEqual(otelSourceFromDraft(draft), {
+  assert.deepEqual(otelSourceFromDraft(draft, { preserveSchemaId: "mesa.otel.shop.a" }), {
     version: 1,
+    schema_id: "mesa.otel.shop.a",
     prod: {
-      endpoint: "https://otel.example.com/v1/traces",
-      auth: { type: "bearer", token_env: "OTEL_SOURCE_TOKEN" },
+      endpoint: "https://otel.example.com/v1/traces?source=prod",
+      auth: { type: "none" },
       service_name: "reference-shop",
     },
     test: {
-      endpoint: "https://otel.example.com/v1/traces",
-      auth: { type: "bearer", token_env: "OTEL_SOURCE_TOKEN" },
+      endpoint: "https://otel.example.com/v1/traces?source=test",
+      auth: { type: "none" },
       service_name: "reference-shop",
     },
   });
-  const missing = otelSourceErrors({ ...draft, tokenEnv: "" });
-  assert.match(missing.token_env ?? "", /Do not paste the token/);
-  const secret = otelSourceErrors({ ...draft, tokenEnv: "sk-live-secret" });
-  assert.match(secret.token_env ?? "", /OTEL_SOURCE_TOKEN/);
+  assert.equal(otelSourceFromDraft(draft)?.schema_id, undefined);
   assert.equal(otelSourceErrors({ ...draft, prodEndpoint: "not a url" }).prod_endpoint?.includes("http"), true);
 });
 
