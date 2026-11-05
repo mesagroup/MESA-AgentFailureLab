@@ -11,11 +11,12 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 Package exports:
 
 - `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`), `planShopTask`, `FIX_KINDS`, `isFixKind`, and `ADR_FIX_BY_CATEGORY` / `adrFixForCategory` (ADR-002 MVP map: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`).
-- `@mesa/shared/otel` — `mapOtelImport`, `remapShopSchemaA`, `readShopOtelMock`, and `pullShopOtelMock`. This entry loads Ajv. The generic mapper maps an OTel import batch onto Traces. Schema A maps shop fixtures under `examples/otel/shop-schema-a/` or a GET from mock-shop `GET /internal/otel/traces`, then `validateTrace`.
+- `@mesa/shared/otel` — `mapOtelImport`, `remapShopSchemaA`, `readShopOtelMock`, `pullShopOtelMock`, `remapLibrarySchemaB`, and `readLibraryOtelMock`. This entry loads Ajv. The generic mapper maps an OTel import batch onto Traces. Schema A maps shop fixtures or a GET from mock-shop. Schema B maps library fixtures or a GET from mock-library. Each remap then runs `validateTrace`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
 - `@mesa/shared/examples/agent-reference-shop.json` — the reference shop agent (T1–T5). The harness loads this; it is not a second schema. Seed URLs are applied by the backend ([docs/seed-endpoints.md](../../docs/seed-endpoints.md)).
-- `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Seeded the same way as the reference shop. `instance.kind` is `external`.
+- `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Dual `otel` HTTP sources and `otel_mock` fixture fallback for schema B. Seeded the same way as the reference shop. `instance.kind` is `external`.
+- `@mesa/shared/schemas/otel-library-schema-b.schema.json` — library mapping B export (`schema_hint` `mesa.otel.library.b`). Not the generic import batch.
 
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 
@@ -112,7 +113,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 
 ### OTel source
 
-`otel` on the agent is optional. It names dual sources `prod` and `test`, each with an HTTP traces URL, plus optional `schema_id` for the lab remap. Auth is `none` or `bearer` plus `token_env`. The token is not stored. The shop seed points those URLs at mock-shop `GET /internal/otel/traces` and keeps `otel_mock` as a file fallback. The library seed omits both. Details are in [docs/otel.md](../../docs/otel.md). The mapper does not invent `fault.labels` or `outcome.verifier`. Production paste/upload of an already valid Trace stays [#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51).
+`otel` on the agent is optional. It names dual sources `prod` and `test`, each with an HTTP traces URL, plus optional `schema_id` for the lab remap. Auth is `none` or `bearer` plus `token_env`. The token is not stored. The shop seed points those URLs at mock-shop `GET /internal/otel/traces` (`mesa.otel.shop.a`). The library seed points at mock-library (`mesa.otel.library.b`). Both keep `otel_mock` as a file fallback. Details are in [docs/otel.md](../../docs/otel.md). The mapper does not invent `fault.labels` or `outcome.verifier`. Production paste/upload of an already valid Trace stays [#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51).
 
 ## Examples
 
@@ -124,6 +125,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 - [`examples/tool-error-trace.json`](examples/tool-error-trace.json) — checkout tool result with `status: "error"`. `diagnosis` is null.
 - [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json) — reference shop agent with T1–T5 and `otel_mock` for schema A.
 - [`examples/otel/shop-schema-a/`](examples/otel/shop-schema-a/) — shop fixture exports for schema A. Schema file [`schemas/otel-shop-schema-a.schema.json`](schemas/otel-shop-schema-a.schema.json).
+- [`examples/otel/library-schema-b/`](examples/otel/library-schema-b/) — library fixture exports for schema B. Schema file [`schemas/otel-library-schema-b.schema.json`](schemas/otel-library-schema-b.schema.json).
 - [`examples/run-injected.json`](examples/run-injected.json) — the Run that owns that trace (`phase: injected`).
 - [`examples/production/`](examples/production/) — three clean production exports (T1, T3, T5) for the import screen. No fault labels. `diagnosis` is null. Usage notes are in that folder's README.
 

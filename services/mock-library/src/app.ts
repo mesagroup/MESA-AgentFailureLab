@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { defaultOtelSeedDir, loadOtelSeeds, resolveOtelQuery } from "./otel.js";
 import { LibraryDesk, type LibraryFailure, type SeedLoan } from "./state.js";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -6,6 +7,7 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 export interface BuildAppOptions {
   logger?: boolean;
   desk?: LibraryDesk;
+  otelSeedDir?: string;
 }
 
 function failureStatus(failure: LibraryFailure): number {
@@ -48,10 +50,21 @@ function seedLoan(value: unknown): SeedLoan | undefined {
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
   const desk = options.desk ?? new LibraryDesk();
+  const otelSeeds = loadOtelSeeds(options.otelSeedDir ?? defaultOtelSeedDir());
 
   app.get("/health", async () => ({ ok: true, service: "mock-library" }));
   app.get("/internal/state", async () => desk.snapshot());
   app.post("/internal/reset", async () => desk.reset());
+
+  app.get("/internal/otel/traces", async (request, reply) => {
+    const header = request.headers["x-mock-otel-schema"];
+    const schemaHeader = Array.isArray(header) ? header[0] : header;
+    const resolved = resolveOtelQuery(request.query, schemaHeader, otelSeeds);
+    if (!resolved.ok) {
+      return reply.code(400).send({ error: "invalid_request", message: resolved.message });
+    }
+    return resolved.body;
+  });
 
   app.post("/internal/seed", async (request, reply) => {
     if (!isRecord(request.body) || !Array.isArray(request.body.loans)) {

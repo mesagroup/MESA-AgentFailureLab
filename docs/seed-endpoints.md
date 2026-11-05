@@ -14,7 +14,7 @@ The fixture files keep the laptop defaults so the JSON is a valid agent without 
 | `AGENTSERVICE_URL` | `reference-shop` `instance.base_url` and `test_instance.base_url` | `POST {origin}/v1/tasks/run` on `mesa-agentservice` |
 | `MOCK_SHOP_URL` | `reference-shop` `world.base_url` (`kind: shop`) and `otel.prod` plus `otel.test` endpoints | Shop tool routes, `GET /internal/state`, and `GET /internal/otel/traces` with `source=prod` or `source=test`. A shop run uses the process value of `MOCK_SHOP_URL`, which is this same variable. A test may pass another shop URL without editing the row. |
 | `LIBRARY_AGENT_URL` | `external-library` `instance.base_url` and `test_instance.base_url` | `POST {origin}/v1/tasks/run` on `mesa-library-agent` |
-| `MOCK_LIBRARY_URL` | `external-library` `world.base_url` (`kind: library`) | Library `POST /internal/seed` and tool routes. A library run uses the URL stored on the row. |
+| `MOCK_LIBRARY_URL` | `external-library` `world.base_url` (`kind: library`) and `otel.prod` / `otel.test` origins | Library `POST /internal/seed`, tool routes, and `GET /internal/otel/traces?source=prod\|test`. A library run uses the URL stored on the row. |
 
 `mesa-agentservice` does not read a shop URL. The harness sends `mock_base_url` on `POST /v1/tasks/run`.
 

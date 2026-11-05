@@ -112,8 +112,8 @@ describe("shop schema A mock pull", () => {
     assert.equal(shop.otel?.prod.auth.type, "none");
     assert.equal(shop.otel_mock?.mode, "fixture");
     assert.equal(shop.otel_mock?.schema_id, SHOP_OTEL_SCHEMA_A_ID);
-    assert.equal(library.otel, undefined);
-    assert.equal(library.otel_mock, undefined);
+    assert.equal(library.otel?.schema_id, "mesa.otel.library.b");
+    assert.equal(library.otel_mock?.schema_id, "mesa.otel.library.b");
   });
 
   it("pulls prod over HTTP and remaps without inventing a verdict", async () => {

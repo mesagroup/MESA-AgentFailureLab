@@ -6,7 +6,7 @@ An agent may register an OTel source. A separate import batch turns a minimal sp
 
 ## Source on the agent
 
-`Agent.otel` is stored by the existing `POST /agents` and `PUT /agents/:agent_id`. There is no separate source API. It has dual sources `prod` and `test`. `schema_id` on that object is the lab remap. The library seed omits `otel`. The shop seed sets both HTTP sources and a fixture fallback in `otel_mock`.
+`Agent.otel` is stored by the existing `POST /agents` and `PUT /agents/:agent_id`. There is no separate source API. It has dual sources `prod` and `test`. `schema_id` on that object is the lab remap. The shop seed uses `mesa.otel.shop.a` and points at mock-shop. The library seed uses `mesa.otel.library.b` and points at mock-library. Both keep `otel_mock` as a file fallback.
 
 ```json
 {
@@ -28,7 +28,7 @@ An agent may register an OTel source. A separate import batch turns a minimal sp
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `version` | yes | `1` (`OTEL_SOURCE_VERSION`). |
-| `schema_id` | no | Lab remap id. Shop demo A is `mesa.otel.shop.a`. Not chosen by the mock. |
+| `schema_id` | no | Lab remap id. Shop demo A is `mesa.otel.shop.a`. Library demo B is `mesa.otel.library.b`. Not chosen by the mock. |
 | `prod.endpoint` / `test.endpoint` | yes | HTTP traces URL for that source. |
 | `prod.auth.type` / `test.auth.type` | yes | `none` or `bearer`. |
 | `auth.token_env` | bearer only | Env-var name (`^[A-Z_][A-Z0-9_]*$`). Forbidden when `type` is `none`. |
@@ -135,4 +135,47 @@ Laptop URLs:
 
 `pullShopOtelMock` GETs `Agent.otel.prod` or `Agent.otel.test`. `readShopOtelMock` still reads `otel_mock.sources[].fixture_path` and does not open a socket.
 
-Library mapping B is reserved and is not in this package. Its `schema_id` is `mesa.otel.library.b`. Its root key is `library_export`. Its attribute prefix is `lib.`. Its span id field is `lib_span_id`. The HTTP path on the library mock is the same `/internal/otel/traces`. Issue #156 owns those files. Issue #154 owns a later lab traces pull route.
+## Library mock remap B
+
+Demo mapping 2 for `external-library` is schema B. It is a different document from the generic batch above and from shop mapping A. `POST /agents/:agentId/otel/import` still accepts only `otel-import.schema.json`. Schema B is loaded with `readLibraryOtelMock` then `remapLibrarySchemaB`, or pulled over HTTP from mock-library and then remapped.
+
+Schema file: [`packages/shared/schemas/otel-library-schema-b.schema.json`](../packages/shared/schemas/otel-library-schema-b.schema.json). The export uses `schema_hint` `mesa.otel.library.b`. The lab agent stores `schema_id` `mesa.otel.library.b`. The mock does not store `schema_id`.
+
+Fixtures, also the mock-library response bodies:
+
+- [`packages/shared/examples/otel/library-schema-b/prod-renew-loan.json`](../packages/shared/examples/otel/library-schema-b/prod-renew-loan.json)
+- [`packages/shared/examples/otel/library-schema-b/test-return-loan.json`](../packages/shared/examples/otel/library-schema-b/test-return-loan.json)
+- [`packages/shared/examples/otel/library-schema-b/prod-place-hold.json`](../packages/shared/examples/otel/library-schema-b/prod-place-hold.json)
+
+The export uses `library_export` and `spans[]` with `lib_trace_id`, `lib_span_id`, `action`, `started_at`, `ended_at` (ISO-8601), and `lib_attrs`. Attribute keys use the `lib.` prefix. `mapOtelImport` rejects this document. A shop A `schema_hint` fails with `schema_hint mesa.otel.shop.a is not mesa.otel.library.b`.
+
+`remapLibrarySchemaB` copies `library_export.verdict` onto `outcome`, writes the production fault mark, and runs `validateTrace`. It does not invent `fault.labels` or `outcome.verifier`.
+
+| | Shop A (#155 / #161) | Library B (#156) |
+| --- | --- | --- |
+| Lab `schema_id` | `mesa.otel.shop.a` | `mesa.otel.library.b` |
+| Export id | `schema_id` | `schema_hint` |
+| Root | `shop_export` | `library_export` |
+| Span ids | `shop_trace_id`, `shop_span_id` | `lib_trace_id`, `lib_span_id` |
+| Times | `opened_ms`, `closed_ms` (unix ms) | `started_at`, `ended_at` (ISO-8601) |
+| Attributes | `shop.*` | `lib.*` |
+| Remap | `remapShopSchemaA` | `remapLibrarySchemaB` |
+| HTTP | `services/mock-shop` `GET /internal/otel/traces` | `services/mock-library` `GET /internal/otel/traces` |
+
+### Fake APM on mock-library
+
+`GET /internal/otel/traces` on `services/mock-library` (port `8788`, origin `MOCK_LIBRARY_URL`).
+
+| Query | Required | Meaning |
+| --- | --- | --- |
+| `source` | no | `prod` or `test`. Default `prod`. |
+| `since` | no | ISO-8601 date-time. Keep spans with `started_at` greater than or equal to that instant. Omit it to return the entire seed. |
+
+Unknown query keys, a bad `source`, or a bad `since` are `400` `{ "error": "invalid_request" }`. Optional header `X-Mock-Otel-Schema`: omit it, or send `mesa.otel.library.b`. Any other value is 400. The route is read-only. It does not seed, renew, return, or reset the desk.
+
+Laptop URLs:
+
+- `http://127.0.0.1:8788/internal/otel/traces?source=prod`
+- `http://127.0.0.1:8788/internal/otel/traces?source=test`
+
+`bindSeedAgent` rewrites those hosts from `MOCK_LIBRARY_URL` together with `world.base_url`. Issue #154 owns a later lab traces pull route.

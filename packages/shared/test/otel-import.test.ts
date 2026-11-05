@@ -65,9 +65,13 @@ describe("OTel import", () => {
     assert.equal(shop.otel?.schema_id, "mesa.otel.shop.a");
     assert.equal(validateAgent(shop).ok, true);
     const library = readJson("examples/agent-library-desk.json") as Agent;
-    assert.equal(library.otel, undefined);
+    assert.equal(library.otel?.schema_id, "mesa.otel.library.b");
     assert.equal(validateAgent(library).ok, true);
-    const withSource = clone(library);
+    const omitted = clone(library);
+    delete omitted.otel;
+    delete omitted.otel_mock;
+    assert.equal(validateAgent(omitted).ok, true);
+    const withSource = clone(omitted);
     withSource.otel = source as Agent["otel"];
     const saved = validateAgent(withSource);
     assert.equal(saved.ok, true, saved.ok ? "" : saved.errors.join("; "));
