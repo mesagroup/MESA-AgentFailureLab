@@ -169,7 +169,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `GET` | `/faults` | Labeled fault catalog and the T1–T5 presets |
 | `POST` | `/runs` | Batch for one registered agent. Required `agent_id`. Optional `phase` (default `baseline`), `task_ids`, `driver` (`scripted`, `http`, `auto`), `injection` (`preset`, a plan, or null), `fix_kinds`, `parent_run_id`, `grant_cancel`, `timeout_ms`. Unknown `agent_id` is 404. 409 `world_busy` when this process already holds the mock-world gate. See [POST /runs](#post-runs) |
 | `GET` | `/attacker/jury-case` | Juror note, the security plan, and the structured request fields. Does not start a run. Stays available while the mock-world gate is held |
-| `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
+| `POST` | `/attacker/jury-case` | Jury launch. Optional `agent_id` (store; default fixture id), `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
 | `GET` | `/traces`, `/traces/:traceId` | Stored traces. After a fresh boot this is the seven demo traces (four shop including `trace-t3-forged-checkout`, three library). Filter `source` includes `production` |

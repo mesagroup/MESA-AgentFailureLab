@@ -124,6 +124,8 @@ export interface JuryCaseReport {
 }
 
 export interface JuryRequestBody {
+  /** Optional. Backend defaults to the process fixture agent id when omitted. */
+  agent_id?: string;
   note: string;
   task_id: string;
   permissions: string[];

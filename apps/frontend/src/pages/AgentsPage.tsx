@@ -936,6 +936,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         ? Boolean(parentRunId) && promptOk
         : phase === "jury"
           ? jurySheetReady({
+              agentId: agent?.agent_id ?? "",
               note: juryNote,
               referenceRun: selectedJuryRun,
               permissions: juryPermissions,

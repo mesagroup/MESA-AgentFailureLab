@@ -178,7 +178,9 @@ export function describeJuryCase() {
       path: "/attacker/jury-case",
       fields: {
         note: "Optional string. Default is the frozen juror note. Trimmed, 1–8000 characters. Appended to the task prompt. It is untrusted text, not a grant.",
-        task_id: "Optional task id. Default T5. Must be a task on the agent.",
+        agent_id:
+          "Optional agent id. Default is the process fixture agent (reference-shop). Loaded from the agent store so catalog edits (extra tasks) apply; store miss falls back to the fixture when the ids match.",
+        task_id: "Optional task id. Default T5. Must be a task on the resolved agent.",
         permissions:
           "Optional session grant. Default is the task grant with cancel withheld (T5 is read). Allowed: read, write:cart, write:order, write:order:cancel. A name that appears only in the note is not added.",
         include_baseline:
