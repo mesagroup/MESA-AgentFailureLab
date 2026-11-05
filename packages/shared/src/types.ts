@@ -239,13 +239,8 @@ export type OtelImportVersion = typeof OTEL_IMPORT_VERSION;
 
 export type OtelSourceAuthType = "none" | "bearer";
 
-/**
- * OpenTelemetry source registered on an agent.
- * `endpoint` is documented for the operator. The importer does not call it.
- * `auth.token_env` is an environment variable name. The token is not stored here.
- */
-export interface OtelSourceConfig {
-  version: OtelSourceVersion;
+/** One HTTP traces URL on `Agent.otel.prod` or `Agent.otel.test`. */
+export interface OtelSourceEndpoint {
   endpoint: string;
   auth: {
     type: OtelSourceAuthType;
@@ -254,6 +249,47 @@ export interface OtelSourceConfig {
   };
   /** When set, an import item must name this `service.name`. */
   service_name?: string;
+}
+
+/**
+ * Dual OpenTelemetry sources registered on an agent.
+ * `schema_id` is the lab remap. The mock HTTP route does not choose it.
+ */
+export interface OtelSourceConfig {
+  version: OtelSourceVersion;
+  schema_id?: string;
+  prod: OtelSourceEndpoint;
+  test: OtelSourceEndpoint;
+}
+
+export const SHOP_OTEL_SCHEMA_A_ID = "mesa.otel.shop.a" as const;
+
+export const MOCK_OTEL_TRACES_PATH = "/internal/otel/traces" as const;
+
+export type ShopOtelSchemaAId = typeof SHOP_OTEL_SCHEMA_A_ID;
+
+export type OtelMockChannel = "prod" | "test";
+
+/**
+ * One fixture-backed OTel source on `Agent.otel_mock`.
+ * `readShopOtelMock` reads `fixture_path` and does not call HTTP.
+ */
+export interface OtelMockSource {
+  fixture_path: string;
+}
+
+/**
+ * Dual fixture sources and schema remap A for `reference-shop`.
+ * Absent on agents that do not use shop mapping A.
+ */
+export interface OtelMockConfig {
+  mode: "fixture";
+  schema_id: ShopOtelSchemaAId;
+  schema_path: string;
+  sources: {
+    prod: OtelMockSource;
+    test: OtelMockSource;
+  };
 }
 
 export type TaskEvalsetVersion = typeof TASK_EVALSET_VERSION;
@@ -336,10 +372,14 @@ export interface Agent {
     base_url: string;
   };
   /**
-   * OpenTelemetry source for this agent. Absent when the author registered none.
-   * Not a Trace, and not a verifier.
+   * Dual OpenTelemetry sources for this agent. Absent when the author registered none.
+   * Not a Trace, and not a verifier. `schema_id` is the lab remap.
    */
   otel?: OtelSourceConfig;
+  /**
+   * Fixture fallback for schema remap A. Demo pull uses `otel.prod` and `otel.test` over HTTP.
+   */
+  otel_mock?: OtelMockConfig;
   tasks: AgentTask[];
 }
 

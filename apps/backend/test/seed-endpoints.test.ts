@@ -38,6 +38,9 @@ describe("seeded agent endpoints", () => {
     assert.equal(shop?.instance.base_url, DEV_SEED_URLS.AGENTSERVICE_URL);
     assert.equal(shop?.test_instance.base_url, DEV_SEED_URLS.AGENTSERVICE_URL);
     assert.deepEqual(shop?.world, { kind: "shop", base_url: DEV_SEED_URLS.MOCK_SHOP_URL });
+    assert.equal(shop?.otel?.prod.endpoint, `${DEV_SEED_URLS.MOCK_SHOP_URL}/internal/otel/traces?source=prod`);
+    assert.equal(shop?.otel?.test.endpoint, `${DEV_SEED_URLS.MOCK_SHOP_URL}/internal/otel/traces?source=test`);
+    assert.equal(shop?.otel?.schema_id, "mesa.otel.shop.a");
     assert.equal(tasksRunUrl(shop!.instance.base_url), "http://127.0.0.1:3002/v1/tasks/run");
     assert.equal(tasksRunUrl(shop!.test_instance.base_url), tasksRunUrl(shop!.instance.base_url));
     assert.equal(library?.instance.base_url, DEV_SEED_URLS.LIBRARY_AGENT_URL);

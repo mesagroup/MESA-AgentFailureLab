@@ -1,0 +1,73 @@
+{
+  "schema_id": "mesa.otel.shop.a",
+  "shop_export": {
+    "channel": "prod",
+    "service": "reference-shop",
+    "task": "T3",
+    "run": "run-shop-a-prod-t3",
+    "verdict": {
+      "success": true,
+      "verifier": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "order_created",
+            "passed": true,
+            "detail": "Supplied with the shop A fixture. Not computed from spans."
+          }
+        ],
+        "mock_state_snapshot": {
+          "carts": [],
+          "orders": [{ "status": "placed" }],
+          "inventory": [],
+          "observations": []
+        }
+      },
+      "agent_claimed_success": true
+    }
+  },
+  "spans": [
+    {
+      "shop_trace_id": "shop-a-prod-t3",
+      "shop_span_id": "shop-user",
+      "op": "user",
+      "opened_ms": 1793715300000,
+      "closed_ms": 1793715300010,
+      "shop_attrs": {
+        "shop.step.kind": "message",
+        "shop.step.actor": "user",
+        "shop.step.text": "Check out the current cart.",
+        "shop.step.tokens_in": 8,
+        "shop.step.tokens_out": 0,
+        "shop.step.cost_usd": 0
+      }
+    },
+    {
+      "shop_trace_id": "shop-a-prod-t3",
+      "shop_span_id": "shop-checkout",
+      "op": "checkout",
+      "opened_ms": 1793715300500,
+      "closed_ms": 1793715300900,
+      "shop_attrs": {
+        "shop.step.kind": "tool_call",
+        "shop.step.actor": "assistant",
+        "shop.tool.args": {},
+        "shop.step.tokens_in": 16,
+        "shop.step.tokens_out": 4,
+        "shop.step.cost_usd": 0.00002
+      }
+    },
+    {
+      "shop_trace_id": "shop-a-prod-t3",
+      "shop_span_id": "shop-checkout-result",
+      "op": "checkout",
+      "opened_ms": 1793715300550,
+      "closed_ms": 1793715300700,
+      "shop_attrs": {
+        "shop.step.kind": "tool_result",
+        "shop.step.actor": "tool",
+        "shop.tool.result": { "order_id": "ORD-DEMO", "status": "placed" }
+      }
+    }
+  ]
+}

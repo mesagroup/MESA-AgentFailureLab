@@ -185,5 +185,32 @@
         ]
       }
     }
-  ]
+  ],
+  "otel": {
+    "version": 1,
+    "schema_id": "mesa.otel.shop.a",
+    "prod": {
+      "endpoint": "http://127.0.0.1:8787/internal/otel/traces?source=prod",
+      "auth": { "type": "none" },
+      "service_name": "reference-shop"
+    },
+    "test": {
+      "endpoint": "http://127.0.0.1:8787/internal/otel/traces?source=test",
+      "auth": { "type": "none" },
+      "service_name": "reference-shop"
+    }
+  },
+  "otel_mock": {
+    "mode": "fixture",
+    "schema_id": "mesa.otel.shop.a",
+    "schema_path": "packages/shared/schemas/otel-shop-schema-a.schema.json",
+    "sources": {
+      "prod": {
+        "fixture_path": "packages/shared/examples/otel/shop-schema-a/prod-t1-search.json"
+      },
+      "test": {
+        "fixture_path": "packages/shared/examples/otel/shop-schema-a/test-t2-cart.json"
+      }
+    }
+  }
 }

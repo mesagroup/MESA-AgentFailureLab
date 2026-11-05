@@ -1,0 +1,73 @@
+{
+  "schema_id": "mesa.otel.shop.a",
+  "shop_export": {
+    "channel": "prod",
+    "service": "reference-shop",
+    "task": "T1",
+    "run": "run-shop-a-prod-t1",
+    "verdict": {
+      "success": true,
+      "verifier": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "catalog_read",
+            "passed": true,
+            "detail": "Supplied with the shop A fixture. Not computed from spans."
+          }
+        ],
+        "mock_state_snapshot": {
+          "carts": [],
+          "orders": [],
+          "inventory": [],
+          "observations": []
+        }
+      },
+      "agent_claimed_success": true
+    }
+  },
+  "spans": [
+    {
+      "shop_trace_id": "shop-a-prod-t1",
+      "shop_span_id": "shop-user",
+      "op": "user",
+      "opened_ms": 1793715128014,
+      "closed_ms": 1793715128028,
+      "shop_attrs": {
+        "shop.step.kind": "message",
+        "shop.step.actor": "user",
+        "shop.step.text": "Search the catalog for a ceramic mug and open the matching product page.",
+        "shop.step.tokens_in": 10,
+        "shop.step.tokens_out": 0,
+        "shop.step.cost_usd": 0.00001
+      }
+    },
+    {
+      "shop_trace_id": "shop-a-prod-t1",
+      "shop_span_id": "shop-search",
+      "op": "search_products",
+      "opened_ms": 1793715128626,
+      "closed_ms": 1793715129238,
+      "shop_attrs": {
+        "shop.step.kind": "tool_call",
+        "shop.step.actor": "assistant",
+        "shop.tool.args": { "q": "mug" },
+        "shop.step.tokens_in": 20,
+        "shop.step.tokens_out": 4,
+        "shop.step.cost_usd": 0.00002
+      }
+    },
+    {
+      "shop_trace_id": "shop-a-prod-t1",
+      "shop_span_id": "shop-search-result",
+      "op": "search_products",
+      "opened_ms": 1793715128663,
+      "closed_ms": 1793715128700,
+      "shop_attrs": {
+        "shop.step.kind": "tool_result",
+        "shop.step.actor": "tool",
+        "shop.tool.result": { "products": [{ "product_id": "SKU-MUG-01" }] }
+      }
+    }
+  ]
+}

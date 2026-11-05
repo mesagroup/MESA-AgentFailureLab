@@ -493,19 +493,28 @@ function OtelSourceFields({
         <span>
           <span className="font-medium">OTel source</span>
           <span className="mt-1 block text-xs text-muted-foreground">
-            Documents where spans come from. The importer does not call this endpoint. A bearer token stays in the named env var and is not stored here. Version 1.
+            Dual prod and test traces URLs. Schema remap stays on the agent. A bearer token stays in the named env var and is not stored here. Version 1.
           </span>
         </span>
       </label>
       {draft.enabled && (
         <div className="space-y-3">
-          <FormField label="OTLP traces URL" error={showErrors ? errors.endpoint : undefined} required>
+          <FormField label="Prod traces URL" error={showErrors ? errors.prod_endpoint : undefined} required>
             <Input
-              value={draft.endpoint}
-              onChange={(event) => onChange("endpoint", event.target.value)}
-              placeholder="https://otel.example.com/v1/traces"
+              value={draft.prodEndpoint}
+              onChange={(event) => onChange("prodEndpoint", event.target.value)}
+              placeholder="http://127.0.0.1:8787/internal/otel/traces?source=prod"
               className="font-mono text-xs"
-              aria-invalid={showErrors && Boolean(errors.endpoint)}
+              aria-invalid={showErrors && Boolean(errors.prod_endpoint)}
+            />
+          </FormField>
+          <FormField label="Test traces URL" error={showErrors ? errors.test_endpoint : undefined} required>
+            <Input
+              value={draft.testEndpoint}
+              onChange={(event) => onChange("testEndpoint", event.target.value)}
+              placeholder="http://127.0.0.1:8787/internal/otel/traces?source=test"
+              className="font-mono text-xs"
+              aria-invalid={showErrors && Boolean(errors.test_endpoint)}
             />
           </FormField>
           <div className="space-y-1.5">

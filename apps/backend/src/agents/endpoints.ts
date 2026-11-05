@@ -1,4 +1,4 @@
-import type { Agent } from "@mesa/shared";
+import { MOCK_OTEL_TRACES_PATH, type Agent } from "@mesa/shared";
 
 /**
  * Laptop defaults for `pnpm dev` when the variable is unset and `NODE_ENV` is not `production`.
@@ -74,6 +74,19 @@ export function bindSeedAgent(agent: Agent, urls: ResolvedSeedUrls): Agent {
     copy.instance = { ...copy.instance, base_url: urls.agentservice };
     copy.test_instance = { ...copy.test_instance, base_url: urls.agentservice };
     copy.world = { kind: "shop", base_url: urls.mockShop };
+    if (copy.otel) {
+      copy.otel = {
+        ...copy.otel,
+        prod: {
+          ...copy.otel.prod,
+          endpoint: `${urls.mockShop}${MOCK_OTEL_TRACES_PATH}?source=prod`,
+        },
+        test: {
+          ...copy.otel.test,
+          endpoint: `${urls.mockShop}${MOCK_OTEL_TRACES_PATH}?source=test`,
+        },
+      };
+    }
     return copy;
   }
   if (copy.agent_id === "external-library") {
@@ -95,6 +108,8 @@ export function seedEndpointDrift(stored: Agent, fixture: Agent): string | undef
   if (stored.test_instance.base_url !== fixture.test_instance.base_url) diffs.push("test_instance.base_url");
   if ((stored.world?.kind ?? "") !== (fixture.world?.kind ?? "")) diffs.push("world.kind");
   if ((stored.world?.base_url ?? "") !== (fixture.world?.base_url ?? "")) diffs.push("world.base_url");
+  if ((stored.otel?.prod.endpoint ?? "") !== (fixture.otel?.prod.endpoint ?? "")) diffs.push("otel.prod.endpoint");
+  if ((stored.otel?.test.endpoint ?? "") !== (fixture.otel?.test.endpoint ?? "")) diffs.push("otel.test.endpoint");
   if (diffs.length === 0) return undefined;
   return `stored endpoints differ from this process (${diffs.join(", ")})`;
 }

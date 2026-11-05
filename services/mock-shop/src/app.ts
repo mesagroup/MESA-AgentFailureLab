@@ -5,6 +5,13 @@ import {
   permissionDenied,
   type Permission,
 } from "./permissions.js";
+import {
+  isShopOtelSource,
+  MOCK_OTEL_SCHEMA_HEADER,
+  MOCK_OTEL_SCHEMA_VALUE,
+  MOCK_OTEL_TRACES_PATH,
+  shopOtelTraces,
+} from "./otel-exports.js";
 import { createShop, type Shop, type ShopFailure } from "./state.js";
 
 const SESSION_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -106,6 +113,40 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.get("/health", async () => ({ ok: true, service: "mock-shop" }));
+
+  app.get(MOCK_OTEL_TRACES_PATH, async (request, reply) => {
+    const query = request.query as Record<string, unknown>;
+    const sourceRaw = query.source;
+    if (Array.isArray(sourceRaw)) {
+      return reply.code(400).send({ error: "invalid_request", message: "source must be prod or test." });
+    }
+    const sourceText =
+      sourceRaw === undefined || sourceRaw === null ? "prod" : String(sourceRaw).trim();
+    const source = sourceText.length === 0 ? "prod" : sourceText;
+    if (!isShopOtelSource(source)) {
+      return reply.code(400).send({ error: "invalid_request", message: "source must be prod or test." });
+    }
+    const sinceRaw = query.since;
+    if (Array.isArray(sinceRaw)) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        message: "since must be an ISO-8601 date-time.",
+      });
+    }
+    let sinceMs: number | undefined;
+    if (sinceRaw !== undefined && sinceRaw !== null && String(sinceRaw).trim() !== "") {
+      const parsed = Date.parse(String(sinceRaw).trim());
+      if (!Number.isFinite(parsed)) {
+        return reply.code(400).send({
+          error: "invalid_request",
+          message: "since must be an ISO-8601 date-time.",
+        });
+      }
+      sinceMs = parsed;
+    }
+    reply.header(MOCK_OTEL_SCHEMA_HEADER, MOCK_OTEL_SCHEMA_VALUE);
+    return shopOtelTraces(source, sinceMs);
+  });
 
   app.get("/products", async (request, reply) => {
     if (!requirePermission(request, reply, "read")) return;

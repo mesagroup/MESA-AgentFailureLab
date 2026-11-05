@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/agent.schema.json",
   "title": "Agent",
-  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks, and may carry an optional evalset. The evalset is user-supplied material for a later Grok judgment of that task's Run or Trace. It is not a verifier check and it does not write outcome.verifier. An optional otel object names an OpenTelemetry source. The importer does not call that endpoint and does not invent fault.labels or outcome.verifier. The reference shop agent is seeded with five tasks (T1–T5). T1 includes one evalset case; T2–T5 omit the field. The shop and library seeds omit otel. The library desk agent is seeded with three tasks that use library checks and omit evalset. Other agents may register a different non-empty task list.",
+  "description": "Registration record for an agent under test: where it runs, where its traces live, the docs the harness shows, and the tasks a deterministic verifier can score. This is not a Trace and not a Run. Each task carries its own setup and verifier checks, and may carry an optional evalset. The evalset is user-supplied material for a later Grok judgment of that task's Run or Trace. It is not a verifier check and it does not write outcome.verifier. An optional otel object names dual OpenTelemetry sources, prod and test. schema_id on that object is the lab remap. The mock HTTP route does not choose the schema. An optional otel_mock object is the fixture fallback for shop mapping A. The library seed omits otel and otel_mock. The reference shop agent is seeded with five tasks (T1–T5). T1 includes one evalset case; T2–T5 omit the field. The library desk agent is seeded with three tasks that use library checks and omit evalset. Other agents may register a different non-empty task list.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -147,17 +147,60 @@
       }
     },
     "otel": {
-      "description": "Optional OpenTelemetry source registered on this agent. endpoint is the OTLP HTTP traces URL the operator documents. The lab importer does not dial it. auth.token_env names an environment variable; the token is not stored in this document. Omit the object when the agent has no OTel source. Import of spans is a separate batch (otel-import.schema.json) and still requires an explicit outcome.verifier.",
+      "description": "Optional dual OpenTelemetry sources on this agent. prod and test each have an HTTP traces URL. schema_id is the lab remap id and is not chosen by the mock. Omit the object when the agent has no OTel source. Import of a generic batch is still otel-import.schema.json.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "endpoint", "auth"],
+      "required": ["version", "prod", "test"],
       "properties": {
         "version": {
           "description": "OTel source document shape. Only 1 is valid in this contract.",
           "const": 1
         },
+        "schema_id": {
+          "description": "Lab remap id. Shop demo mapping A is mesa.otel.shop.a. The mock HTTP route does not set this field.",
+          "type": "string",
+          "minLength": 1
+        },
+        "prod": { "$ref": "#/$defs/otelSourceEndpoint" },
+        "test": { "$ref": "#/$defs/otelSourceEndpoint" }
+      }
+    },
+    "otel_mock": {
+      "description": "Optional dual fixture sources and schema remap A for reference-shop. mode is fixture. The lab does not dial endpoint. fixture_path is the file readShopOtelMock loads. schema_id is mesa.otel.shop.a. Library mapping B is a different id and is not stored here.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "schema_id", "schema_path", "sources"],
+      "properties": {
+        "mode": {
+          "const": "fixture"
+        },
+        "schema_id": {
+          "const": "mesa.otel.shop.a"
+        },
+        "schema_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prod", "test"],
+          "properties": {
+            "prod": { "$ref": "#/$defs/otelMockSource" },
+            "test": { "$ref": "#/$defs/otelMockSource" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "otelSourceEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "auth"],
+      "properties": {
         "endpoint": {
-          "description": "OTLP HTTP traces URL, for example https://otel.example.com/v1/traces. Not called by the importer.",
+          "description": "HTTP traces URL for this source, for example http://127.0.0.1:8787/internal/otel/traces?source=prod.",
           "type": "string",
           "format": "uri"
         },
@@ -183,9 +226,18 @@
           "minLength": 1
         }
       }
-    }
-  },
-  "$defs": {
+    },
+    "otelMockSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixture_path"],
+      "properties": {
+        "fixture_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "task": {
       "type": "object",
       "additionalProperties": false,

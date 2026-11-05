@@ -66,6 +66,22 @@ Checkout decrements stock and empties the cart. Cancel restores stock. Stock is 
 
 `GET /internal/state` and `POST /internal/reset` take no permission header. Reset returns the fresh snapshot.
 
+## Fake APM traces
+
+`GET /internal/otel/traces` takes no permission header. It returns the same JSON as the schema A fixtures under `packages/shared/examples/otel/shop-schema-a/`. It is not OTLP protobuf. It does not change carts, orders, or inventory.
+
+| Query | Default | Meaning |
+| --- | --- | --- |
+| `source` | `prod` | `prod` is T1 search. `test` is T2 cart. Any other value is `400`. |
+| `since` | omitted | ISO-8601 date-time. Keep spans whose `opened_ms` is at or after that instant. Omit it for the entire seed. A value that is not a date is `400`. |
+
+The response may send `X-Mock-Otel-Schema: mesa.otel.shop.a`. Remap still uses `schema_id` on the agent.
+
+```bash
+curl -sS "$BASE/internal/otel/traces?source=prod"
+curl -sS "$BASE/internal/otel/traces?source=test&since=2026-11-05T00:00:00.000Z"
+```
+
 ```json
 {
   "carts": [{ "session_id": "demo", "items": [], "total_usd": 0 }],

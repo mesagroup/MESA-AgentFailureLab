@@ -27,6 +27,7 @@ export const traceSchema = loadSchema("trace.schema.json");
 export const agentSchema = loadSchema("agent.schema.json");
 export const runSchema = loadSchema("run.schema.json");
 export const otelImportSchema = loadSchema("otel-import.schema.json");
+export const otelShopSchemaA = loadSchema("otel-shop-schema-a.schema.json");
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -44,6 +45,7 @@ const validateTraceSchema: ValidateFunction = ajv.compile(traceSchema as AnySche
 const validateAgentSchema: ValidateFunction = ajv.compile(agentSchema as AnySchema);
 const validateRunSchema: ValidateFunction = ajv.compile(runSchema as AnySchema);
 const validateOtelImportSchema: ValidateFunction = ajv.compile(otelImportSchema as AnySchema);
+const validateOtelShopSchemaASchema: ValidateFunction = ajv.compile(otelShopSchemaA as AnySchema);
 const validateTaskSchema: ValidateFunction = ajv.compile({ $ref: `${AGENT_SCHEMA_ID}#/$defs/task` });
 const validateEvalsetSchema: ValidateFunction = ajv.compile({
   $ref: `${AGENT_SCHEMA_ID}#/$defs/task/properties/evalset`,
@@ -105,4 +107,9 @@ export function validateRun(data: unknown): ValidationResult<Run> {
 /** Structural check for an OTel import batch. The mapper still applies field rules and `validateTrace`. */
 export function validateOtelImport(data: unknown): ValidationResult<unknown> {
   return check(validateOtelImportSchema, data);
+}
+
+/** Structural check for a shop schema A export. `remapShopSchemaA` still applies field rules and `validateTrace`. */
+export function validateOtelShopSchemaA(data: unknown): ValidationResult<unknown> {
+  return check(validateOtelShopSchemaASchema, data);
 }

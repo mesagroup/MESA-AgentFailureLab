@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/otel-shop-schema-a.schema.json",
+  "title": "OtelShopSchemaA",
+  "description": "Shop fixture export for demo mapping A. This is not otel-import.schema.json and it is not a Trace. remapShopSchemaA copies shop_export.verdict onto outcome and sets fault to the production mark. It does not invent fault.labels or outcome.verifier. Keys version and items belong to the generic batch, not this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_id", "shop_export", "spans"],
+  "properties": {
+    "schema_id": {
+      "description": "Demo mapping id for reference-shop. Library mapping B is reserved as mesa.otel.library.b and is not this document.",
+      "const": "mesa.otel.shop.a"
+    },
+    "shop_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "service", "task", "run", "verdict"],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["prod", "test"]
+        },
+        "service": {
+          "const": "reference-shop"
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verdict": {
+          "description": "Lab Trace.outcome already computed outside this remap. Copied. The remap does not fill verifier.passed from spans.",
+          "type": "object"
+        }
+      }
+    },
+    "spans": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/span"
+      }
+    }
+  },
+  "$defs": {
+    "span": {
+      "description": "Shop mapping A span. Times are unix milliseconds as integers. shop_span_id is not spanId. shop_attrs uses shop.* keys, not mesa.* keys.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shop_trace_id", "shop_span_id", "op", "opened_ms", "closed_ms", "shop_attrs"],
+      "properties": {
+        "shop_trace_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shop_span_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "op": {
+          "type": "string",
+          "minLength": 1
+        },
+        "opened_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "closed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shop_attrs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "shop.step.kind": {
+              "type": "string",
+              "enum": ["message", "tool_call", "tool_result", "system"]
+            },
+            "shop.step.actor": {
+              "type": "string",
+              "enum": ["user", "assistant", "tool", "system"]
+            },
+            "shop.step.text": {
+              "type": "string"
+            },
+            "shop.tool.args": true,
+            "shop.tool.result": true,
+            "shop.step.tokens_in": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "shop.step.tokens_out": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "shop.step.cost_usd": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

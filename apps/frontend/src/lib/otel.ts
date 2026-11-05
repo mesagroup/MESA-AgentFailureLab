@@ -5,7 +5,8 @@ const TOKEN_ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
 /** Form fields for the optional `Agent.otel` source. `enabled` false omits the field on save. */
 export interface OtelSourceDraft {
   enabled: boolean;
-  endpoint: string;
+  prodEndpoint: string;
+  testEndpoint: string;
   authType: OtelSourceAuthType;
   /** Env var name. Never a bearer token. */
   tokenEnv: string;
@@ -13,32 +14,44 @@ export interface OtelSourceDraft {
 }
 
 export interface OtelSourceFieldError {
-  endpoint?: string;
+  prod_endpoint?: string;
+  test_endpoint?: string;
   token_env?: string;
   service_name?: string;
 }
 
 export function emptyOtelDraft(): OtelSourceDraft {
-  return { enabled: false, endpoint: "", authType: "none", tokenEnv: "", serviceName: "" };
+  return {
+    enabled: false,
+    prodEndpoint: "",
+    testEndpoint: "",
+    authType: "none",
+    tokenEnv: "",
+    serviceName: "",
+  };
 }
 
 export function otelDraftFromAgent(otel: OtelSourceConfig | undefined): OtelSourceDraft {
   if (!otel) return emptyOtelDraft();
   return {
     enabled: true,
-    endpoint: otel.endpoint,
-    authType: otel.auth.type,
-    tokenEnv: otel.auth.token_env ?? "",
-    serviceName: otel.service_name ?? "",
+    prodEndpoint: otel.prod.endpoint,
+    testEndpoint: otel.test.endpoint,
+    authType: otel.prod.auth.type,
+    tokenEnv: otel.prod.auth.token_env ?? "",
+    serviceName: otel.prod.service_name ?? "",
   };
 }
 
 export function otelSourceErrors(draft: OtelSourceDraft): OtelSourceFieldError {
   if (!draft.enabled) return {};
   const error: OtelSourceFieldError = {};
-  const endpoint = draft.endpoint.trim();
-  if (!endpoint) error.endpoint = "Enter the OTLP traces URL.";
-  else if (!isHttpUrl(endpoint)) error.endpoint = "Enter an http or https URL. The importer does not call it.";
+  const prodEndpoint = draft.prodEndpoint.trim();
+  const testEndpoint = draft.testEndpoint.trim();
+  if (!prodEndpoint) error.prod_endpoint = "Enter the prod traces URL.";
+  else if (!isHttpUrl(prodEndpoint)) error.prod_endpoint = "Enter an http or https URL.";
+  if (!testEndpoint) error.test_endpoint = "Enter the test traces URL.";
+  else if (!isHttpUrl(testEndpoint)) error.test_endpoint = "Enter an http or https URL.";
   if (draft.authType === "bearer") {
     const name = draft.tokenEnv.trim();
     if (!name) error.token_env = "Enter the env var name that holds the bearer token. Do not paste the token.";
@@ -53,7 +66,7 @@ export function otelSourceErrors(draft: OtelSourceDraft): OtelSourceFieldError {
 }
 
 export function otelSourceHasErrors(errors: OtelSourceFieldError): boolean {
-  return Boolean(errors.endpoint || errors.token_env || errors.service_name);
+  return Boolean(errors.prod_endpoint || errors.test_endpoint || errors.token_env || errors.service_name);
 }
 
 /**
@@ -62,16 +75,18 @@ export function otelSourceHasErrors(errors: OtelSourceFieldError): boolean {
  */
 export function otelSourceFromDraft(draft: OtelSourceDraft): OtelSourceConfig | undefined {
   if (!draft.enabled) return undefined;
+  const auth =
+    draft.authType === "bearer"
+      ? { type: "bearer" as const, token_env: draft.tokenEnv.trim() }
+      : { type: "none" as const };
+  const serviceName = draft.serviceName.trim();
+  const prod = { endpoint: draft.prodEndpoint.trim(), auth };
+  const test = { endpoint: draft.testEndpoint.trim(), auth };
   const source: OtelSourceConfig = {
     version: OTEL_SOURCE_VERSION,
-    endpoint: draft.endpoint.trim(),
-    auth:
-      draft.authType === "bearer"
-        ? { type: "bearer", token_env: draft.tokenEnv.trim() }
-        : { type: "none" },
+    prod: serviceName ? { ...prod, service_name: serviceName } : prod,
+    test: serviceName ? { ...test, service_name: serviceName } : test,
   };
-  const serviceName = draft.serviceName.trim();
-  if (serviceName) source.service_name = serviceName;
   return source;
 }
 

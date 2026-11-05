@@ -25,15 +25,16 @@ test("a disabled source is omitted and stores no token", () => {
   assert.equal(otelSourceFromDraft(emptyOtelDraft()), undefined);
   const none = otelSourceFromDraft({
     enabled: true,
-    endpoint: " https://otel.example.com/v1/traces ",
+    prodEndpoint: " https://otel.example.com/v1/traces ",
+    testEndpoint: " https://otel.example.com/v1/traces ",
     authType: "none",
     tokenEnv: "SHOULD_NOT_BE_SENT",
     serviceName: "  ",
   });
   assert.deepEqual(none, {
     version: OTEL_SOURCE_VERSION,
-    endpoint: "https://otel.example.com/v1/traces",
-    auth: { type: "none" },
+    prod: { endpoint: "https://otel.example.com/v1/traces", auth: { type: "none" } },
+    test: { endpoint: "https://otel.example.com/v1/traces", auth: { type: "none" } },
   });
   assert.equal(JSON.stringify(none).includes("token"), false);
   assert.equal(JSON.stringify(none).includes("SHOULD_NOT_BE_SENT"), false);
@@ -42,22 +43,30 @@ test("a disabled source is omitted and stores no token", () => {
 test("bearer auth stores the env var name and rejects a pasted token", () => {
   const draft = {
     enabled: true,
-    endpoint: "https://otel.example.com/v1/traces",
+    prodEndpoint: "https://otel.example.com/v1/traces",
+    testEndpoint: "https://otel.example.com/v1/traces",
     authType: "bearer" as const,
     tokenEnv: "OTEL_SOURCE_TOKEN",
     serviceName: "reference-shop",
   };
   assert.deepEqual(otelSourceFromDraft(draft), {
     version: 1,
-    endpoint: "https://otel.example.com/v1/traces",
-    auth: { type: "bearer", token_env: "OTEL_SOURCE_TOKEN" },
-    service_name: "reference-shop",
+    prod: {
+      endpoint: "https://otel.example.com/v1/traces",
+      auth: { type: "bearer", token_env: "OTEL_SOURCE_TOKEN" },
+      service_name: "reference-shop",
+    },
+    test: {
+      endpoint: "https://otel.example.com/v1/traces",
+      auth: { type: "bearer", token_env: "OTEL_SOURCE_TOKEN" },
+      service_name: "reference-shop",
+    },
   });
   const missing = otelSourceErrors({ ...draft, tokenEnv: "" });
   assert.match(missing.token_env ?? "", /Do not paste the token/);
   const secret = otelSourceErrors({ ...draft, tokenEnv: "sk-live-secret" });
   assert.match(secret.token_env ?? "", /OTEL_SOURCE_TOKEN/);
-  assert.equal(otelSourceErrors({ ...draft, endpoint: "not a url" }).endpoint?.includes("http"), true);
+  assert.equal(otelSourceErrors({ ...draft, prodEndpoint: "not a url" }).prod_endpoint?.includes("http"), true);
 });
 
 test("a span batch must be JSON, and import errors name 400 and 409", () => {
