@@ -40,6 +40,7 @@ export interface BuildAppOptions {
  * `POST /runs` loads `agent_id` from the agent store and runs that agent's tasks.
  * `phase: after_fix` with `parent_run_id` copies the parent task and injection
  * plan when those fields are omitted, and each result includes `parent` plus `links`.
+ * `phase: injected` with `parent_run_id` requires a baseline parent and copies its task.
  * The jury case still uses the agent passed to `buildApp`.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit

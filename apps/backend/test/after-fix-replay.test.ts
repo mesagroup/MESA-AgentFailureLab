@@ -28,7 +28,7 @@ describe("resolveAfterFixParent", () => {
       parentRunId: "run-missing",
     });
     assert.equal(baseline.ok, false);
-    if (!baseline.ok) assert.match(baseline.message, /after_fix/);
+    if (!baseline.ok) assert.match(baseline.message, /injected or after_fix/);
 
     const missing = await resolveAfterFixParent({
       store,
@@ -151,6 +151,51 @@ describe("POST /runs after_fix replay from a parent", { concurrency: false }, ()
     }
   });
 
+  it("injects from a baseline parent_run_id and rejects a non-baseline parent", async () => {
+    const store = new MemoryStore();
+    const app = buildApp({ logger: false, mockBaseUrl: baseUrl, store });
+    try {
+      const baseline = await app.inject({
+        method: "POST",
+        url: "/runs",
+        payload: { agent_id: "reference-shop", phase: "baseline", task_ids: ["T3"] },
+      });
+      assert.equal(baseline.statusCode, 200, baseline.body);
+      const parentId = baseline.json().results[0].run.run_id as string;
+
+      const injected = await app.inject({
+        method: "POST",
+        url: "/runs",
+        payload: {
+          agent_id: "reference-shop",
+          phase: "injected",
+          parent_run_id: parentId,
+        },
+      });
+      assert.equal(injected.statusCode, 200, injected.body);
+      const child = injected.json().results[0] as { run: Run; parent: { run: Run } };
+      assert.equal(child.run.phase, "injected");
+      assert.equal(child.run.task_id, "T3");
+      assert.equal(child.run.parent_run_id, parentId);
+      assert.equal(child.parent.run.run_id, parentId);
+      assert.ok(child.run.injection_plan);
+
+      const fromInjected = await app.inject({
+        method: "POST",
+        url: "/runs",
+        payload: {
+          agent_id: "reference-shop",
+          phase: "injected",
+          parent_run_id: child.run.run_id,
+        },
+      });
+      assert.equal(fromInjected.statusCode, 400);
+      assert.match(fromInjected.json().message, /baseline/);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("keeps injection null when the caller sends null, and rejects a bad parent", async () => {
     const store = new MemoryStore();
     const app = buildApp({ logger: false, mockBaseUrl: baseUrl, store });
@@ -203,7 +248,7 @@ describe("POST /runs after_fix replay from a parent", { concurrency: false }, ()
         },
       });
       assert.equal(wrongPhase.statusCode, 400);
-      assert.match(wrongPhase.json().message, /after_fix/);
+      assert.match(wrongPhase.json().message, /injected or after_fix/);
 
       const wrongTask = await app.inject({
         method: "POST",

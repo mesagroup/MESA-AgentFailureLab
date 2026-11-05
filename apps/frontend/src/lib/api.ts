@@ -200,9 +200,9 @@ export interface RunTraceLink {
   first_trace_id: string | null;
   /** Stored traces in `trace_ids` order. A missing id is omitted. */
   traces: HarnessLinkedTrace[];
-  /** Same as `runs[i].parent_run_id`. Null when this run is not an after_fix replay. */
+  /** Same as `runs[i].parent_run_id`. Null when this run has no parent link. */
   parent_run_id: string | null;
-  /** Later after_fix runs in this snapshot whose `parent_run_id` is this run. */
+  /** Later runs in this snapshot whose `parent_run_id` is this run. */
   child_run_ids: string[];
 }
 
@@ -244,8 +244,9 @@ export async function getRun(id: string): Promise<Run> {
 
 /**
  * `POST /runs`. Each result is `{ run, trace, parent, links }`.
+ * injected from baseline: `{ agent_id, phase: "injected", parent_run_id }`.
  * after_fix: `{ agent_id, phase: "after_fix", parent_run_id, fix_kinds }`.
- * Omit `injection` to replay the parent fault. Verdict is `outcome.verifier`.
+ * Omit `injection` on after_fix to replay the parent fault. Verdict is `outcome.verifier`.
  */
 export async function createRun(params: RunParams): Promise<HarnessTaskResult[]> {
   const body: Record<string, unknown> = { agent_id: params.agent_id, phase: params.phase };
