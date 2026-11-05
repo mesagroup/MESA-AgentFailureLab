@@ -714,6 +714,15 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     };
   }, [agent]);
 
+  const hasTestRun = useMemo(
+    () =>
+      !!agent &&
+      agentRuns.some(
+        (run) => run.agent_id === agent.agent_id && run.phase !== "after_fix",
+      ),
+    [agent, agentRuns],
+  );
+
   const baselines = useMemo(
     () => (agent ? baselineRunsForAgent(agentRuns, agent.agent_id) : []),
     [agent, agentRuns],
@@ -913,41 +922,47 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
           <div className="w-[32%] shrink-0 border-r border-border/40 px-8 py-6">
             <p className="text-sm font-medium mb-3">Phase</p>
             <div className="flex flex-col gap-2" role="radiogroup" aria-label="Launch phase">
-              {LAUNCH_PHASES.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  disabled={launching}
-                  onClick={() => selectPhase(p)}
-                  aria-pressed={phase === p}
-                  className={cn(
-                    "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors disabled:opacity-50",
-                    phase === p
-                      ? "bg-foreground text-background border-foreground"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
-                  )}
-                >
-                  <span>{LAUNCH_PHASE_COPY[p].label}</span>
-                  <span className="block text-[11px] mt-0.5 opacity-80">{LAUNCH_PHASE_COPY[p].subtitle}</span>
-                </button>
-              ))}
+              {LAUNCH_PHASES.map((p) => {
+                const phaseLocked = !hasTestRun && p !== "baseline";
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    disabled={launching || phaseLocked}
+                    onClick={phaseLocked ? undefined : () => selectPhase(p)}
+                    aria-pressed={phase === p}
+                    aria-describedby={phaseLocked ? "phase-lock-hint" : undefined}
+                    className={cn(
+                      "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors",
+                      phaseLocked
+                        ? "opacity-50 cursor-not-allowed border-border text-muted-foreground"
+                        : phase === p
+                          ? "bg-foreground text-background border-foreground"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 disabled:opacity-50"
+                    )}
+                  >
+                    <span>{LAUNCH_PHASE_COPY[p].label}</span>
+                    <span className="block text-[11px] mt-0.5 opacity-80">{LAUNCH_PHASE_COPY[p].subtitle}</span>
+                  </button>
+                );
+              })}
             </div>
-            {phase === "baseline" && (
-              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                {LAUNCH_PHASE_COPY.baseline.subtitle}. Pick one or more tasks, then launch.
+            {!hasTestRun && (
+              <p id="phase-lock-hint" className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                Complete a baseline run first to unlock other phases.
               </p>
             )}
-            {phase === "injected" && (
+            {hasTestRun && phase === "injected" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                 Pick a completed baseline. Review the task prompt, edit it if needed, then inject.
               </p>
             )}
-            {phase === "after_fix" && (
+            {hasTestRun && phase === "after_fix" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                 Owner already fixed the agent on their deploy. Pick one baseline, edit the prompt if needed, choose fix kinds, then replay.
               </p>
             )}
-            {phase === "jury" && (
+            {hasTestRun && phase === "jury" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                 {JURY_LAUNCH_COPY.helper}
               </p>
