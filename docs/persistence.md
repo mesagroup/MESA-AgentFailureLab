@@ -31,7 +31,7 @@ CI and a laptop without a database still have to run `pnpm build` and `pnpm test
 
 `instance.base_url` and `test_instance.base_url` are the agent runtime. For `reference-shop` that is agentservice. For `external-library` that is the library desk. They are not the mock. The mock is `world.base_url`. The process resolves both from environment variables. See [seed-endpoints.md](seed-endpoints.md).
 
-`POST /runs` loads the agent from this store. The jury case still starts from `loadReferenceAgent()` unless the caller passes another agent.
+`POST /runs` and `POST /attacker/jury-case` load the agent from this store (`agent_id` on the body; jury defaults to the process fixture id). Store miss on the jury path falls back to the agent passed to `buildApp` when the ids match.
 
 ## Architecture
 

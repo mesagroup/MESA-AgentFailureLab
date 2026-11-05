@@ -3,6 +3,7 @@ import type { RunParams } from "./api";
 
 /** Mirrors `POST /attacker/jury-case` body. Kept here so node tests can load this module. */
 export interface JuryLaunchBody {
+  agent_id: string;
   note: string;
   task_id: string;
   permissions: string[];
@@ -281,6 +282,7 @@ export function toggleLaunchFixKind(selected: readonly FixKind[], kind: FixKind)
 }
 
 export function buildJuryLaunchParams(input: {
+  agentId: string;
   note: string;
   referenceRun: Pick<Run, "run_id" | "phase" | "task_id"> | null;
   permissions: readonly string[];
@@ -289,6 +291,8 @@ export function buildJuryLaunchParams(input: {
   maxChars?: number;
   promptOverride?: string | null;
 }): { ok: true; body: JuryLaunchBody } | { ok: false; message: string } {
+  const agentId = input.agentId.trim();
+  if (agentId.length === 0) return { ok: false, message: "Choose an agent." };
   const reference = input.referenceRun;
   if (!reference) {
     return { ok: false, message: "Select a completed run to attack or replay." };
@@ -304,6 +308,7 @@ export function buildJuryLaunchParams(input: {
   if (reference.task_id.trim().length === 0) return { ok: false, message: "Choose a task." };
 
   const body: JuryLaunchBody = {
+    agent_id: agentId,
     note,
     task_id: reference.task_id.trim(),
     permissions: [...input.permissions],
@@ -352,6 +357,7 @@ export function buildLaunchRequest(input: {
   if (input.phase === "jury") {
     if (!input.jury) return { ok: false, message: "Security launch is missing the attack note form." };
     const built = buildJuryLaunchParams({
+      agentId: input.agentId,
       note: input.jury.note,
       referenceRun: input.jury.referenceRun,
       permissions: input.jury.permissions,
@@ -376,6 +382,7 @@ export function buildLaunchRequest(input: {
 }
 
 export function jurySheetReady(input: {
+  agentId: string;
   note: string;
   referenceRun: Pick<Run, "run_id" | "phase" | "task_id"> | null;
   permissions: readonly string[];

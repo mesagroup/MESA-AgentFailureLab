@@ -71,9 +71,10 @@ export interface BuildAppOptions {
  * `phase: after_fix` with `parent_run_id` copies the parent task and injection
  * plan when those fields are omitted, and each result includes `parent` plus `links`.
  * `phase: injected` with `parent_run_id` requires a baseline parent and copies its task.
- * The jury case uses the stored agent with the same id when the store has one,
- * so production calls the seeded public origin instead of the fixture's loopback URL.
- * An explicit `options.agent` (offline demo, tests) is kept.
+ * `POST /attacker/jury-case` loads `agent_id` from the agent store (default: the
+ * process fixture id) so catalog edits and seeded public origins apply. An
+ * explicit `options.agent` (offline demo, tests) is kept when the request targets
+ * that same id; otherwise store miss falls back to the fixture when the ids match.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
  * POST /traces/:traceId/diagnose route calls agentservice with the stored trace
@@ -192,14 +193,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.post("/attacker/jury-case", async (request, reply) => {
     const parsed = parseJuryRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
+    const agentId = parsed.agentId ?? agent.agent_id;
+    const registered =
+      options.agent && agentId === agent.agent_id
+        ? agent
+        : ((await agents.get(agentId)) ?? (agentId === agent.agent_id ? agent : undefined));
+    if (!registered) {
+      return reply.code(404).send({ error: "not_found", message: `No agent ${agentId}` });
+    }
     try {
-      const juryAgent = options.agent ? agent : ((await agents.get(agent.agent_id)) ?? agent);
-      const choice = await choosePlanner(agentEnv, agentFetch, "jury", juryAgent);
+      const juryMockUrl = mockBaseUrlForAgent(registered, mockBaseUrl);
+      const juryMock = juryMockUrl === mockBaseUrl ? mock : createHttpMockClient(juryMockUrl);
+      const choice = await choosePlanner(agentEnv, agentFetch, "jury", registered);
       const juryOptions = {
-        agent: juryAgent,
+        agent: registered,
         store,
-        mock,
-        mockBaseUrl,
+        mock: juryMock,
+        mockBaseUrl: juryMockUrl,
         includeBaseline: parsed.includeBaseline,
         fixKinds: parsed.fixKinds,
         note: parsed.note,
@@ -404,6 +414,7 @@ function parseJuryRequest(body: unknown):
   | {
       ok: true;
       includeBaseline: boolean;
+      agentId?: string;
       fixKinds?: string[];
       note?: string;
       taskId?: string;
@@ -416,6 +427,13 @@ function parseJuryRequest(body: unknown):
   if (!isRecord(body)) return { ok: false, message: "Body must be a JSON object." };
   if (body.include_baseline !== undefined && typeof body.include_baseline !== "boolean") {
     return { ok: false, message: "include_baseline must be a boolean." };
+  }
+  let agentId: string | undefined;
+  if (body.agent_id !== undefined) {
+    if (typeof body.agent_id !== "string" || body.agent_id.trim() === "") {
+      return { ok: false, message: "agent_id must be a non-empty string." };
+    }
+    agentId = body.agent_id.trim();
   }
   let fixKinds: string[] | undefined;
   if (body.fix_kinds !== undefined) {
@@ -460,6 +478,7 @@ function parseJuryRequest(body: unknown):
   return {
     ok: true,
     includeBaseline: body.include_baseline === undefined ? true : body.include_baseline,
+    agentId,
     fixKinds,
     note,
     taskId,
