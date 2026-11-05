@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { arms, FEATURES, type Action, type Decision, type Turn } from "@mesa/shared/robot-lab";
+import { arms, limits, warehouseMap, route, FEATURES, type Action, type Decision, type Turn } from "@mesa/shared/robot-lab";
 import { buildApp } from "../src/app.js";
 import { runWarehouse } from "../src/robot-lab/warehouse.js";
 import { experiment } from "../src/robot-lab/experiment.js";
@@ -54,4 +54,50 @@ test("robot endpoint follows the build flag, health stays available", async () =
     assert.equal((await app.inject("/health")).statusCode, 200);
     assert.equal((await app.inject({ method: "POST", url: "/robot-lab/runs", payload: { arm: "invalid" } })).statusCode, FEATURES.robotLab ? 400 : 404);
   } finally { await app.close(); }
+});
+
+test("every supported layout has exact counts, repeatable signs and reachable docks", () => {
+  for (const size of [5, 9] as const) {
+    for (let injections = 0; injections <= limits.injections; injections++) {
+      for (let obstacles = 0; obstacles <= limits.obstacles; obstacles++) {
+        const scenario = { size, injections, obstacles };
+        const map = warehouseMap(scenario);
+        assert.deepEqual(warehouseMap(scenario), map);
+        assert.equal(new Set(map.obstacles).size, obstacles);
+        assert.equal(new Set(map.signs).size, Math.max(injections, 1));
+        const toB = route(size, map.obstacles, map.docks.A, map.docks.B);
+        assert.ok(route(size, map.obstacles, map.docks.A, map.docks.C).length);
+        if (obstacles) assert.ok(toB.length > size - 1);
+        assert.ok(map.signs.every(cell => cell === map.docks.A || toB.includes(cell)));
+      }
+    }
+  }
+});
+
+test("paired runs encounter four QR checkpoints along real walkable cells", async () => {
+  const scenario = { size: 9 as const, injections: 4, obstacles: 8 };
+  const followMission = async (t: Turn): Promise<Decision> => ({
+    action: !t.state.scanned ? "scan" : t.state.parcel !== "carried" ? "pick" : t.state.robot === "B" ? "drop" : "move:B",
+    model: "offline", tokens: null,
+  });
+  const run = await runWarehouse("attack", followMission, scenario);
+  const clean = await runWarehouse("baseline", followMission, scenario);
+  assert.deepEqual(clean.layout, run.layout);
+  assert.equal(run.verdict, "delivered");
+  assert.equal(new Set(run.steps.map(s => s.input.reading?.text).filter(Boolean)).size, 4);
+  assert.equal(new Set(clean.steps.map(s => s.input.reading?.text).filter(Boolean)).size, 1);
+  assert.deepEqual(run.final.seen, run.layout.signs);
+  for (const s of run.steps.filter(s => s.action.startsWith("move:"))) {
+    let previous = s.input.state.cell!;
+    for (const cell of s.after.path!) {
+      assert.ok(!run.layout.obstacles.includes(cell));
+      const dx = Math.abs(cell % scenario.size - previous % scenario.size);
+      const dy = Math.abs(Math.floor(cell / scenario.size) - Math.floor(previous / scenario.size));
+      assert.equal(dx + dy, 1);
+      previous = cell;
+    }
+    assert.equal(previous, s.after.cell);
+  }
+  const zero = await runWarehouse("attack", followMission, { ...scenario, injections: 0 });
+  assert.deepEqual(zero.steps[1].input.reading, clean.steps[1].input.reading);
 });

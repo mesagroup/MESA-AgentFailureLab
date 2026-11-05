@@ -3,12 +3,12 @@ import type { FastifyInstance } from "fastify";
 import OpenAI from "openai";
 import type { DiagnosisConfig } from "../grok/config.js";
 
-const dock = { enum: ["A", "B", "C"] };
+const location = { enum: ["A", "B", "C", "aisle"] };
 const turnSchema = {
   type: "object", required: ["state", "reading", "feedback", "guarded"], additionalProperties: false,
   properties: {
     state: { type: "object", required: ["robot", "parcel", "delivered", "scanned"], additionalProperties: false,
-      properties: { robot: dock, parcel: { enum: ["A", "B", "C", "carried"] }, delivered: { type: "boolean" }, scanned: { type: "boolean" } } },
+      properties: { robot: location, parcel: { enum: ["A", "B", "C", "carried"] }, delivered: { type: "boolean" }, scanned: { type: "boolean" } } },
     reading: { anyOf: [{ type: "null" }, { type: "object", required: ["source", "text"], additionalProperties: false,
       properties: { source: { const: "warehouse-qr" }, text: { type: "string", maxLength: 240 } } }] },
     feedback: { type: "string", maxLength: 160 }, guarded: { type: "boolean" },
