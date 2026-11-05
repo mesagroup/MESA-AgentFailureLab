@@ -5,6 +5,7 @@ import { FIX_KINDS } from "@mesa/shared";
 import { agentRunRequest, type AgentRunRequest, type AgentRunResponse } from "../agent/http.js";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { AGENT_RUNTIME_LABELS, agentRuntimeLine, type AgentTaskCheck } from "@mesa/shared";
+import { resolvePlannerBaseUrl } from "../agents/endpoints.js";
 import { executeAttempt, traceBounds } from "../harness/execute.js";
 import { publicErrorMessage } from "../net/fetch-error.js";
 import { prepareWorld } from "../harness/world.js";
@@ -537,10 +538,11 @@ async function consultJuryAgent(
     fix_kinds: input.fixKinds,
   });
   if (options.callAgent) {
-    const baseUrl =
+    const stored =
       options.agent.test_instance.base_url.length > 0
         ? options.agent.test_instance.base_url
         : options.agent.instance.base_url;
+    const baseUrl = resolvePlannerBaseUrl(options.agent, stored);
     const response = await options.callAgent(baseUrl, request);
     if (response.executed) {
       throw new Error("The jury agent must set executed to false and return actions.");

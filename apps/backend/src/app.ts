@@ -71,7 +71,9 @@ export interface BuildAppOptions {
  * `phase: after_fix` with `parent_run_id` copies the parent task and injection
  * plan when those fields are omitted, and each result includes `parent` plus `links`.
  * `phase: injected` with `parent_run_id` requires a baseline parent and copies its task.
- * The jury case still uses the agent passed to `buildApp`.
+ * The jury case uses the stored agent with the same id when the store has one,
+ * so production calls the seeded public origin instead of the fixture's loopback URL.
+ * An explicit `options.agent` (offline demo, tests) is kept.
  * `outcome.verifier` is written by the verifier. `fault.labels` are written by the injector,
  * or by the attacker on the jury case. Runs leave `diagnosis` null; the explicit
  * POST /traces/:traceId/diagnose route calls agentservice with the stored trace
@@ -191,9 +193,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const parsed = parseJuryRequest(request.body);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_request", message: parsed.message });
     try {
-      const choice = await choosePlanner(agentEnv, agentFetch, "jury", agent);
+      const juryAgent = options.agent ? agent : ((await agents.get(agent.agent_id)) ?? agent);
+      const choice = await choosePlanner(agentEnv, agentFetch, "jury", juryAgent);
       const juryOptions = {
-        agent,
+        agent: juryAgent,
         store,
         mock,
         mockBaseUrl,

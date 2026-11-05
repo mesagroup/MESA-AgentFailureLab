@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isSeededAgentId, SEEDED_AGENT_IDS, type Agent } from "@mesa/shared";
 import { validateAgent } from "@mesa/shared/validate";
-import { bindSeedAgent, resolveSeedUrls, seedEndpointDrift } from "./endpoints.js";
+import { bindSeedAgent, healLoopbackSeed, resolveSeedUrls, seedEndpointDrift } from "./endpoints.js";
 import { loadSeedAgents } from "../reference-agent.js";
 import { isRecord } from "../util.js";
 
@@ -221,6 +221,29 @@ function githubRepoUrlMissing(agent: Pick<Agent, "github_repo_url">): boolean {
  * Copy `fixture.github_repo_url` onto a stored seed only when that field is
  * absent. An operator-set URL is left alone. Other fields are not rewritten.
  */
+/**
+ * Partial update for a seed row that is newer than the fixture.
+ * Loopback runtime URLs are replaced in production. A missing GitHub URL is filled.
+ * Name, tasks, and public endpoints stay.
+ */
+export function keptSeedDocument(
+  stored: Agent,
+  fixture: Agent,
+  env: NodeJS.ProcessEnv = process.env,
+): { agent: Agent; healed: boolean } | undefined {
+  let next = stored;
+  let healed = false;
+  const healedAgent = healLoopbackSeed(stored, fixture, env);
+  if (healedAgent) {
+    next = healedAgent;
+    healed = true;
+  }
+  const filled = backfillGithubRepoUrl(next, fixture);
+  if (filled) next = filled;
+  if (!healed && !filled) return undefined;
+  return { agent: next, healed };
+}
+
 export function backfillGithubRepoUrl(stored: Agent, fixture: Agent): Agent | undefined {
   const next = fixture.github_repo_url?.trim();
   if (!next) return undefined;
@@ -382,9 +405,10 @@ export class MemoryAgentStore implements AgentStore {
     }
     const parsed = validateAgent(structuredClone(stored));
     if (!parsed.ok) return "kept";
-    const next = backfillGithubRepoUrl(parsed.value, fixture);
-    if (!next) return "kept";
-    this.agents.set(fixture.agent_id, next);
-    return "backfilled";
+    const kept = keptSeedDocument(parsed.value, fixture);
+    if (!kept) return "kept";
+    this.agents.set(fixture.agent_id, kept.agent);
+    if (kept.healed) warnSeedRewritten(fixture.agent_id, "production loopback endpoints replaced from this process");
+    return kept.healed ? "refreshed" : "backfilled";
   }
 }

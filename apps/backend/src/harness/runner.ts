@@ -11,6 +11,7 @@ import {
 } from "../agent/http.js";
 import { AGENT_RUNTIME_LABELS, agentRuntimeLine } from "@mesa/shared";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
+import { resolvePlannerBaseUrl } from "../agents/endpoints.js";
 import { normalizePlan, presetPlan } from "../injector/catalog.js";
 import { publicErrorMessage } from "../net/fetch-error.js";
 import type { MockShopClient } from "../mock/client.js";
@@ -137,7 +138,8 @@ function withAttachedNote(prompt: string, note: string | undefined): string {
 }
 
 function agentBaseUrl(agent: Agent, phase: RunPhase): string {
-  return phase === "baseline" ? agent.instance.base_url : agent.test_instance.base_url;
+  const stored = phase === "baseline" ? agent.instance.base_url : agent.test_instance.base_url;
+  return resolvePlannerBaseUrl(agent, stored);
 }
 
 function strictWorldChecksEnabled(): boolean {
