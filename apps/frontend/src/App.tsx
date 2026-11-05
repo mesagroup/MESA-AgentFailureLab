@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { FEATURES } from "@mesa/shared/robot-lab";
 import { Moon, Sun } from "lucide-react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
@@ -14,6 +16,8 @@ import { RunsPage } from "@/pages/RunsPage";
 import { EvalScoreboardPage } from "@/pages/EvalScoreboardPage";
 import { TracePage } from "@/pages/TracePage";
 import { TracesIndexPage } from "@/pages/TracesIndexPage";
+
+const RobotLab = FEATURES.robotLab ? lazy(() => import("./features/robot-lab/RobotLab")) : null;
 
 function AppShell() {
   const { dark, toggle } = useTheme();
@@ -40,6 +44,7 @@ function AppShell() {
             <Route path={RUNS_DETAIL_ROUTE} element={<RunDetailPage />} />
             <Route path="/traces/:traceId" element={<TracePage />} />
             <Route path="/traces" element={<TracesIndexPage />} />
+            <Route path="/robot-lab" element={RobotLab ? <Suspense fallback={<p>Loading Robot Lab…</p>}><RobotLab /></Suspense> : <Navigate to="/" replace />} />
             <Route path="/eval" element={<EvalScoreboardPage />} />
           </Routes>
         </main>

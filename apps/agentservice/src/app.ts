@@ -1,3 +1,5 @@
+import { FEATURES } from "@mesa/shared/robot-lab";
+import { registerRobotDecisions } from "./robot-lab/routes.js";
 import { CONTRACT_VERSION, GROK_FORBIDDEN_WRITE_PATHS } from "@mesa/shared";
 import Fastify from "fastify";
 import { DiagnosisFailed, diagnoseTrace } from "./diagnosis/diagnose.js";
@@ -65,6 +67,7 @@ export function buildApp(deps: AppDeps = {}) {
             })
           : null;
   const app = Fastify({ logger: deps.logger ?? true });
+  if (FEATURES.robotLab) registerRobotDecisions(app, config);
 
   app.get("/", async () => ({
     service: "agentservice",
