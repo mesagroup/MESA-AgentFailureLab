@@ -148,6 +148,9 @@ function formatSeedLine(agentId: string, result: ResetCounts["seed"][string]): s
   if (result === "refreshed") {
     return `Rewrote ${agentId} from the fixture because the stored row was invalid, older than the fixture, or still on the fixture timestamp with different runtime or world URLs.`;
   }
+  if (result === "backfilled") {
+    return `Backfilled github_repo_url on ${agentId}. Other fields were not rewritten.`;
+  }
   return `Inserted ${agentId} because that id was missing.`;
 }
 

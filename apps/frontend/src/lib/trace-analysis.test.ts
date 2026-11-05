@@ -7,11 +7,13 @@ import type { Diagnosis, Trace } from "@mesa/shared";
 import { PRIMARY_NAV } from "./nav.ts";
 import {
   ANALYSIS_SECTION_ID,
+  DEMO_REFERENCE_SHOP_GITHUB_REPO_URL,
   TRACE_DETAIL_ROUTE,
   TRACE_EMPTY_PULL,
   TRACE_EMPTY_SEED,
   TRACE_LIST_ROUTE,
   analysisView,
+  composeGitHubIssue,
   describeDiagnoseFailure,
   diagnosePath,
   parentRunHref,
@@ -111,6 +113,8 @@ test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run l
   assert.match(page, /Open parent run/);
   assert.match(page, /diagnoseTrace/);
   assert.match(page, /Open as GitHub issue/);
+  assert.match(page, /composeGitHubIssue/);
+  assert.match(page, /agent\?\.github_repo_url/);
   assert.match(page, /AfterFixPanel/);
   assert.doesNotMatch(page, /Giuria/);
   const panel = readFileSync(join(here, "../pages/AfterFixPanel.tsx"), "utf8");
@@ -119,6 +123,48 @@ test("TracePage keeps iolmao diagnosis content and adds Run diagnosis plus run l
   assert.match(panel, /AFTER_FIX_SECTION_ID/);
   assert.match(panel, /beforeAfterHeadline/);
   assert.match(page, /AFTER_FIX_SECTION_ID/);
+});
+
+test("Open as GitHub issue targets the reference-shop repo with title, cause, step, evidence, fix, and trace link", () => {
+  const fixture = JSON.parse(
+    readFileSync(join(here, "../../../../packages/shared/examples/injected-failed-trace.json"), "utf8"),
+  ) as Trace;
+  assert.ok(fixture.diagnosis);
+  const missing = composeGitHubIssue({
+    repoUrl: undefined,
+    trace: fixture,
+    diagnosis: fixture.diagnosis,
+    origin: "https://mesa-frontend-rleq.onrender.com",
+  });
+  assert.equal(missing, null);
+
+  const draft = composeGitHubIssue({
+    repoUrl: DEMO_REFERENCE_SHOP_GITHUB_REPO_URL,
+    trace: fixture,
+    diagnosis: fixture.diagnosis,
+    origin: "https://mesa-frontend-rleq.onrender.com",
+  });
+  assert.ok(draft);
+  assert.match(draft.title, /T3/);
+  assert.match(draft.title, /Verification/);
+  assert.equal(
+    draft.href.startsWith(`${DEMO_REFERENCE_SHOP_GITHUB_REPO_URL}/issues/new?title=`),
+    true,
+  );
+  const parsed = new URL(draft.href);
+  assert.equal(parsed.origin + parsed.pathname, `${DEMO_REFERENCE_SHOP_GITHUB_REPO_URL}/issues/new`);
+  assert.equal(parsed.searchParams.get("title"), draft.title);
+  const body = parsed.searchParams.get("body") ?? "";
+  assert.match(body, /\*\*Cause:\*\*/);
+  assert.equal(body.includes(fixture.diagnosis.cause), true);
+  assert.match(body, new RegExp(`\\*\\*Step:\\*\\* ${fixture.diagnosis.step_id}`));
+  assert.match(body, /Evidence/);
+  for (const item of fixture.diagnosis.evidence) {
+    assert.equal(body.includes(item), true);
+  }
+  assert.match(body, /pre_response_check/);
+  assert.match(body, /trace-t3-forged-checkout/);
+  assert.match(body, /https:\/\/mesa-frontend-rleq\.onrender\.com\/traces\/trace-t3-forged-checkout/);
 });
 
 test("traces index empty state and pull panel stay on the list page", () => {

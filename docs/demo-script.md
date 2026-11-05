@@ -227,10 +227,9 @@ Per ogni passo: **azione**, **dato atteso** (dettaglio in D), **fallimento tipic
 - Fallimento tipico: 503 `grok_not_configured` (manca la chiave), 502 `diagnosis_failed` (errore del provider o JSON non valido), 400 `invalid_trace`.
 
 **5. Apri il fix come issue GitHub**
-- OGGI: a mano. Nuova issue con il template di D.5, copiando i dati da trace e diagnosi.
-- DOMANI (#52): pulsante "Apri issue" in **Ispeziona traccia**.
-- Atteso: l'issue contiene task, run_id, trace_id, step colpevole, check falliti, diagnosi e fix proposti.
-- Fallimento tipico: l'Agent non ha ancora un campo per il repository di destinazione (#52). Non si sa dove aprire l'issue.
+- OGGI: su `/traces/trace-t3-forged-checkout#analysis` il CTA **Open as GitHub issue** (seed `reference-shop.github_repo_url` = `https://github.com/mesagroup/MESA-AgentFailureLab`). Dialog di conferma, poi `issues/new` con titolo, causa, step, evidenze, fix, link traccia.
+- Atteso: il bottone è visibile (non il copy “Configure a GitHub repo URL…”). Il repo è MESA-AgentFailureLab.
+- Fallimento tipico: backend non ancora riavviato dopo il seed → `github_repo_url` assente sulla riga Postgres. Un URL già impostato da un operatore non viene sovrascritto.
 
 **6. Scegli il fix → replay `after_fix` → before/after**
 - OGGI: su `/traces/trace-t3-forged-checkout` lasciare **pre-response check** selezionato → **Replay after_fix** (niente Clean treated). Il POST è `{ "agent_id":"reference-shop","phase":"after_fix","parent_run_id":"run-t3-injected-001","fix_kinds":["pre_response_check"] }` (senza `injection`: il harness copia `forged_tool_result` e `at_step: 4`). La UI resta sulla traccia parent e mostra before/after `outcome.verifier`. Il piano trattato T3 è `get_cart`, `checkout` (forgiato), `get_cart`, `checkout` (vero). Serve `test_instance` con `/health` (altrimenti `auto` cade sul driver scripted e il fix non si applica).
@@ -333,7 +332,7 @@ Taglio registrato provvisorio: [`docs/demo/demo-chaos-ai-it-v2.mp4`](demo/demo-c
 
 Note di regia: la pagina `/jury` (PR #122) copre il caso security, non l’esperimento shop HTTP. Lo shop end-to-end si gira con `pnpm demo:shop -- --mode offline` (o live quando autorizzato). I numeri della scena 11 vanno presi dal README il giorno della registrazione, senza riscrivere le baseline eval.
 
-Scene 6–8 sul deploy usano la traccia seed `trace-t3-forged-checkout` (run `run-t3-injected-001`, fault `forged_tool_result`, check `order_created` ✗). Il boot inserisce già `diagnosis` (causa, `step_id`, confidenza, `proposed_fixes: ["pre_response_check"]`). Aprire `/traces/trace-t3-forged-checkout#analysis`. Il CTA **Run diagnosis** resta per tracce senza diagnosi (chiamata live Grok). Scene 7 usa **Open as GitHub issue** su quella diagnosi. Scene 8: lasciare **pre-response check** selezionato → **Replay after_fix** (parent `run-t3-injected-001`, senza Clean treated). Il replay gira su `test_instance` (agentservice). L’iniettore contraffà ancora il primo checkout; il fix completa un checkout vero dopo la rilettura del carrello. Before/after: verifier failed → passed, check `order_created` recovered. Serve agentservice up (`driver: auto` → HTTP). Se il runtime è giù il harness cade sul driver scripted e il fix non si applica.
+Scene 6–8 sul deploy usano la traccia seed `trace-t3-forged-checkout` (run `run-t3-injected-001`, fault `forged_tool_result`, check `order_created` ✗). Il boot inserisce già `diagnosis` (causa, `step_id`, confidenza, `proposed_fixes: ["pre_response_check"]`). Aprire `/traces/trace-t3-forged-checkout#analysis`. Il CTA **Run diagnosis** resta per tracce senza diagnosi (chiamata live Grok). Scene 7: **Open as GitHub issue** (serve `github_repo_url` sul seed `reference-shop`; il boot lo backfill-a se manca). Confermare il dialog → `https://github.com/mesagroup/MESA-AgentFailureLab/issues/new` con titolo, causa, step, evidenze, `pre_response_check`, link traccia. Scene 8: lasciare **pre-response check** selezionato → **Replay after_fix** (parent `run-t3-injected-001`, senza Clean treated). Il replay gira su `test_instance` (agentservice). L’iniettore contraffà ancora il primo checkout; il fix completa un checkout vero dopo la rilettura del carrello. Before/after: verifier failed → passed, check `order_created` recovered. Serve agentservice up (`driver: auto` → HTTP). Se il runtime è giù il harness cade sul driver scripted e il fix non si applica.
 
 ## F. Relazione con gli altri documenti
 
