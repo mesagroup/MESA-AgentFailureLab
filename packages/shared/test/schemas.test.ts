@@ -171,6 +171,7 @@ describe("examples", () => {
       assert.ok(Array.isArray(task.setup.orders));
       assert.ok(task.setup.permissions.length > 0);
     }
+    assert.equal(result.value.github_repo_url, "https://github.com/mesagroup/MESA-AgentFailureLab");
     const checkout = result.value.tasks.find((task) => task.task_id === "T3");
     assert.deepEqual(checkout?.setup.cart, [{ sku: "SKU-MUG-01", qty: 2 }]);
     assert.deepEqual(checkout?.setup.orders, []);

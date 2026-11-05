@@ -5,6 +5,9 @@
 
 import type { Diagnosis, Trace } from "@mesa/shared";
 
+/** Demo destination on the reference-shop seed. Scene 7 opens issues/new here. */
+export const DEMO_REFERENCE_SHOP_GITHUB_REPO_URL = "https://github.com/mesagroup/MESA-AgentFailureLab";
+
 export const TRACE_LIST_ROUTE = "/traces";
 export const TRACE_DETAIL_ROUTE = "/traces/:traceId";
 export const ANALYSIS_SECTION_ID = "analysis";
@@ -35,6 +38,51 @@ export function parentRunHref(runId: string | null | undefined): string | null {
 
 export function diagnosePath(traceId: string): string {
   return `/traces/${encodeURIComponent(traceId)}/diagnose`;
+}
+
+export interface GitHubIssueDraft {
+  title: string;
+  body: string;
+  href: string;
+}
+
+/**
+ * Pre-submit GitHub issue from a diagnosed trace (#52 CTA, scene 7).
+ * `repoUrl` is `Agent.github_repo_url`. `origin` is the lab origin for the trace link.
+ */
+export function composeGitHubIssue(input: {
+  repoUrl: string | null | undefined;
+  trace: Pick<Trace, "agent_id" | "task_id" | "status" | "trace_id">;
+  diagnosis: Diagnosis;
+  origin: string;
+}): GitHubIssueDraft | null {
+  const repo = input.repoUrl?.trim().replace(/\/$/, "");
+  if (!repo) return null;
+  const d = input.diagnosis;
+  const title = `[MESA] ${d.category}: ${input.trace.agent_id} — ${input.trace.task_id}`;
+  const body = [
+    "## Fault diagnosis",
+    "",
+    `**Category:** ${d.category}`,
+    `**Confidence:** ${Math.round(d.confidence * 100)}%`,
+    `**Cause:** ${d.cause}`,
+    `**Step:** ${d.step_id}`,
+    "",
+    "## Evidence",
+    ...d.evidence.map((item) => `- ${item}`),
+    "",
+    "## Proposed fixes",
+    ...d.proposed_fixes.map((fix) => `- ${fix}`),
+    "",
+    "## Trace",
+    `Agent: ${input.trace.agent_id}`,
+    `Task: ${input.trace.task_id}`,
+    `Status: ${input.trace.status}`,
+    `Trace ID: ${input.trace.trace_id}`,
+    `Link: ${input.origin.replace(/\/$/, "")}/traces/${input.trace.trace_id}`,
+  ].join("\n");
+  const href = `${repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  return { title, body, href };
 }
 
 export function analysisView(diagnosis: Diagnosis | null | undefined): {

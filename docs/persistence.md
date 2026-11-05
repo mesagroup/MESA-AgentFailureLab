@@ -60,7 +60,7 @@ Backup, restore, and jury reset are command-line scripts in `src/persistence/cli
 | `create(body)` | Fill missing server fields, `validateAgent`, insert. Conflict if the id exists |
 | `replace(agentId, body)` | 404 if the id is absent. Server sets `updated_at`. Validate, then replace the document. An invalid stored document is still replaced. `created_at` is kept when the body omits it and the stored value is a date-time |
 | `delete(agentId)` | 409 for `reference-shop` and `external-library`. 404 if another id is absent |
-| `seedIfMissing()` | Insert each demo fixture when that id is absent. Rewrite a row when its document fails `validateAgent` or its `updated_at` is earlier than that fixture. A valid row at the same age or newer stays |
+| `seedIfMissing()` | Insert each demo fixture when that id is absent. Rewrite a row when its document fails `validateAgent` or its `updated_at` is earlier than that fixture. A valid row at the same age or newer stays, except a missing `github_repo_url` on `reference-shop` is copied from the fixture |
 | `upsertImported(agent)` | Backup import. Insert the document, or replace it and keep the stored `created_at`. An invalid stored document is still replaced. Not an HTTP route |
 | `deleteAgentsExceptSeed()` | Delete every agent except `reference-shop` and `external-library`. Not an HTTP route |
 | `close()` | End the pool, or a no-op for memory |
@@ -213,7 +213,7 @@ The fixtures are `packages/shared/examples/agent-reference-shop.json` (`referenc
 | Event | Memory | Postgres |
 | --- | --- | --- |
 | Boot, id absent | Insert the fixture | `INSERT … ON CONFLICT DO NOTHING` |
-| Boot, id present, document valid, `updated_at` newer than the fixture | Leave the row, including a `PUT` that renamed it or changed a URL | Same |
+| Boot, id present, document valid, `updated_at` newer than the fixture | Leave the row, including a `PUT` that renamed it or changed a URL. Copy `github_repo_url` from the fixture only when the stored field is missing | Same |
 | Boot, document fails `validateAgent`, `updated_at` is earlier than the fixture, or `updated_at` matches the fixture and the runtime or world URL differs | Replace the row with the fixture for this process | `UPDATE` the row from the fixture |
 | `DELETE /agents/reference-shop` or `DELETE /agents/external-library` | 409, row kept | 409, row kept |
 | Process restart | New empty map, then seed agents and demo traces. Other agents, runs, and traces are gone | Rows stay. The agent seed is inserted or rewritten by the rules above. Missing demo run/trace ids are inserted. Other rows stay |

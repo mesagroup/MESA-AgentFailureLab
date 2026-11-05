@@ -47,7 +47,10 @@ export class ProtectedAgentError extends Error {
 }
 
 /** What `seedIfMissing` did to one demo seed. */
-export type SeedResult = "inserted" | "kept" | "refreshed";
+export type SeedResult = "inserted" | "kept" | "refreshed" | "backfilled";
+
+/** Scene 7 demo destination for `reference-shop` (`packages/shared/examples/agent-reference-shop.json`). */
+export const DEMO_REFERENCE_SHOP_GITHUB_REPO_URL = "https://github.com/mesagroup/MESA-AgentFailureLab";
 
 /** One result per seeded agent id. */
 export type SeedReport = Readonly<Record<string, SeedResult>>;
@@ -84,7 +87,9 @@ export interface AgentStore {
    * Rewrite a row when its document fails `validateAgent`, when its
    * `updated_at` is earlier than that fixture, or when it is the same age and
    * its runtime or world URL differs from the URLs resolved for this process.
-   * A valid newer row stays, including one edited with PUT.
+   * A valid newer row stays, including one edited with PUT, except
+   * `github_repo_url` is copied from the fixture when the stored value is
+   * missing (other fields are not rewritten).
    */
   seedIfMissing(): Promise<SeedReport>;
   /**
@@ -205,6 +210,22 @@ export function seedRewriteReason(stored: unknown, fixture: Agent): string | und
   }
   if (storedMs > fixtureMs) return undefined;
   return seedEndpointDrift(result.value, fixture);
+}
+
+function githubRepoUrlMissing(agent: Pick<Agent, "github_repo_url">): boolean {
+  const value = agent.github_repo_url;
+  return typeof value !== "string" || value.trim() === "";
+}
+
+/**
+ * Copy `fixture.github_repo_url` onto a stored seed only when that field is
+ * absent. An operator-set URL is left alone. Other fields are not rewritten.
+ */
+export function backfillGithubRepoUrl(stored: Agent, fixture: Agent): Agent | undefined {
+  const next = fixture.github_repo_url?.trim();
+  if (!next) return undefined;
+  if (!githubRepoUrlMissing(stored)) return undefined;
+  return { ...stored, github_repo_url: next };
 }
 
 export function readStoredAgent(value: unknown): Agent {
@@ -354,9 +375,16 @@ export class MemoryAgentStore implements AgentStore {
       return "inserted";
     }
     const reason = seedRewriteReason(stored, fixture);
-    if (reason === undefined) return "kept";
-    warnSeedRewritten(fixture.agent_id, reason);
-    this.agents.set(fixture.agent_id, fixture);
-    return "refreshed";
+    if (reason !== undefined) {
+      warnSeedRewritten(fixture.agent_id, reason);
+      this.agents.set(fixture.agent_id, fixture);
+      return "refreshed";
+    }
+    const parsed = validateAgent(structuredClone(stored));
+    if (!parsed.ok) return "kept";
+    const next = backfillGithubRepoUrl(parsed.value, fixture);
+    if (!next) return "kept";
+    this.agents.set(fixture.agent_id, next);
+    return "backfilled";
   }
 }

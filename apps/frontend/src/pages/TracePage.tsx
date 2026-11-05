@@ -20,7 +20,13 @@ import { isWorldBusy } from "@/lib/jury";
 import { adrFixForCategory, type Agent, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
 import { AfterFixPanel } from "@/pages/AfterFixPanel";
 import { TraceSourceBadge } from "@/pages/TraceSourceBadge";
-import { ANALYSIS_SECTION_ID, describeDiagnoseFailure, parentRunHref, TRACE_LIST_ROUTE } from "@/lib/trace-analysis";
+import {
+  ANALYSIS_SECTION_ID,
+  composeGitHubIssue,
+  describeDiagnoseFailure,
+  parentRunHref,
+  TRACE_LIST_ROUTE,
+} from "@/lib/trace-analysis";
 import { traceListSource } from "@/lib/traces";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -599,30 +605,13 @@ export function TracePage() {
       </div>
 
       {issueDialogOpen && trace.diagnosis && agent?.github_repo_url && (() => {
-        const d = trace.diagnosis;
-        const issueTitle = `[MESA] ${d.category}: ${trace.agent_id} — ${trace.task_id}`;
-        const issueBody = [
-          "## Fault diagnosis",
-          "",
-          `**Category:** ${d.category}`,
-          `**Confidence:** ${Math.round(d.confidence * 100)}%`,
-          `**Cause:** ${d.cause}`,
-          "",
-          "## Evidence",
-          ...d.evidence.map((e) => `- ${e}`),
-          "",
-          "## Proposed fixes",
-          ...d.proposed_fixes.map((f) => `- ${f}`),
-          "",
-          "## Trace",
-          `Agent: ${trace.agent_id}`,
-          `Task: ${trace.task_id}`,
-          `Status: ${trace.status}`,
-          `Trace ID: ${trace.trace_id}`,
-          `Link: ${window.location.origin}/traces/${trace.trace_id}`,
-        ].join("\n");
-        const repoUrl = agent.github_repo_url.replace(/\/$/, "");
-        const ghUrl = `${repoUrl}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+        const draft = composeGitHubIssue({
+          repoUrl: agent.github_repo_url,
+          trace,
+          diagnosis: trace.diagnosis,
+          origin: window.location.origin,
+        });
+        if (!draft) return null;
         return (
           <dialog
             open
@@ -632,15 +621,15 @@ export function TracePage() {
             <h2 className="text-sm font-semibold mb-1">Open as GitHub issue</h2>
             <p className="text-xs text-muted-foreground mb-3">Review the composed issue before opening GitHub.</p>
             <div className="rounded-lg bg-muted/40 p-3 mb-4 max-h-64 overflow-y-auto">
-              <p className="text-xs font-mono font-medium mb-2">{issueTitle}</p>
-              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">{issueBody}</pre>
+              <p className="text-xs font-mono font-medium mb-2">{draft.title}</p>
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">{draft.body}</pre>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setIssueDialogOpen(false)}>Cancel</Button>
               <Button
                 size="sm"
                 onClick={() => {
-                  window.open(ghUrl, "_blank", "noopener,noreferrer");
+                  window.open(draft.href, "_blank", "noopener,noreferrer");
                   setIssueDialogOpen(false);
                   setIssueFeedback("Issue opened in new tab");
                 }}

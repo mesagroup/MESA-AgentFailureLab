@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Agent } from "@mesa/shared";
+import { validateAgent } from "@mesa/shared/validate";
 import pg from "pg";
 import {
   AgentConflictError,
@@ -9,6 +10,7 @@ import {
   ProtectedAgentError,
   agentFromCreate,
   agentFromReplace,
+  backfillGithubRepoUrl,
   importedAgent,
   isSeededAgentId,
   rawAgentId,
@@ -314,7 +316,20 @@ export class PostgresAgentStore implements AgentStore {
 
   private async rewriteSeedIfNeeded(stored: unknown, fixture: Agent): Promise<SeedResult> {
     const reason = seedRewriteReason(stored, fixture);
-    if (reason === undefined) return "kept";
+    if (reason === undefined) {
+      const parsed = validateAgent(structuredClone(stored));
+      if (!parsed.ok) return "kept";
+      const next = backfillGithubRepoUrl(parsed.value, fixture);
+      if (!next) return "kept";
+      const filled = await this.pool.query(
+        `UPDATE agents
+         SET document = $2::jsonb
+         WHERE agent_id = $1`,
+        [next.agent_id, JSON.stringify(next)],
+      );
+      if ((filled.rowCount ?? 0) === 0) throw new AgentNotFoundError(fixture.agent_id);
+      return "backfilled";
+    }
     warnSeedRewritten(fixture.agent_id, reason);
     const updated = await this.pool.query(
       `UPDATE agents
