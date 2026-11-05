@@ -35,7 +35,7 @@ describe("parseDiagnosisConfig", () => {
 
   it("defaults the model and timeout when they are unset", () => {
     const config = parseDiagnosisConfig({});
-    assert.equal(config.modelName, "grok-3");
+    assert.equal(config.modelName, "grok-4.6");
     assert.equal(config.baseUrl, "https://api.x.ai/v1");
     assert.equal(config.timeoutMs, 30_000);
     assert.equal(config.apiKey, null);

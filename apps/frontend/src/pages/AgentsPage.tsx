@@ -681,7 +681,14 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
+  const [wakingShop, setWakingShop] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!launching) return;
+    const timer = setTimeout(() => setWakingShop(true), 1000);
+    return () => clearTimeout(timer);
+  }, [launching]);
 
   useEffect(() => {
     if (!agent) return;
@@ -889,6 +896,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       return;
     }
     setLaunching(true);
+    setWakingShop(false);
     setError(null);
     try {
       if (built.kind === "jury") {
@@ -913,6 +921,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       }
     } finally {
       setLaunching(false);
+      setWakingShop(false);
     }
   }
 
@@ -1228,14 +1237,24 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         <div className="shrink-0 flex items-center gap-3 px-8 py-4 border-t border-border/40">
           {launching && (
             <span role="status" className="text-xs text-muted-foreground flex-1">
-              {agentLabel === "Grok 4.6" ? "Waiting for Grok 4.6…" : "Launching run…"}
+              {wakingShop
+                ? "Waking up mock shop…"
+                : agentLabel === "Grok 4.6"
+                  ? "Waiting for Grok 4.6…"
+                  : "Launching run…"}
             </span>
           )}
           {error && <span className="text-xs text-destructive flex-1">{error}</span>}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={onClose} disabled={launching}>Cancel</Button>
             <Button onClick={handleLaunch} disabled={launching || !launchReady} aria-busy={launching}>
-              {launching ? (agentLabel === "Grok 4.6" ? "Waiting for Grok 4.6…" : "Launching…") : "Launch run"}
+              {launching
+                ? wakingShop
+                  ? "Waking up mock shop…"
+                  : agentLabel === "Grok 4.6"
+                    ? "Waiting for Grok 4.6…"
+                    : "Launching…"
+                : "Launch run"}
             </Button>
           </div>
         </div>

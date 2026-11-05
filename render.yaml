@@ -189,7 +189,7 @@ projects:
               - key: XAI_BASE_URL
                 value: https://api.x.ai/v1
               - key: GROK_MODEL
-                value: grok-3
+                value: grok-4.6
               # Assigned public hosts. A Blueprint sync overwrites these.
               # See docs/deploy.md.
               - key: BACKEND_URL

@@ -1,3 +1,4 @@
+import { describeFetchError } from "../net/fetch-error.js";
 import { isRecord } from "../util.js";
 import { parseSnapshot, type ShopSnapshot } from "./snapshot.js";
 
@@ -114,6 +115,69 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
   }
 }
 
+/** Render's free web services answer 502/503/504 while they wake. */
+export const MOCK_WAKE_BUDGET_MS = 60_000;
+
+const MOCK_WAKE_STATUSES = new Set([502, 503, 504]);
+
+export function mockWakeDelayMs(attempt: number): number {
+  return Math.min(8_000, 500 * 2 ** Math.max(0, attempt - 1));
+}
+
+export interface MockWakeOptions {
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  budgetMs?: number;
+}
+
+/**
+ * Retry while the mock process is asleep.
+ * 502, 503, 504, and network failures wait with backoff until `budgetMs`.
+ * Other statuses return immediately so a real shop error is not hidden.
+ */
+export async function fetchWhileMockWakes(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit | undefined,
+  options: MockWakeOptions = {},
+): Promise<Response> {
+  const sleep = options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const now = options.now ?? Date.now;
+  const budget = options.budgetMs ?? MOCK_WAKE_BUDGET_MS;
+  const started = now();
+  let attempt = 0;
+  let lastResponse: Response | undefined;
+  let lastError: Error | undefined;
+  while (true) {
+    attempt += 1;
+    try {
+      const response = await fetchImpl(url, init);
+      if (!MOCK_WAKE_STATUSES.has(response.status)) return response;
+      lastResponse = response;
+      lastError = new Error(`status ${response.status}`);
+    } catch (error) {
+      lastResponse = undefined;
+      lastError = error instanceof Error ? error : new Error("Mock network error.");
+    }
+    const remaining = budget - (now() - started);
+    if (remaining <= 0) {
+      if (lastResponse) return lastResponse;
+      throw mockNetworkError(url, lastError ?? new Error("Mock network error."));
+    }
+    await sleep(Math.min(mockWakeDelayMs(attempt), remaining));
+  }
+}
+
+function mockNetworkError(url: string, error: Error): Error {
+  let path = url;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    // Keep the raw target when it is not an absolute URL.
+  }
+  return new Error(`Mock shop ${path} failed: ${describeFetchError(error)}`, { cause: error });
+}
+
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (text.trim().length === 0) return null;
@@ -124,17 +188,22 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export function createHttpMockClient(baseUrl: string, fetchImpl: typeof fetch = fetch): MockShopClient {
+export function createHttpMockClient(
+  baseUrl: string,
+  fetchImpl: typeof fetch = fetch,
+  wake: MockWakeOptions = {},
+): MockShopClient {
   const root = baseUrl.replace(/\/$/, "");
+  const call = (url: string, init?: RequestInit) => fetchWhileMockWakes(fetchImpl, url, init, wake);
 
   return {
     async reset() {
-      const response = await fetchImpl(`${root}/internal/reset`, { method: "POST" });
+      const response = await call(`${root}/internal/reset`, { method: "POST" });
       if (!response.ok) throw new Error(`Mock reset failed with ${response.status}.`);
       return shopStateFrom(await readJson(response));
     },
     async state() {
-      const response = await fetchImpl(`${root}/internal/state`);
+      const response = await call(`${root}/internal/state`);
       if (!response.ok) throw new Error(`Mock state failed with ${response.status}.`);
       return shopStateFrom(await readJson(response));
     },
@@ -148,7 +217,7 @@ export function createHttpMockClient(baseUrl: string, fetchImpl: typeof fetch = 
         headers["content-type"] = "application/json";
         body = JSON.stringify(options.body);
       }
-      const response = await fetchImpl(`${root}${options.path}`, {
+      const response = await call(`${root}${options.path}`, {
         method: options.method,
         headers,
         body,
