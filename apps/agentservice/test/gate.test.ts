@@ -130,7 +130,7 @@ describe("eval gate command", () => {
       assert.equal(stderr.length, 0);
       const report = stdout.join("");
       assert.match(report, /rules baseline matches/);
-      assert.match(report, /category_accuracy \(Accuratezza di categoria\): 4\/19/);
+      assert.match(report, /category_accuracy \(Category accuracy\): 4\/19/);
       assert.match(report, /grok: skipped \(XAI_API_KEY is unset\)/);
       assert.equal(report.includes("sk-test-not-a-real-key"), false);
     } finally {
@@ -213,7 +213,7 @@ describe("writeBaselineCounts", () => {
     }));
     writeBaselineCounts(target, committed, metrics);
     const written = loadBaseline(target);
-    assert.equal(written.metrics[0]?.scoreboard, "Accuratezza di categoria");
+    assert.equal(written.metrics[0]?.scoreboard, "Category accuracy");
   });
 });
 

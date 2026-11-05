@@ -10,7 +10,7 @@ import { DATASET_PLAN } from "../src/eval/dataset-plan.js";
 import { METRIC_DEFINITIONS, evaluateDataset, scoreJudgement } from "../src/eval/evaluate.js";
 import { loadDataset } from "../src/eval/load-dataset.js";
 import { MANIFEST_PATH } from "../src/eval/dataset-plan.js";
-import { GROK_PLACEHOLDER, ITALIAN_METRIC_DEFINITIONS, formatCost, formatMs, limitsBody, markerBody } from "../src/eval/report.js";
+import { GROK_PLACEHOLDER, SCOREBOARD_METRIC_DEFINITIONS, formatCost, formatMs, limitsBody, markerBody } from "../src/eval/report.js";
 import { repoRoot } from "../src/eval/repo-root.js";
 import { LEAKAGE_NOTE, baselineMappingLines, hintsInSteps, rulesBaseline } from "../src/eval/rules.js";
 
@@ -253,11 +253,11 @@ describe("published numbers", () => {
     const limits = limitsBody(readme);
     const scored = fresh.methods.baseline.scored;
     const lines = [
-      `Set valutato: ${fresh.dataset.scored_count} trace, ${fresh.dataset.categories.length} categorie (${fresh.dataset.categories.join(", ")}).`,
-      `| Accuratezza di categoria | ${fresh.methods.baseline.category_correct}/${scored} |`,
-      `| Step esatto | ${fresh.methods.baseline.step_exact}/${scored} |`,
-      `| Step entro ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} |`,
-      `| Hit del fix proposto | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} |`,
+      `Scored set: ${fresh.dataset.scored_count} traces, ${fresh.dataset.categories.length} categories (${fresh.dataset.categories.join(", ")}).`,
+      `| Category accuracy | ${fresh.methods.baseline.category_correct}/${scored} |`,
+      `| Exact step | ${fresh.methods.baseline.step_exact}/${scored} |`,
+      `| Step within ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} |`,
+      `| Proposed-fix hit | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} |`,
     ];
     const grokMode = readString(latestJson, ["methods", "grok", "mode"]);
     if (grokMode === "skipped") {
@@ -272,11 +272,11 @@ describe("published numbers", () => {
       const stepTolerance = `${readNumber(latestJson, ["methods", "grok", "step_tolerance_1"])}/${grokScored}`;
       const fixHits = `${readNumber(latestJson, ["methods", "grok", "fix_hits"])}/${grokApplicable}`;
       lines.push(
-        `**Colonna Grok — live** (\`${model}\`)`,
-        `| Accuratezza di categoria | ${fresh.methods.baseline.category_correct}/${scored} | ${category} |`,
-        `| Step esatto | ${fresh.methods.baseline.step_exact}/${scored} | ${stepExact} |`,
-        `| Step entro ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} | ${stepTolerance} |`,
-        `| Hit del fix proposto | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} | ${fixHits} |`,
+        `**Grok column — live** (\`${model}\`)`,
+        `| Category accuracy | ${fresh.methods.baseline.category_correct}/${scored} | ${category} |`,
+        `| Exact step | ${fresh.methods.baseline.step_exact}/${scored} | ${stepExact} |`,
+        `| Step within ±1 | ${fresh.methods.baseline.step_tolerance_1}/${scored} | ${stepTolerance} |`,
+        `| Proposed-fix hit | ${fresh.methods.baseline.fix_hits}/${fresh.methods.baseline.fix_applicable} | ${fixHits} |`,
       );
       assert.equal(board.includes(GROK_PLACEHOLDER), false);
     } else {
@@ -285,7 +285,7 @@ describe("published numbers", () => {
     for (const line of lines) {
       assert.ok(board.includes(line), line);
     }
-    for (const text of Object.values(ITALIAN_METRIC_DEFINITIONS)) {
+    for (const text of Object.values(SCOREBOARD_METRIC_DEFINITIONS)) {
       assert.ok(board.includes(text));
     }
     for (const text of Object.values(METRIC_DEFINITIONS)) {
@@ -309,15 +309,15 @@ describe("published numbers", () => {
       const tokensOut = readNumber(latestJson, ["methods", "grok", "tokens", "output"]);
       assert.ok(
         limits.includes(
-          `Costo Grok riportato dal provider: ${cost} USD (totale), token in/out ${tokensIn}/${tokensOut}. La baseline solo-regole non riporta token né costo.`,
+          `Grok cost reported by the provider: ${cost} USD (total), tokens in/out ${tokensIn}/${tokensOut}. The rules-only baseline reports neither tokens nor cost.`,
         ),
       );
     }
-    assert.ok(readme.includes("## Dataset e risultati"));
-    assert.ok(readme.includes("## Limiti noti"));
+    assert.ok(readme.includes("## Dataset and results"));
+    assert.ok(readme.includes("## Known limits"));
     assert.ok(latestMd.includes(LEAKAGE_NOTE));
     const storedLatency = readNumber(latestJson, ["methods", "baseline", "mean_latency_ms"]);
-    assert.ok(board.includes(`| Latenza media (ms) | ${formatMs(storedLatency)} |`));
+    assert.ok(board.includes(`| Mean latency (ms) | ${formatMs(storedLatency)} |`));
     assert.equal(readNumber(latestJson, ["methods", "baseline", "category_correct"]), fresh.methods.baseline.category_correct);
     assert.equal(readNumber(latestJson, ["methods", "baseline", "step_exact"]), fresh.methods.baseline.step_exact);
     assert.equal(readNumber(latestJson, ["methods", "baseline", "step_tolerance_1"]), fresh.methods.baseline.step_tolerance_1);

@@ -38,7 +38,7 @@ On `main` today:
 - Harness phases `baseline`, `injected`, and `after_fix`, a labeled fault injector, and the jury attacker. `POST /attacker/jury-case` takes a note, a task (default T5), and a session grant, returns `outcome.verifier` with a baseline comparison and `links.attacked_trace`, and can start a new `after_fix` run with `permission_guard` on the request. Runs and traces persist in Postgres when `DATABASE_URL` is set, and stay in memory otherwise. See [architecture](architecture.md) and [the jury demo](demo-jury.md).
 - Lab dashboard. The home page reads `GET /agents` and `GET /runs` ([#77](https://github.com/mesagroup/MESA-AgentFailureLab/issues/77), snapshot [#76](https://github.com/mesagroup/MESA-AgentFailureLab/issues/76)). `GET /agents` lists registered agents (`agent_id`, `instance.kind`, task count = `tasks.length`). `GET /runs` lists stored runs, newest start first, with `trace_ids`, the first trace id, and `outcome.verifier` from each linked trace. `counts.scope` is `harness_session`: agents and run statuses in the store this process has open. With Postgres those rows survive a restart. Multi-day series, uptime percentages, and agent ranking stay out, per ADR-001. See the [backend README](../apps/backend/README.md#dashboard-snapshot).
 - Agent CRUD. The agents page calls `GET/POST/PUT/DELETE /agents` ([#49](https://github.com/mesagroup/MESA-AgentFailureLab/issues/49), API [#50](https://github.com/mesagroup/MESA-AgentFailureLab/issues/50)). `reference-shop` and `external-library` are seeded. A run launches from that page.
-- **Testa agente.** The runs page lists stored runs ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` starts a batch for the required `agent_id` from the agent page. A row opens `/traces/:traceId` when a trace is stored, and `/runs/:runId` otherwise.
+- **Test the agent.** The runs page lists stored runs ([#14](https://github.com/mesagroup/MESA-AgentFailureLab/issues/14)). `POST /runs` starts a batch for the required `agent_id` from the agent page. A row opens `/traces/:traceId` when a trace is stored, and `/runs/:runId` otherwise.
 - Demo script and video storyboard ([#56](https://github.com/mesagroup/MESA-AgentFailureLab/issues/56)) in [demo-script.md](demo-script.md).
 - `after_fix` request wiring. A live `after_fix` run stores `fix_kinds` and the harness sends them on the agent run request ([#40](https://github.com/mesagroup/MESA-AgentFailureLab/issues/40)). `controlled_retry` runs inside `executeAttempt` on that attempt ([#41](https://github.com/mesagroup/MESA-AgentFailureLab/issues/41)). See [What `after_fix` means](#what-after_fix-means).
 - A deterministic verifier. It is the only writer of `outcome.verifier`. On the demo it reads mock state (`GET /internal/state`) and the task checks. It does not call Grok.
@@ -50,7 +50,7 @@ On `main` today:
 
 | Surface | Status |
 | --- | --- |
-| **Ispeziona traccia** — timeline, culprit step, diagnosis when present | Open ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12), reopened). `/traces/:traceId` loads `GET /traces/:traceId`. Hand-written traces are in `packages/shared/examples`. The timeline issue is not closed. |
+| **Inspect the trace** — timeline, culprit step, diagnosis when present | Open ([#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12), reopened). `/traces/:traceId` loads `GET /traces/:traceId`. Hand-written traces are in `packages/shared/examples`. The timeline issue is not closed. |
 | Diagnosis panel and `proposed_fixes` | Open ([#103](https://github.com/mesagroup/MESA-AgentFailureLab/issues/103)). |
 | Agents and launch feedback — loading, toast, progress | Open ([#104](https://github.com/mesagroup/MESA-AgentFailureLab/issues/104)). |
 | Runs detail — `/runs/:runId` and error messages | Open ([#105](https://github.com/mesagroup/MESA-AgentFailureLab/issues/105)). |
@@ -65,7 +65,7 @@ On `main` today:
 These areas are still being shaped. Some lab machinery already exists. The screens and the remaining scope do not.
 
 - **Production.** Import a real trace, mark it as production (no `fault.labels`), and ask for a diagnosis. How that trace gets an outcome is still open ([#51](https://github.com/mesagroup/MESA-AgentFailureLab/issues/51)).
-- **Jury.** The harness launch is on main ([demo-jury.md](demo-jury.md#frontend-contract-issue-55)). The form that posts the note, task, and permissions, and the click that opens Ispeziona traccia, are still open on the frontend ([#55](https://github.com/mesagroup/MESA-AgentFailureLab/issues/55), trace page [#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)).
+- **Jury.** The harness launch is on main ([demo-jury.md](demo-jury.md#frontend-contract-issue-55)). The form that posts the note, task, and permissions, and the click that opens Inspect the trace, are still open on the frontend ([#55](https://github.com/mesagroup/MESA-AgentFailureLab/issues/55), trace page [#12](https://github.com/mesagroup/MESA-AgentFailureLab/issues/12)).
 - **Regression.** The demo replay records whether the baseline still passes after a fix. A suite per agent, a comparison with the last baseline, and whether the suite is T1–T5 or custom are open ([#54](https://github.com/mesagroup/MESA-AgentFailureLab/issues/54)).
 - **Eval.** The CLI scoreboard is in the README. A screen for it is a stretch and does not block the jury demo ([#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57)).
 
@@ -74,7 +74,7 @@ These areas are still being shaped. Some lab machinery already exists. The scree
 - Multi-run aggregation of after_fix results is out of scope ([#186](https://github.com/mesagroup/MESA-AgentFailureLab/issues/186)).
 - Jury form. The harness fields are in [demo-jury.md](demo-jury.md#frontend-contract-issue-55). The trace page already loads `GET /traces/:traceId`.
 - Regression content: the demo task list versus a custom suite.
-- Extra screens beyond Agent CRUD, Testa agente, and Ispeziona traccia.
+- Extra screens beyond Agent CRUD, Test the agent, and Inspect the trace.
 
 ## Track
 

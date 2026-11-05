@@ -7,6 +7,7 @@ import {
   type EvalReport,
   type MethodSummary,
 } from "./evaluate.js";
+import { GATED_METRICS } from "./gate.js";
 
 export const SCOREBOARD_START = "<!-- eval-scoreboard:start -->";
 export const SCOREBOARD_END = "<!-- eval-scoreboard:end -->";
@@ -14,22 +15,10 @@ export const LIMITS_START = "<!-- eval-limits:start -->";
 export const LIMITS_END = "<!-- eval-limits:end -->";
 
 /** Cell used when Grok did not run. `pnpm eval` with `XAI_API_KEY` replaces it. */
-export const GROK_PLACEHOLDER = "*(segnaposto: `pnpm eval` con XAI_API_KEY)*";
+export const GROK_PLACEHOLDER = "*(placeholder: `pnpm eval` with XAI_API_KEY)*";
 
-/** Metric prose for the jury README. Counts stay in the generated table. */
-export const ITALIAN_METRIC_DEFINITIONS = {
-  category_accuracy:
-    "La categoria predetta è uguale all'unica categoria in `fault.labels`. Astensione e diagnosi fallita contano come errori. Il denominatore è ogni trace del set.",
-  step_accuracy_exact: "Lo `step_id` predetto è uguale allo `step_id` dell'etichetta.",
-  step_accuracy_tolerance_1:
-    "La differenza assoluta di `step.index` fra predizione ed etichetta è al massimo 1, incluso l'esatto. Uno `step_id` che non è sulla trace è un errore.",
-  proposed_fix_hit_rate:
-    "`proposed_fixes` contiene il fix ADR-002 della categoria etichettata: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`. Plan, ToolUse, Context e Reasoning non hanno un fix MVP e restano fuori dal denominatore. Un fix in più non annulla l'hit. Non è il replay del verificatore.",
-  mean_latency_ms:
-    "Media aritmetica di una sola passata, dopo che la trace è già caricata. Non è una mediana e non è un benchmark.",
-  tokens_and_cost:
-    "Token e `cost_usd` sono solo quelli riportati dal provider. Se l'usage manca il valore resta assente. I token non vengono convertiti in un prezzo.",
-} as const;
+/** Metric prose for the README scoreboard. Counts stay in the generated table. */
+export const SCOREBOARD_METRIC_DEFINITIONS = METRIC_DEFINITIONS;
 
 const CONFUSION_COLUMNS: readonly ConfusionColumn[] = [
   ...FAULT_CATEGORIES,
@@ -56,25 +45,25 @@ export function formatTokens(summary: MethodSummary): string {
 }
 
 export function renderScoreboard(report: EvalReport): string {
-  const definitions = Object.entries(ITALIAN_METRIC_DEFINITIONS).map(([key, text]) => `- \`${key}\`: ${text}`);
+  const definitions = Object.entries(SCOREBOARD_METRIC_DEFINITIONS).map(([key, text]) => `- \`${key}\`: ${text}`);
   const mapping = baselineMappingLines().map((line) => `- ${line}`);
   const fixtures = report.cases.filter((item) => item.origin === "fixture");
   const generated = report.cases.length - fixtures.length;
   const fixtureList = fixtures.map((item) => `\`${item.relative_path}\``).join(", ");
   const categories = report.dataset.categories.join(", ");
   return [
-    `Set valutato: ${report.dataset.scored_count} trace, ${report.dataset.categories.length} categorie (${categories}).`,
+    `Scored set: ${report.dataset.scored_count} traces, ${report.dataset.categories.length} categories (${categories}).`,
     "",
-    `Provenienza: ${fixtures.length} fixture già nel repository (${fixtureList}) e ${generated} trace del harness scriptato. Rigenerare le trace del harness e il manifest con \`pnpm generate-dataset\` (mock in loopback, driver \`scripted\`, fault del catalogo). Poi \`pnpm eval\` riscrive questa sezione.`,
+    `Provenance: ${fixtures.length} fixtures already in the repository (${fixtureList}) and ${generated} traces from the scripted harness. Regenerate the harness traces and the manifest with \`pnpm generate-dataset\` (loopback mock, \`scripted\` driver, catalog faults). Then \`pnpm eval\` rewrites this section.`,
     "",
-    "I conteggi del baseline solo-regole sono stati ricalcolati dopo la [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). Quella PR smette di copiare i marker dell'iniettore negli step, e `pnpm generate-dataset` ha rigenerato le trace del harness su quel codice.",
+    "The rules-only baseline counts were recomputed after [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). That PR stopped copying injector markers into steps, and `pnpm generate-dataset` regenerated the harness traces on that code.",
     "",
-    "Il ground truth è l'unica etichetta in `fault.labels`. Se `fault.attacker.used` è true, la fonte nel manifest è `fault.attacker`: quell'oggetto non ha una categoria e ADR-002 attribuisce l'etichetta all'attaccante. Il valutatore legge `fault`. Il prompt di Grok no.",
+    "Ground truth is the single label in `fault.labels`. If `fault.attacker.used` is true, the source in the manifest is `fault.attacker`: that object has no category, and ADR-002 assigns the label to the attacker. The evaluator reads `fault`. Grok's prompt does not.",
     "",
-    "### Definizioni",
+    "### Definitions",
     ...definitions,
     "",
-    "La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest'ordine. Senza finding il metodo si astiene.",
+    "The rules-only baseline takes the first finding from `diagnosisFindings`, in this order. With no finding the method abstains.",
     ...mapping,
     "",
     grokBanner(report),
@@ -87,10 +76,10 @@ export function renderLimits(report: EvalReport): string {
   const hints = report.dataset.leakage.traces_with_hints;
   const scored = report.dataset.scored_count;
   return [
-    `- Hint dell'iniettore in ${hints}/${scored} trace. Prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) erano 13/19: i marker negli step (\`Injected execution drop…\`, \`Injector skipped\`, \`forged: true\`, \`stale: true\`, \`injected: true\`) arrivavano a Grok. Quella PR (@diamanti-sg) non li copia più. Questo eval non modifica \`apps/backend\`.`,
-    "- Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.",
-    "- L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.",
-    `- Una sola passata (conteggio: ${MEASUREMENT.passes}). ADR-001 esclude l'aggregazione multi-run.`,
+    `- Injector hints in ${hints}/${scored} traces. Before [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) they were 13/19: markers in the steps (\`Injected execution drop…\`, \`Injector skipped\`, \`forged: true\`, \`stale: true\`, \`injected: true\`) reached Grok. That PR (@diamanti-sg) no longer copies them. This eval does not change \`apps/backend\`.`,
+    "- The scripted driver has little variety until the reference agent lands ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` does not copy that agent.",
+    "- Fix effectiveness needs the verifier replay ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). The fix row in the table only says whether the proposal contains the ADR-002 fix for the labelled category.",
+    `- One pass (count: ${MEASUREMENT.passes}). ADR-001 excludes multi-run aggregation.`,
     `- ${costLimit(report)}`,
   ].join("\n");
 }
@@ -169,17 +158,18 @@ function markedBody(source: string, start: string, end: string, missing: string)
 
 function renderComparisonTable(report: EvalReport): string {
   const baseline = report.methods.baseline;
+  const [category, exact, tolerance, fixHit] = GATED_METRICS;
   const rows: ReadonlyArray<readonly [string, string, string]> = [
-    ["Accuratezza di categoria", fraction(baseline.category_correct, baseline.scored), grokFraction(report, "category_correct", "scored")],
-    ["Step esatto", fraction(baseline.step_exact, baseline.scored), grokFraction(report, "step_exact", "scored")],
-    ["Step entro ±1", fraction(baseline.step_tolerance_1, baseline.scored), grokFraction(report, "step_tolerance_1", "scored")],
-    ["Hit del fix proposto", fraction(baseline.fix_hits, baseline.fix_applicable), grokFraction(report, "fix_hits", "fix_applicable")],
-    ["Fix non applicabile", String(baseline.fix_not_applicable), grokCount(report, "fix_not_applicable")],
-    ["Latenza media (ms)", formatMs(baseline.mean_latency_ms), grokLatency(report)],
-    ["Token in/out", formatTokens(baseline), grokTokens(report)],
-    ["Costo USD", formatCost(baseline.cost_usd.total), grokCost(report)],
+    [category.scoreboard, fraction(baseline.category_correct, baseline.scored), grokFraction(report, "category_correct", "scored")],
+    [exact.scoreboard, fraction(baseline.step_exact, baseline.scored), grokFraction(report, "step_exact", "scored")],
+    [tolerance.scoreboard, fraction(baseline.step_tolerance_1, baseline.scored), grokFraction(report, "step_tolerance_1", "scored")],
+    [fixHit.scoreboard, fraction(baseline.fix_hits, baseline.fix_applicable), grokFraction(report, "fix_hits", "fix_applicable")],
+    ["Fix not applicable", String(baseline.fix_not_applicable), grokCount(report, "fix_not_applicable")],
+    ["Mean latency (ms)", formatMs(baseline.mean_latency_ms), grokLatency(report)],
+    ["Tokens in/out", formatTokens(baseline), grokTokens(report)],
+    ["Cost USD", formatCost(baseline.cost_usd.total), grokCost(report)],
   ];
-  const lines = ["| Metrica | Baseline (solo regole) | Grok |", "| --- | --- | --- |"];
+  const lines = ["| Metric | Baseline (rules only) | Grok |", "| --- | --- | --- |"];
   for (const [metric, rules, model] of rows) {
     lines.push(`| ${metric} | ${rules} | ${model} |`);
   }
@@ -189,13 +179,13 @@ function renderComparisonTable(report: EvalReport): string {
 function grokBanner(report: EvalReport): string {
   const grok = report.methods.grok;
   if (grok.mode === "skipped") {
-    return "> **Colonna Grok — segnaposto.** Non è un risultato. Si riempie eseguendo `pnpm eval` con `XAI_API_KEY` impostata.";
+    return "> **Grok column — placeholder.** Not a result. Fill it by running `pnpm eval` with `XAI_API_KEY` set.";
   }
   if (grok.mode === "fake") {
-    return "> **Colonna Grok — fake.** Non è un punteggio di Grok. Il modello etichettato è `fake-diagnosis`.";
+    return "> **Grok column — fake.** Not a Grok score. The labelled model is `fake-diagnosis`.";
   }
   const name = grok.model ?? "unnamed";
-  return `> **Colonna Grok — live** (\`${name}\`), una passata. Errori nel denominatore: ${grok.errors}.`;
+  return `> **Grok column — live** (\`${name}\`), one pass. Errors in the denominator: ${grok.errors}.`;
 }
 
 function grokFraction(
@@ -250,12 +240,12 @@ function grokCost(report: EvalReport): string {
 function costLimit(report: EvalReport): string {
   const grok = report.methods.grok;
   if (grok.mode === "skipped") {
-    return "Senza `XAI_API_KEY` il costo di Grok è n/a. La baseline solo-regole non riporta token né costo.";
+    return "Without `XAI_API_KEY` Grok cost is n/a. The rules-only baseline reports neither tokens nor cost.";
   }
   if (grok.mode === "fake") {
-    return "La colonna Grok di questa esecuzione è un fake: il costo non è un costo xAI. La baseline solo-regole non riporta token né costo.";
+    return "The Grok column of this run is fake: the cost is not an xAI cost. The rules-only baseline reports neither tokens nor cost.";
   }
-  return `Costo Grok riportato dal provider: ${formatCost(grok.cost_usd.total)} USD (totale), token in/out ${formatTokens(grok)}. La baseline solo-regole non riporta token né costo.`;
+  return `Grok cost reported by the provider: ${formatCost(grok.cost_usd.total)} USD (total), tokens in/out ${formatTokens(grok)}. The rules-only baseline reports neither tokens nor cost.`;
 }
 
 function fraction(correct: number, total: number): string {

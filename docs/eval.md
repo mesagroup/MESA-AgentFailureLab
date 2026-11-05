@@ -45,14 +45,14 @@ This envelope is not a Trace/Agent/Run field and is not in `@mesa/shared`. `CONT
 
 `.github/workflows/ci.yml` lancia `pnpm eval:gate` su ogni pull request e su `main`, dopo build e test. Il job non ha bisogno di `XAI_API_KEY`. Il comando passa a `resolveGrok` una env con la chiave vuota, lo stesso skip di `pnpm eval` senza chiave, e non apre un client live.
 
-Il riferimento committato è [`apps/agentservice/eval/baseline.json`](../apps/agentservice/eval/baseline.json). `pnpm eval` non lo riscrive: quel comando aggiorna la scoreboard (README e `eval/results`), compresa la colonna Grok quando la chiave c'è. Il gate legge i quattro tassi della colonna «Baseline (solo regole)», gli stessi che la schermata [#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57) deve prendere dall'output di `pnpm eval`:
+Il riferimento committato è [`apps/agentservice/eval/baseline.json`](../apps/agentservice/eval/baseline.json). `pnpm eval` non lo riscrive: quel comando aggiorna la scoreboard (README e `eval/results`), compresa la colonna Grok quando la chiave c'è. Il gate legge i quattro tassi della colonna «Baseline (rules only)», gli stessi che la schermata [#57](https://github.com/mesagroup/MESA-AgentFailureLab/issues/57) deve prendere dall'output di `pnpm eval`:
 
-| id | Riga della scoreboard |
+| id | Scoreboard row |
 | --- | --- |
-| `category_accuracy` | Accuratezza di categoria |
-| `step_accuracy_exact` | Step esatto |
-| `step_accuracy_tolerance_1` | Step entro ±1 |
-| `proposed_fix_hit_rate` | Hit del fix proposto |
+| `category_accuracy` | Category accuracy |
+| `step_accuracy_exact` | Exact step |
+| `step_accuracy_tolerance_1` | Step within ±1 |
+| `proposed_fix_hit_rate` | Proposed-fix hit |
 
 La soglia è `threshold.max_rate_drop`, una frazione `numerator/denominator` nello stesso file. Con `0/1` il tasso fresco deve avere gli stessi `hits` e lo stesso `total` del file. Con una soglia positiva il job fallisce solo se il valore assoluto della differenza fra i due tassi è maggiore della soglia: una differenza uguale passa. Latenza, token, costo e la colonna Grok restano fuori, perché la latenza del baseline solo-regole cambia fra un processo e l'altro e senza chiave Grok non ha un punteggio.
 
@@ -79,13 +79,13 @@ pnpm eval:gate -- --write
 
 I numeri pubblicati prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) erano stati calcolati su trace del harness che contenevano ancora i marker dell'iniettore. Su main, dopo quella PR, `pnpm generate-dataset` e `pnpm eval` (senza `XAI_API_KEY`) hanno rigenerato il dataset e la baseline solo-regole. La colonna Grok resta il segnaposto.
 
-| Metrica | Prima di #44 | Dopo #44 |
+| Metric | Before #44 | After #44 |
 | --- | --- | --- |
-| Accuratezza di categoria | 4/19 | 4/19 |
-| Step esatto | 3/19 | 4/19 |
-| Step entro ±1 | 10/19 | 10/19 |
-| Hit del fix proposto | 4/7 | 4/7 |
-| Hint dell'iniettore | 13/19 | 0/19 |
+| Category accuracy | 4/19 | 4/19 |
+| Exact step | 3/19 | 4/19 |
+| Step within ±1 | 10/19 | 10/19 |
+| Proposed-fix hit | 4/7 | 4/7 |
+| Injector hints | 13/19 | 0/19 |
 
 Nessuna delle 19 trace contiene ancora un marker (`dropped_message`, `injector_skipped`, `injector_missed_target`, `forged_true`, `stale_true`, `injected_true`). Lo step esatto passa da 3/19 a 4/19 perché in `t1-verification-skip-product` l'etichetta e il finding `false_success_claim` cadono sullo stesso step: lo skip non inserisce più lo step di sistema `Injector skipped`.
 
@@ -112,15 +112,15 @@ Senza finding il metodo si astiene. L'astensione resta nel denominatore e conta 
 
 ## Metriche
 
-- **Accuratezza di categoria.** La categoria predetta è uguale all'unica categoria in `fault.labels`.
-- **Step esatto.** Lo `step_id` predetto è uguale a quello dell'etichetta.
-- **Step entro ±1.** La differenza assoluta di `step.index` è al massimo 1, incluso l'esatto. Uno `step_id` assente dalla trace è un errore.
-- **Hit del fix proposto.** `proposed_fixes` contiene il fix ADR-002 della categoria etichettata: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`. Plan, ToolUse, Context e Reasoning non hanno un fix MVP e non entrano nel denominatore. Un fix in più non annulla l'hit. Non è il delta del verificatore dopo il replay ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15), ADR-001).
+- **Category accuracy.** La categoria predetta è uguale all'unica categoria in `fault.labels`.
+- **Exact step.** Lo `step_id` predetto è uguale a quello dell'etichetta.
+- **Step within ±1.** La differenza assoluta di `step.index` è al massimo 1, incluso l'esatto. Uno `step_id` assente dalla trace è un errore.
+- **Proposed-fix hit.** `proposed_fixes` contiene il fix ADR-002 della categoria etichettata: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`. Plan, ToolUse, Context e Reasoning non hanno un fix MVP e non entrano nel denominatore. Un fix in più non annulla l'hit. Non è il delta del verificatore dopo il replay ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15), ADR-001).
 - **Latenza, token, costo.** Una sola passata. Il timer avvolge `rulesBaseline` o `diagnoseTrace` dopo il caricamento della trace. Token e `cost_usd` sono quelli del provider. Se l'usage manca, il valore resta assente. I token non diventano un prezzo.
 
 ## Limiti
 
-Il dettaglio con i conteggi è la sezione «Limiti noti» del README, riscritta da `pnpm eval`.
+Il dettaglio con i conteggi è la sezione «Known limits» del README, riscritta da `pnpm eval`.
 
 - I marker dell'iniettore (PR #28) stavano negli step e arrivavano a Grok: 13/19 trace prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). Quella PR (@diamanti-sg) non li copia più. Sul dataset rigenerato il conteggio è 0/19. Questo eval non modifica `apps/backend`.
 - Il driver scriptato copre i fault del catalogo sulla sequenza T1–T5. La varietà di un agent che sceglie da solo lo strumento sbagliato arriva con la PR #21.

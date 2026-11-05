@@ -11,25 +11,25 @@
   "metrics": [
     {
       "id": "category_accuracy",
-      "scoreboard": "Accuratezza di categoria",
+      "scoreboard": "Category accuracy",
       "hits": 4,
       "total": 19
     },
     {
       "id": "step_accuracy_exact",
-      "scoreboard": "Step esatto",
+      "scoreboard": "Exact step",
       "hits": 5,
       "total": 19
     },
     {
       "id": "step_accuracy_tolerance_1",
-      "scoreboard": "Step entro ±1",
+      "scoreboard": "Step within ±1",
       "hits": 10,
       "total": 19
     },
     {
       "id": "proposed_fix_hit_rate",
-      "scoreboard": "Hit del fix proposto",
+      "scoreboard": "Proposed-fix hit",
       "hits": 4,
       "total": 7
     }
