@@ -58,7 +58,7 @@ test("primary nav has no standalone Jury/Giuria entry", () => {
   assert.equal(PRIMARY_NAV.some((item) => ITALIAN_USER_COPY.test(item.label)), false);
   assert.deepEqual(
     PRIMARY_NAV.map((item) => item.label),
-    ["Dashboard", "Agents", "Runs", "Traces"],
+    ["Dashboard", "Agents", "Runs", "Traces", "Eval"],
   );
 });
 
