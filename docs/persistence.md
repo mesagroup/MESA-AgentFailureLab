@@ -27,7 +27,7 @@ These files are not edited by the store. SQL stores the document as `jsonb`. It 
 
 Agents, runs, and traces have to survive a process restart and a redeploy. The lab's hosted target is one Postgres database on Render, selected with `DATABASE_URL`. The backend talks to it with `pg` (node-postgres). There is no Prisma and no second service. Runs and traces are not a second database.
 
-CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. `AgentStore` and `RunStore` each have an in-memory implementation. `DATABASE_URL` empty means both implementations. `GET /health` then reports `agent_store: "memory"` and `run_store: "memory"`. A restart drops those rows. The agent store seeds `reference-shop` and `external-library` again. The run store does not seed anything.
+CI and a laptop without a database still have to run `pnpm build` and `pnpm test`. `AgentStore` and `RunStore` each have an in-memory implementation. `DATABASE_URL` empty means both implementations. `GET /health` then reports `agent_store: "memory"` and `run_store: "memory"`. A restart drops those rows. The agent store seeds `reference-shop` and `external-library` again. The run store then inserts the demo Run/Trace pairs when those ids are missing. Other runs and traces stay gone after a memory restart.
 
 `instance.base_url` and `test_instance.base_url` are the agent runtime. For `reference-shop` that is agentservice. For `external-library` that is the library desk. They are not the mock. The mock is `world.base_url`. The process resolves both from environment variables. See [seed-endpoints.md](seed-endpoints.md).
 
@@ -38,16 +38,16 @@ CI and a laptop without a database still have to run `pnpm build` and `pnpm test
 ```text
 openAgentStore(env)          openRunStore(env)
   DATABASE_URL blank           DATABASE_URL blank
-    -> MemoryAgentStore          -> MemoryStore (empty)
+    -> MemoryAgentStore          -> MemoryStore (empty until demo seed)
   DATABASE_URL set             DATABASE_URL set
     -> PostgresAgentStore        -> PostgresRunStore
-       migrate() then seed          migrate() (no seed)
+       migrate() then seed          migrate(); index.ts then seedDemoRunsAndTraces
 buildApp({ agents, store })
   registerAgentRoutes
   GET /runs, GET /traces, POST /runs, POST /attacker/jury-case
 ```
 
-Both openers read the same variable. A blank or missing `DATABASE_URL` is memory for both. A URL is Postgres for both. `src/index.ts` opens the agent store first (migrate, then seed), then the run store (migrate). The second migrate sees the files already recorded and does not run them again. On shutdown the process closes the run store, then the agent store.
+Both openers read the same variable. A blank or missing `DATABASE_URL` is memory for both. A URL is Postgres for both. `src/index.ts` opens the agent store first (migrate, then seed), then the run store (migrate), then `seedDemoRunsAndTraces` (insert-if-missing). The second migrate sees the files already recorded and does not run them again. On shutdown the process closes the run store, then the agent store.
 
 Backup, restore, and jury reset are command-line scripts in `src/persistence/cli.ts` (`db:export`, `db:import`, `db:reset`). They are not HTTP routes. See [Backup and restore](#backup-and-restore), [Jury reset](#jury-reset), and [Cutover](#cutover).
 
@@ -183,7 +183,7 @@ The runner is `applyMigrations` in `src/agents/postgres.ts`. `PostgresAgentStore
 3. Skips a file whose name is already in `schema_migrations`.
 4. Runs the file in a transaction, then records the file name. A UTF-8 BOM is stripped and CRLF is normalized to LF before the script runs, so a Windows checkout applies the same statements.
 
-The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `external-library` when that document fails the Agent schema, its `updated_at` is earlier than that fixture, or the timestamp matches and the runtime or world URL differs. A newer valid row is kept. It does not duplicate run or trace rows. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
+The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `external-library` when that document fails the Agent schema, its `updated_at` is earlier than that fixture, or the timestamp matches and the runtime or world URL differs. A newer valid row is kept. It does not duplicate run or trace rows. Missing demo run and trace ids are inserted once. A present id is left alone. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
 
 Do not edit a file after it has been applied in a shared database. The runner will not apply it again. Add the next numbered file instead.
 
@@ -199,10 +199,10 @@ The fixtures are `packages/shared/examples/agent-reference-shop.json` (`referenc
 | Boot, id present, document valid, `updated_at` newer than the fixture | Leave the row, including a `PUT` that renamed it or changed a URL | Same |
 | Boot, document fails `validateAgent`, `updated_at` is earlier than the fixture, or `updated_at` matches the fixture and the runtime or world URL differs | Replace the row with the fixture for this process | `UPDATE` the row from the fixture |
 | `DELETE /agents/reference-shop` or `DELETE /agents/external-library` | 409, row kept | 409, row kept |
-| Process restart | New empty map, then seed. Other agents are gone | Rows stay. The seed is inserted or rewritten by the rules above. Other agents stay |
+| Process restart | New empty map, then seed agents and demo traces. Other agents, runs, and traces are gone | Rows stay. The agent seed is inserted or rewritten by the rules above. Missing demo run/trace ids are inserted. Other rows stay |
 | `seedIfMissing()` again on a valid row newer than the fixture, or the same age with the same endpoints | No overwrite | No overwrite |
 
-There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Runs and traces are not seeded. A fresh memory store is empty. A fresh Postgres database has the tables and no run or trace rows.
+There is no `POST /internal/agents/reset` and no other HTTP wipe. The architect note on #50 marked that route optional, and that route is still absent. The backend has no auth, so a wipe route would be reachable by anyone who can call the process. Jury reset is the CLI in [Jury reset](#jury-reset). Demo runs and traces are seeded insert-if-missing (`seedDemoRunsAndTraces`), remapped from the mock OTel schema A/B fixtures. A fresh memory process and a fresh Postgres database get the two agents plus the six demo traces. Other runs and traces are not created.
 
 A local wipe of the whole Postgres volume is still `docker compose down -v`, which deletes `mesa-pgdata`. The next start runs migrations on an empty database and seeds `reference-shop` and `external-library` because those ids are missing. `db:reset` does not delete the volume. It deletes runs, traces, and agents other than those seeds. A valid seed newer than its fixture is left as it is, including a name changed with PUT. An invalid or older seed is rewritten from its fixture. A row at the fixture timestamp is rewritten when its runtime or world URL differs from this process. Reset does not read a seed through `get`, so a document that fails the schema does not abort the command.
 
@@ -214,12 +214,12 @@ Nothing in this store expires. There is no TTL, no row cap, and no purge job.
 
 | Event | Memory | Postgres |
 | --- | --- | --- |
-| Process restart | Runs and traces are gone. Agents other than the reseeded `reference-shop` and `external-library` are gone | Every run, trace, and agent row stays |
+| Process restart | Other agents, runs, and traces are gone. The two demo agents and the demo traces are inserted again | Every run, trace, and agent row stays. Missing demo ids are inserted |
 | `DELETE /agents/:id` (not the seed) | That agent row is gone. Runs and traces that name it stay | Same |
 | Save the same `run_id` or `trace_id` again | Document replaced. List position unchanged | Document replaced. `created_at` unchanged, so list position stays |
 | `docker compose down` | The process is gone | The `mesa-pgdata` volume keeps agents, runs, and traces |
-| `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds `reference-shop` and `external-library` |
-| `db:reset -- --yes` | Not used. Stop the process instead. The next start has the seeds and no runs | Runs, traces, and agents other than `reference-shop` and `external-library` are deleted. A valid seed newer than its fixture stays. An invalid or older seed is rewritten. A same-age seed with different endpoints is rewritten. The volume stays |
+| `docker compose down -v` | The process is gone | The volume is deleted. The next start migrates an empty database and seeds the two agents plus the demo traces |
+| `db:reset -- --yes` | Not used. Stop the process instead. The next start has the two agents and the demo traces | Runs, traces, and agents other than `reference-shop` and `external-library` are deleted, then the demo traces are inserted again. A valid seed newer than its fixture stays. An invalid or older seed is rewritten. A same-age seed with different endpoints is rewritten. The volume stays |
 
 There is no `DELETE /runs` or `DELETE /traces`. A jury reset that keeps the volume and the seed is [Jury reset](#jury-reset). A copy of the rows is [Backup and restore](#backup-and-restore).
 
@@ -291,13 +291,13 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
       "agent_id": "reference-shop",
       "name": "Reference shop assistant",
       "created_at": "2026-11-04T09:00:00.000Z",
-      "updated_at": "2026-11-04T22:00:00.000Z"
+      "updated_at": "2026-11-05T07:00:00.000Z"
     }
   ]
 }
 ```
 
-The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` and `otel` are optional user data on that document. The reference seed sets evalset on T1, omits it on T2–T5, and omits `otel`. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits either field. The column is still `agents.document` jsonb. There is no evalset table. `POST /evalset/generate` proposes cases and does not write this row. The verifier does not read evalset and does not write `outcome.verifier` from it. `POST /agents/:agentId/otel/import` writes Trace rows and a baseline Run through the same run/trace store. It copies a supplied outcome and does not invent `fault.labels`. See [otel.md](otel.md).
+The real seed document also includes `description`, `instance`, `test_instance`, `traces`, `docs`, and `tasks`. The snippet above shows the identity fields. `GET /agents/reference-shop` returns the full fixture. `tasks[].evalset` and `otel` are optional user data on that document. The reference seed sets evalset on T1, omits it on T2–T5, and sets dual `otel.prod` / `otel.test` plus `otel_mock` (schema A). The library seed does the same with schema B. `POST /agents` and `PUT /agents/:agent_id` persist whatever the body carries, including a body that omits either field. The column is still `agents.document` jsonb. There is no evalset table. `POST /evalset/generate` proposes cases and does not write this row. The verifier does not read evalset and does not write `outcome.verifier` from it. `POST /agents/:agentId/otel/import` writes Trace rows and a baseline Run through the same run/trace store. It copies a supplied outcome and does not invent `fault.labels`. See [otel.md](otel.md).
 
 ### `GET /agents/:agent_id`
 
@@ -470,7 +470,7 @@ pnpm install
 pnpm dev:backend
 ```
 
-`GET http://127.0.0.1:3001/health` reports `agent_store` and `run_store` as `memory`. `GET /agents/reference-shop` returns the seed. `GET /runs` is a snapshot with empty `runs` and `trace_links` until something calls `POST /runs`. Other agents, and every run and trace, disappear when the process stops.
+`GET http://127.0.0.1:3001/health` reports `agent_store` and `run_store` as `memory`. `GET /agents/reference-shop` returns the seed. `GET /traces` lists the six demo traces. `GET /runs` is a snapshot of those demo runs until something else calls `POST /runs`. Other agents, and every non-demo run and trace, disappear when the process stops. The next start inserts the two agents and the demo traces again.
 
 Windows PowerShell:
 
@@ -495,7 +495,7 @@ User, password, and database name are `mesa`. That password is a local default, 
 
 `GET /health` on the backend reports `agent_store` and `run_store` as `postgres`.
 
-Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` and `external-library` again. Runs and traces are not seeded, so `GET /runs` has empty `runs` and `trace_links` after a volume wipe until the next batch. `counts.agents` is 2 because both seeds are back. To drop runs, traces, and non-seed agents without deleting the volume, use [Jury reset](#jury-reset). To copy the rows first, use [Backup and restore](#backup-and-restore).
+Agent, run, and trace rows live in the `mesa-pgdata` volume. `docker compose down` keeps the volume. `docker compose down -v` deletes it. The next `up` migrates and seeds `reference-shop` and `external-library` again, then inserts the demo traces if those ids are missing. `counts.agents` is 2. `GET /traces` is not empty. To drop non-seed agents and every run and trace without deleting the volume, use [Jury reset](#jury-reset) (it puts the demo traces back). To copy the rows first, use [Backup and restore](#backup-and-restore).
 
 Windows PowerShell, from the repo root:
 
@@ -661,7 +661,7 @@ Passing both `DATABASE_URL` and `--base-url` is an error. Unset `DATABASE_URL` t
 
 ## Jury reset
 
-`db:reset` deletes every run, every trace, and every agent whose id is not `reference-shop` or `external-library`. A valid seed newer than its fixture stays, including a name or other field changed with `PUT`. If an id is missing, that fixture is inserted. If the stored seed fails validation, is older than its fixture, or matches the fixture timestamp with different runtime or world URLs, it is rewritten. `DELETE` of either seed is still 409. Reset does not call that route.
+`db:reset` deletes every run, every trace, and every agent whose id is not `reference-shop` or `external-library`. A valid seed newer than its fixture stays, including a name or other field changed with `PUT`. If an id is missing, that fixture is inserted. If the stored seed fails validation, is older than its fixture, or matches the fixture timestamp with different runtime or world URLs, it is rewritten. After the wipe, missing demo run and trace ids are inserted. Present ids are not overwritten. `DELETE` of either seed is still 409. Reset does not call that route.
 
 To get the fixture body back after a valid edit, `PUT` the example document, or delete the volume with `docker compose down -v`. The next boot inserts the fixture because the row is gone. Reset is the step that keeps the volume. Boot already rewrites a seed that fails validation or is older than the fixture.
 
@@ -680,7 +680,7 @@ curl -fsS http://127.0.0.1:3001/agents
 curl -fsS http://127.0.0.1:3001/runs
 ```
 
-`GET /health` still reports `agent_store` and `run_store` as `postgres` when that URL is set on the running backend. `GET /agents` is the seed only. `GET /runs` has empty `runs` and `trace_links`. `counts.agents` is 1 because the seed remains. `counts.runs` is 0.
+`GET /health` still reports `agent_store` and `run_store` as `postgres` when that URL is set on the running backend. `GET /agents` is the two demo seeds only. `GET /traces` lists the demo traces again. Operator runs that were not those seed ids are gone.
 
 Windows PowerShell:
 
@@ -693,13 +693,13 @@ Invoke-RestMethod http://127.0.0.1:3001/agents
 Invoke-RestMethod http://127.0.0.1:3001/runs
 ```
 
-An in-memory backend has nothing for this command to delete. Stop that process. The next start has the seed and no runs. `db:reset` without `DATABASE_URL` exits with that explanation and does not pretend to wipe the other process.
+An in-memory backend has nothing for this command to delete. Stop that process. The next start has the two demo agents and the demo traces. `db:reset` without `DATABASE_URL` exits with that explanation and does not pretend to wipe the other process.
 
 A URL whose host contains `.render.com` still runs when you pass `--yes`. The command prints the host (not the password) and tells you the hosted rows will be deleted. Export first. Render's free plan has no backups of its own. See [Render free Postgres limits](#render-free-postgres-limits).
 
 ## Cutover
 
-The seed rules do not change in a cutover. On boot, `reference-shop` and `external-library` are inserted when that id is missing. A valid row newer than its fixture is not overwritten. An invalid or older row is rewritten from its fixture. A row at the fixture timestamp is rewritten when its endpoints differ. The origins are in [seed-endpoints.md](seed-endpoints.md). `DELETE` of either seed stays 409. Runs and traces are not seeded. After `DATABASE_URL` is set, `GET /health` reports `agent_store` and `run_store` as `postgres`.
+The seed rules do not change in a cutover. On boot, `reference-shop` and `external-library` are inserted when that id is missing. A valid row newer than its fixture is not overwritten. An invalid or older row is rewritten from its fixture. A row at the fixture timestamp is rewritten when its endpoints differ. The origins are in [seed-endpoints.md](seed-endpoints.md). `DELETE` of either seed stays 409. Missing demo run and trace ids are inserted; present ids are kept. After `DATABASE_URL` is set, `GET /health` reports `agent_store` and `run_store` as `postgres`.
 
 Memory rows exist only in the process that has them. Export before you stop it. A restart with no `DATABASE_URL` drops them. Setting `DATABASE_URL` on a new process does not copy them. The copy is the JSON file, then `db:import`.
 

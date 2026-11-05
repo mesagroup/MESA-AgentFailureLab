@@ -1,5 +1,6 @@
 import { openAgentStore } from "./agents/open.js";
 import { buildApp } from "./app.js";
+import { seedDemoRunsAndTraces } from "./persistence/demo-seed.js";
 import { openRunStore } from "./persistence/open.js";
 
 main().catch((error: unknown) => {
@@ -15,6 +16,13 @@ async function main(): Promise<void> {
     await agents.close();
     throw error;
   });
+  try {
+    await seedDemoRunsAndTraces(runs);
+  } catch (error) {
+    await runs.close();
+    await agents.close();
+    throw error;
+  }
   const app = buildApp({ agents, store: runs });
   app.addHook("onClose", async () => {
     await runs.close();

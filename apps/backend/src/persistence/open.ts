@@ -9,7 +9,8 @@ export function runStoreKind(env: NodeJS.ProcessEnv): RunStore["kind"] {
 
 /**
  * Open the run and trace store. Postgres applies SQL migrations first.
- * The memory store starts empty. Runs and traces are not seeded.
+ * The memory store starts empty. Demo Run/Trace rows are inserted by
+ * `seedDemoRunsAndTraces` on boot, import, and reset, not in this opener.
  */
 export async function openRunStore(env: NodeJS.ProcessEnv = process.env): Promise<RunStore> {
   const url = env.DATABASE_URL?.trim() ?? "";

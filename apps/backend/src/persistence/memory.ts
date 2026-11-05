@@ -19,7 +19,7 @@ function clone<T>(value: T): T {
 
 /**
  * In-memory Run and Trace store. Records are cloned on the way in and out.
- * A process restart drops every row. There is no seed.
+ * A process restart drops every row. This class does not insert demo traces.
  * Map order is first-save order. Saving an id again does not move it.
  */
 export class MemoryStore implements RunStore {

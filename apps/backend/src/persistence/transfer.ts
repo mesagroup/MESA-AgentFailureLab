@@ -2,6 +2,7 @@ import type { Agent, Run, Trace } from "@mesa/shared";
 import { validateAgent, validateRun, validateTrace } from "@mesa/shared/validate";
 import { SEEDED_AGENT_IDS, type AgentStore, type SeedReport } from "../agents/store.js";
 import { isRecord } from "../util.js";
+import { seedDemoRunsAndTraces, type DemoSeedReport } from "./demo-seed.js";
 import {
   assertUtcTimestamp,
   orderPreservingTimestamp,
@@ -52,6 +53,11 @@ export interface ResetCounts {
    * `inserted`: the id was missing.
    */
   seed: SeedReport;
+  /**
+   * Insert-if-missing result for each demo Run and Trace.
+   * Reset wipes every run and trace, then puts the demo pairs back.
+   */
+  demo: DemoSeedReport;
 }
 
 export class PersistenceTransferError extends Error {
@@ -302,6 +308,7 @@ export async function importPersistence(
  * An invalid or older seed is rewritten from its fixture.
  * A row at the fixture timestamp is rewritten when its runtime or world URL differs.
  * A missing seed is inserted.
+ * Demo runs and traces are inserted when those ids are missing after the wipe.
  * Not an HTTP route. Does not read a seed through `get`, so an invalid document
  * does not abort the reset.
  */
@@ -309,6 +316,7 @@ export async function resetKeepingSeed(agents: AgentStore, runs: RunStore): Prom
   const deleted = await runs.deleteAllRunsAndTraces();
   const agentsDeleted = await agents.deleteAgentsExceptSeed();
   const seed = await agents.seedIfMissing();
+  const demo = await seedDemoRunsAndTraces(runs);
   for (const agentId of SEEDED_AGENT_IDS) {
     const seedAfter = await agents.get(agentId);
     if (!seedAfter || seedAfter.agent_id !== agentId) {
@@ -320,6 +328,7 @@ export async function resetKeepingSeed(agents: AgentStore, runs: RunStore): Prom
     runs_deleted: deleted.runs,
     traces_deleted: deleted.traces,
     seed,
+    demo,
   };
 }
 
