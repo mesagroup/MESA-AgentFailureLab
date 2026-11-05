@@ -12,3 +12,29 @@ export function canEditAgent(agentId: string): boolean {
 export function canDeleteAgent(agentId: string): boolean {
   return !isSeededAgentId(agentId);
 }
+
+/** After a successful launch, open the first created run. No id → the runs list. */
+export function hrefAfterCreateRun(
+  results: readonly { run?: { run_id?: string } }[] | null | undefined,
+): string {
+  const id = results?.[0]?.run?.run_id;
+  if (typeof id !== "string" || id.trim().length === 0) return "/runs";
+  return `/runs/${encodeURIComponent(id.trim())}`;
+}
+
+export function deleteAgentErrorMessage(error: unknown, agentId: string): string {
+  if (isHttpError(error) && error.status === 409) {
+    return error.message.trim() || `Agent ${agentId} is a demo seed and cannot be deleted.`;
+  }
+  if (error instanceof Error && error.message.trim().length > 0) return error.message;
+  return "Delete failed.";
+}
+
+function isHttpError(error: unknown): error is { status: number; message: string } {
+  return typeof error === "object"
+    && error !== null
+    && "status" in error
+    && typeof (error as { status: unknown }).status === "number"
+    && "message" in error
+    && typeof (error as { message: unknown }).message === "string";
+}

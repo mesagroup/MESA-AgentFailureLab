@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Pencil, Play, PlusCircle, Search, Trash2, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,7 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { canDeleteAgent, canEditAgent } from "@/lib/agents-page";
+import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun } from "@/lib/agents-page";
 import { createRun, deleteAgent, listAgents, listRuns, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
 import {
   emptyOtelDraft,
@@ -85,6 +86,8 @@ export function AgentsPage() {
   const [otelErrors, setOtelErrors] = useState<OtelSourceFieldError>({});
   const [showErrors, setShowErrors] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [runAgent, setRunAgent] = useState<Agent | null>(null);
   const [importAgent, setImportAgent] = useState<Agent | null>(null);
 
@@ -120,11 +123,25 @@ export function AgentsPage() {
     setSheetOpen(true);
   }
 
+  function openDelete(agent: Agent) {
+    setDeleteError(null);
+    setDeleting(false);
+    setDeleteTarget(agent);
+  }
+
   async function confirmDelete() {
-    if (!deleteTarget) return;
-    await deleteAgent(deleteTarget.agent_id);
-    setDeleteTarget(null);
-    await reload();
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAgent(deleteTarget.agent_id);
+      setDeleteTarget(null);
+      await reload();
+    } catch (error) {
+      setDeleteError(deleteAgentErrorMessage(error, deleteTarget.agent_id));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -262,34 +279,34 @@ export function AgentsPage() {
                     {agent.otel ? " · otel" : ""}
                   </span>
 
-                  <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button size="icon-sm" variant="ghost" onClick={() => setImportAgent(agent)} title="Import OTel spans">
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" onClick={() => setImportAgent(agent)} title="Import OTel spans">
                       <Upload className="h-3.5 w-3.5" />
+                      <span className="hidden md:inline">Import</span>
                     </Button>
-                    <Button size="icon-sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
+                    <Button size="sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
                       <Play className="h-3.5 w-3.5" />
+                      <span className="hidden md:inline">Run</span>
                     </Button>
-                    {canEditAgent(agent.agent_id) && (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => openEdit(agent)}
-                        title="Edit"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {canDeleteAgent(agent.agent_id) && (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => setDeleteTarget(agent)}
-                        title="Delete"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEdit(agent)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span className="hidden md:inline">Edit</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openDelete(agent)}
+                      title="Delete"
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span className="hidden md:inline">Delete</span>
+                    </Button>
                   </div>
                 </div>
               );
@@ -436,17 +453,37 @@ export function AgentsPage() {
       </Sheet>
 
       {/* Delete confirm dialog */}
-      <Dialog.Root open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+      <Dialog.Root
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
           <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card p-6 shadow-xl transition duration-150 data-ending-style:opacity-0 data-ending-style:scale-95 data-starting-style:opacity-0 data-starting-style:scale-95">
             <Dialog.Title className="text-sm font-semibold mb-1">Delete agent</Dialog.Title>
             <Dialog.Description className="text-sm text-muted-foreground mb-5">
-              <span className="font-medium text-foreground">{deleteTarget?.name}</span> will be permanently removed.
+              {deleteTarget && !canDeleteAgent(deleteTarget.agent_id) ? (
+                <>
+                  <span className="font-medium text-foreground">{deleteTarget.name}</span> is a demo seed.
+                  DELETE returns 409 and the agent stays registered.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{deleteTarget?.name}</span> will be permanently removed.
+                </>
+              )}
             </Dialog.Description>
+            {deleteError && <p className="text-xs text-destructive mb-4">{deleteError}</p>}
             <div className="flex justify-end gap-2">
-              <Dialog.Close render={<Button variant="outline" />}>Cancel</Dialog.Close>
-              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+              <Dialog.Close render={<Button variant="outline" disabled={deleting} />}>Cancel</Dialog.Close>
+              <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
             </div>
           </Dialog.Popup>
         </Dialog.Portal>
@@ -579,6 +616,7 @@ function OtelSourceFields({
 }
 
 function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<RunPhase>("baseline");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [parentRunId, setParentRunId] = useState<string | null>(null);
@@ -661,6 +699,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   }, [selectedTask, promptTouched]);
 
   function toggleTask(id: string) {
+    if (launching) return;
     setSelectedTasks((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -687,7 +726,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   }
 
   async function handleLaunch() {
-    if (!agent) return;
+    if (!agent || launching) return;
     const built = buildLaunchParams({
       agentId: agent.agent_id,
       phase,
@@ -709,8 +748,9 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     setLaunching(true);
     setError(null);
     try {
-      await createRun(built.params);
+      const results = await createRun(built.params);
       onClose();
+      navigate(hrefAfterCreateRun(results));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Launch failed.");
     } finally {
@@ -730,7 +770,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         : Boolean(parentRunId) && fixKinds.length > 0 && promptOk;
 
   return (
-    <Sheet open={!!agent} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Sheet open={!!agent} onOpenChange={(open) => { if (!open && !launching) onClose(); }}>
       <SheetContent side="bottom" className="flex flex-col h-[80vh] rounded-t-2xl p-0">
         <div className="shrink-0 px-8 pt-6 pb-5 border-b border-border/40">
           <p className="text-xs text-muted-foreground mb-0.5">Launch run</p>
@@ -745,9 +785,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 <button
                   key={p}
                   type="button"
+                  disabled={launching}
                   onClick={() => selectPhase(p)}
                   className={cn(
-                    "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors",
+                    "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors disabled:opacity-50",
                     phase === p
                       ? "bg-foreground text-background border-foreground"
                       : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
@@ -964,10 +1005,15 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         </div>
 
         <div className="shrink-0 flex items-center gap-3 px-8 py-4 border-t border-border/40">
+          {launching && (
+            <span role="status" className="text-xs text-muted-foreground flex-1">
+              Launching run…
+            </span>
+          )}
           {error && <span className="text-xs text-destructive flex-1">{error}</span>}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={onClose} disabled={launching}>Cancel</Button>
-            <Button onClick={handleLaunch} disabled={launching || !launchReady}>
+            <Button onClick={handleLaunch} disabled={launching || !launchReady} aria-busy={launching}>
               {launching ? "Launching…" : "Launch run"}
             </Button>
           </div>
