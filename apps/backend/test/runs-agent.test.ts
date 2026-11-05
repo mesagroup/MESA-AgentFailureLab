@@ -107,6 +107,8 @@ describe("POST /runs selects a registry agent", { concurrency: false }, () => {
       assert.equal(stored.statusCode, 200);
       assert.equal(stored.json().agent_id, "cart-only");
       assert.equal(stored.json().task_id, "T2");
+      assert.equal(stored.json().prompt, "CUSTOM-T2 add two mugs.");
+      assert.equal("prompt_override" in stored.json(), false);
 
       const before = (await app.inject({ method: "GET", url: "/runs" })).json().runs.length as number;
       const foreignTask = await app.inject({
@@ -144,6 +146,32 @@ describe("POST /runs selects a registry agent", { concurrency: false }, () => {
       assert.equal(seedResults[0]?.run.status, "passed");
       assert.equal(userPrompt(seedResults[0]!.trace), "EDITED-SEED-T1");
       assertContract(seedResults[0]!.run, seedResults[0]!.trace, REFERENCE_AGENT_ID);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("stores prompt_override as Run.prompt, not as prompt_override", async () => {
+    const app = buildApp({ logger: false, mockBaseUrl: baseUrl });
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/agents",
+        payload: { ...subsetAgent(), agent_id: "cart-prompt-hist", name: "Cart prompt hist" },
+      });
+      assert.equal(created.statusCode, 201, created.body);
+      const override = "CUSTOM-T2 add two mugs. OVERRIDE-188.";
+      const batch = await app.inject({
+        method: "POST",
+        url: "/runs",
+        payload: { agent_id: "cart-prompt-hist", phase: "baseline", task_ids: ["T2"], prompt_override: override },
+      });
+      assert.equal(batch.statusCode, 200, batch.body);
+      const run = batch.json().results[0].run as Run;
+      assert.equal(run.prompt, override);
+      assert.equal("prompt_override" in run, false);
+      const stored = await app.inject({ method: "GET", url: `/runs/${run.run_id}` });
+      assert.equal(stored.json().prompt, override);
     } finally {
       await app.close();
     }

@@ -109,7 +109,7 @@ export interface JuryCaseOptions {
   parentRunId?: string;
   /**
    * When set (non-empty), replaces `task.prompt` before the juror note.
-   * Same rule as POST /runs `prompt_override`. Not stored on Run.
+   * Same rule as POST /runs `prompt_override`. Stored on Run.prompt.
    */
   promptOverride?: string;
   /** Shop URL copied onto the agent request. The scripted jury agent does not call it. */
@@ -160,6 +160,8 @@ interface BuiltAttempt {
   checks: Agent["tasks"][number]["success_test"]["checks"];
   shopState: Awaited<ReturnType<MockShopClient["state"]>>;
   store: RunStore;
+  /** Effective task prompt before the juror note. Stored on Run.prompt. */
+  prompt: string;
 }
 
 async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
@@ -188,6 +190,7 @@ async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
     trace_ids: [],
     injection_plan: finishedPlan,
     fix_kinds: input.fixKinds,
+    prompt: input.prompt,
   };
   await input.store.saveRun(running);
 
@@ -341,6 +344,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
         timeoutMs,
         checks: task.success_test.checks,
         shopState,
+        prompt: taskPrompt,
       });
     }
 
@@ -408,6 +412,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
       timeoutMs,
       checks: task.success_test.checks,
       shopState,
+      prompt: taskPrompt,
     });
 
     const stepId = attacked.run.injection_plan?.ground_truth.step_id;

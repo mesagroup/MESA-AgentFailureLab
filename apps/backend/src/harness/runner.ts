@@ -171,6 +171,10 @@ async function runOne(
   const runId = `run-${taskId}-${options.phase}-${randomUUID()}`;
   const traceId = `trace-${taskId}-${options.phase}-${randomUUID()}`;
   const startedMs = Date.now();
+  const basePrompt =
+    options.promptOverride !== undefined && options.promptOverride.length > 0
+      ? options.promptOverride
+      : task.prompt;
 
   const running: Run = {
     run_id: runId,
@@ -182,16 +186,13 @@ async function runOne(
     trace_ids: [],
     injection_plan: plan,
     fix_kinds: fixKinds,
+    prompt: basePrompt,
   };
   await options.store.saveRun(running);
 
   try {
     const prepared = await prepareWorld(task, options.mock, sessionId);
     await options.afterWorldSetup?.();
-    const basePrompt =
-      options.promptOverride !== undefined && options.promptOverride.length > 0
-        ? options.promptOverride
-        : task.prompt;
     const prompt = withAttachedNote(basePrompt, options.attachedNote);
     const remote = await loadActions(
       options,
