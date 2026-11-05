@@ -77,6 +77,7 @@ export function AgentTasksEditor({
   showErrors?: boolean;
   onChange: (tasks: AgentTask[]) => void;
 }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [instructions, setInstructions] = useState<Record<number, string>>({});
   const [aiBusy, setAiBusy] = useState<Record<number, boolean>>({});
   const [aiError, setAiError] = useState<Record<number, string>>({});
@@ -123,26 +124,62 @@ export function AgentTasksEditor({
     }
   }
 
+  // Clamp selectedIndex to valid range whenever tasks length changes.
+  const safeIndex = Math.min(selectedIndex, Math.max(0, tasks.length - 1));
+
+  function addTask() {
+    const newTasks = [...tasks, blankTask(nextTaskId(tasks, domain), domain)];
+    onChange(newTasks);
+    setSelectedIndex(newTasks.length - 1);
+  }
+
+  function removeTask(index: number) {
+    const newTasks = tasks.filter((_, i) => i !== index);
+    onChange(newTasks);
+    // Navigate to the previous task, or first if we removed the first.
+    setSelectedIndex(Math.max(0, index - 1));
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground">Tasks ({tasks.length})</p>
-          <p className="text-xs text-muted-foreground/80 mt-1">{copy.intro}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-xs text-muted-foreground shrink-0">Tasks ({tasks.length})</p>
+          <div className="flex items-center gap-1 flex-wrap">
+            {tasks.map((task, index) => (
+              <button
+                key={`chip-${index}`}
+                type="button"
+                onClick={() => setSelectedIndex(index)}
+                className={
+                  index === safeIndex
+                    ? "px-2 py-0.5 rounded text-xs font-mono border border-foreground bg-foreground text-background"
+                    : "px-2 py-0.5 rounded text-xs font-mono border border-border text-muted-foreground hover:border-foreground/60"
+                }
+                title={task.task_id || `Task ${index + 1}`}
+              >
+                T{index + 1}
+              </button>
+            ))}
+          </div>
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="gap-1.5"
-          onClick={() => onChange([...tasks, blankTask(nextTaskId(tasks, domain), domain)])}
+          className="gap-1.5 shrink-0"
+          onClick={addTask}
         >
           <Plus className="h-3.5 w-3.5" />
           Add task
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground/80">{copy.intro}</p>
 
-      {tasks.map((task, index) => {
+      {(() => {
+        const index = safeIndex;
+        const task = tasks[index];
+        if (!task) return null;
         const issues = evalsetIssues(task);
         const evalCases = task.evalset?.cases ?? [];
         return (
@@ -155,7 +192,7 @@ export function AgentTasksEditor({
               variant="ghost"
               title="Remove task"
               disabled={tasks.length === 1}
-              onClick={() => onChange(tasks.filter((_, taskIndex) => taskIndex !== index))}
+              onClick={() => removeTask(index)}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -598,7 +635,7 @@ export function AgentTasksEditor({
           </div>
         </div>
         );
-      })}
+      })()}
     </div>
   );
 }

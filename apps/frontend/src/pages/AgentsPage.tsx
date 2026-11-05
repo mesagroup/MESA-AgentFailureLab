@@ -387,7 +387,7 @@ export function AgentsPage() {
                   value={form.description}
                   onChange={(e) => setField("description", e.target.value)}
                   placeholder="What does this agent do?"
-                  rows={4}
+                  rows={7}
                   className="w-full rounded-none border-0 border-b border-border/60 bg-transparent px-0 py-1 text-sm placeholder:text-muted-foreground/50 focus-visible:border-foreground focus-visible:outline-none resize-none transition-[color,border-color]"
                 />
               </FormField>
