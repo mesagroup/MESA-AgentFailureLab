@@ -1,4 +1,4 @@
-import type { Diagnosis, Run, Trace } from "@mesa/shared";
+import type { Diagnosis, OtelMockChannel, Run, Trace } from "@mesa/shared";
 import { validateRun, validateTrace } from "@mesa/shared/validate";
 
 export type RunStoreKind = "memory" | "postgres";
@@ -55,6 +55,13 @@ export interface RunStore {
   upsertImportedTrace(trace: Trace, createdAt: string): Promise<"inserted" | "updated">;
   /** Delete every run and every trace. Agents are untouched. Not an HTTP route. */
   deleteAllRunsAndTraces(): Promise<{ runs: number; traces: number }>;
+  /**
+   * Server time of the last successful telemetry pull for this agent and source.
+   * Absent when that source has never pulled successfully. Not an Agent field.
+   */
+  getOtelPullCursor(agentId: string, source: OtelMockChannel): Promise<string | undefined>;
+  /** Record a successful pull. Replaces any cursor for that agent and source. */
+  setOtelPullCursor(agentId: string, source: OtelMockChannel, lastPullAt: string): Promise<void>;
   close(): Promise<void>;
 }
 

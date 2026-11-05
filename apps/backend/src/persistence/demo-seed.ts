@@ -59,7 +59,7 @@ function pairFromRemap(result: OtelImportResult, relative: string, agentId: stri
   if (run.run_id !== trace.run_id || run.trace_ids[0] !== trace.trace_id) {
     throw new Error(`Demo seed run ${run.run_id} is not linked to trace ${trace.trace_id}.`);
   }
-  return { run, trace };
+  return { run, trace: { ...trace, source: "demo_seed" } };
 }
 
 /** Validated demo Run/Trace pairs from the #161/#163 mock OTel fixtures, shop first, then library. */

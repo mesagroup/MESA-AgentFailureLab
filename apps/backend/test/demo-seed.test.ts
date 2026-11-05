@@ -36,6 +36,7 @@ describe("demo seed runs and traces", () => {
       assert.equal(pair.run.injection_plan, null);
       assert.deepEqual(pair.run.fix_kinds, []);
       assert.equal(pair.trace.diagnosis, null);
+      assert.equal(pair.trace.source, "demo_seed");
       assert.equal(pair.trace.fault.injected, false);
       assert.deepEqual(pair.trace.fault.labels, []);
       assert.equal(pair.trace.outcome.success, pair.trace.outcome.verifier.passed);

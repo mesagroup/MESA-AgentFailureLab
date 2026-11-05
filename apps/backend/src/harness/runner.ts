@@ -275,6 +275,7 @@ async function runOne(
           : { used: false, payload_id: null },
       },
       diagnosis: null,
+      source: "harness",
     };
 
     const savedTrace = await options.store.saveTrace(trace);

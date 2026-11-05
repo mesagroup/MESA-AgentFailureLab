@@ -59,7 +59,12 @@ describe("agent store selection", () => {
   });
 
   it("lists the migrations in order", () => {
-    assert.deepEqual(listMigrationFiles(), ["001_agents.sql", "002_runs.sql", "003_traces.sql"]);
+    assert.deepEqual(listMigrationFiles(), [
+      "001_agents.sql",
+      "002_runs.sql",
+      "003_traces.sql",
+      "004_otel_pull_cursors.sql",
+    ]);
   });
 
   it("normalizes a BOM and Windows CRLF before a migration is applied", () => {

@@ -166,7 +166,23 @@ CREATE INDEX IF NOT EXISTS traces_created_at_trace_id_idx
   ON traces (created_at, trace_id);
 ```
 
-`document` is the Trace object `GET /traces` returns. `run_id`, `agent_id`, and `started_at` are copied from that document. `started_at` is the attempt's own clock (a required Trace field). `created_at` is the first insert and is not a Trace field. A later save refreshes `started_at` from the new document and keeps `created_at`.
+`document` is the Trace object `GET /traces` returns. `run_id`, `agent_id`, and `started_at` are copied from that document. `started_at` is the attempt's own clock (a required Trace field). `created_at` is the first insert and is not a Trace field. A later save refreshes `started_at` from the new document and keeps `created_at`. Optional `Trace.source` lives inside `document`. It is not a column.
+
+### OTel pull cursors
+
+File: `apps/backend/migrations/004_otel_pull_cursors.sql`.
+
+```sql
+CREATE TABLE IF NOT EXISTS otel_pull_cursors (
+  agent_id text NOT NULL,
+  source text NOT NULL,
+  last_pull_at timestamptz NOT NULL,
+  PRIMARY KEY (agent_id, source),
+  CONSTRAINT otel_pull_cursors_source_check CHECK (source IN ('prod', 'test'))
+);
+```
+
+`last_pull_at` is the server time of the last successful `POST /agents/:agentId/traces/pull` for that source. It is not a Trace field and not an Agent field. There is no foreign key. `deleteAllRunsAndTraces` (used by `db:reset`) deletes these rows so the next pull omits `since` and reads the endpoint buffer again. The memory store drops the same map. See [otel.md](otel.md#pull-traces).
 
 `traces_run_id_created_at_idx` serves `listTracesByRun` (`WHERE run_id = ? ORDER BY created_at, trace_id`). `traces_created_at_trace_id_idx` serves `GET /traces`. `GET /traces/:traceId` uses the primary key.
 
@@ -179,11 +195,11 @@ Migrations run inside the backend process when it starts and `DATABASE_URL` is s
 The runner is `applyMigrations` in `src/agents/postgres.ts`. `PostgresAgentStore.migrate()` and `PostgresRunStore.migrate()` both call it:
 
 1. Creates `schema_migrations` if needed.
-2. Reads `apps/backend/migrations/*.sql` in name order (`001_agents.sql`, `002_runs.sql`, `003_traces.sql`). From the compiled image that directory is `/app/migrations` (the Dockerfile copies it next to `dist/`).
+2. Reads `apps/backend/migrations/*.sql` in name order (`001_agents.sql`, `002_runs.sql`, `003_traces.sql`, `004_otel_pull_cursors.sql`). From the compiled image that directory is `/app/migrations` (the Dockerfile copies it next to `dist/`).
 3. Skips a file whose name is already in `schema_migrations`.
 4. Runs the file in a transaction, then records the file name. A UTF-8 BOM is stripped and CRLF is normalized to LF before the script runs, so a Windows checkout applies the same statements.
 
-The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `external-library` when that document fails the Agent schema, its `updated_at` is earlier than that fixture, or the timestamp matches and the runtime or world URL differs. A newer valid row is kept. It does not duplicate run or trace rows. Missing demo run and trace ids are inserted once. A present id is left alone. `002_runs.sql` and `003_traces.sql` are applied on an empty database and skipped once their names are recorded.
+The statements also use `IF NOT EXISTS`, so applying a file by hand is safe. Starting the process twice does not insert a second copy of a seed row. It rewrites `reference-shop` or `external-library` when that document fails the Agent schema, its `updated_at` is earlier than that fixture, or the timestamp matches and the runtime or world URL differs. A newer valid row is kept. It does not duplicate run or trace rows. Missing demo run and trace ids are inserted once. A present id is left alone. `002_runs.sql`, `003_traces.sql`, and `004_otel_pull_cursors.sql` are applied on an empty database and skipped once their names are recorded.
 
 Do not edit a file after it has been applied in a shared database. The runner will not apply it again. Add the next numbered file instead.
 
@@ -249,7 +265,7 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 
 ### `GET /runs`, `GET /runs/:runId`, `GET /traces`, `GET /traces/:traceId`
 
-`GET /traces` is `{ "traces": [ ... ] }`, oldest first. One trace is the Trace document. `GET /runs/:runId` is the Run document alone.
+`GET /traces` is `{ "traces": [ ... ] }`, oldest first. One trace is the Trace document. Optional query: `agent_id`, `source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`), `since`, and `until` (inclusive bounds on `started_at`). A bad value is HTTP 400. `GET /runs/:runId` is the Run document alone.
 
 `GET /runs` is the dashboard snapshot from `src/harness/session.ts` ([#79](https://github.com/mesagroup/MESA-AgentFailureLab/pull/79)). The store still supplies the documents. `sessionView` reverses the store order and attaches links and counts. It does not score the run. `outcome.verifier` on `trace_links` is copied from the stored trace.
 
@@ -596,7 +612,7 @@ The external URL is for a laptop. It uses TLS (`sslmode=require` or a `.render.c
 
 A Blueprint sync refreshes `DATABASE_URL` from the database. That sync runs on a push to `main` only when auto-sync is on for the Blueprint. Auto-sync off means the merge updates the file and does not create the database. Yuri then uses Manual Sync in the Dashboard. `autoDeployTrigger: commit` still redeploys `mesa-backend` on that push, which restarts the in-memory process. Export before that restart. `XAI_API_KEY` stays `sync: false`.
 
-The same database holds agents, runs, and traces once `DATABASE_URL` is set and the backend has booted. Startup applies `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`, then seeds `reference-shop` and `external-library` when either id is missing.
+The same database holds agents, runs, and traces once `DATABASE_URL` is set and the backend has booted. Startup applies `001_agents.sql`, `002_runs.sql`, `003_traces.sql`, and `004_otel_pull_cursors.sql`, then seeds `reference-shop` and `external-library` when either id is missing.
 
 ## Backup and restore
 
