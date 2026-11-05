@@ -25,7 +25,11 @@ import {
   FIX_KINDS,
   baselineRunsForAgent,
   buildLaunchParams,
+  filterRunsByQuery,
+  formatRunDuration,
   phaseNeedsBaselineParent,
+  taskForRun,
+  taskTitleForRun,
   toggleLaunchFixKind,
 } from "@/lib/run-launch";
 import type { Agent, AgentInstanceKind, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
@@ -578,6 +582,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   const [phase, setPhase] = useState<RunPhase>("baseline");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [parentRunId, setParentRunId] = useState<string | null>(null);
+  const [detailRunId, setDetailRunId] = useState<string | null>(null);
+  const [baselineFilter, setBaselineFilter] = useState("");
+  const [promptDraft, setPromptDraft] = useState("");
+  const [promptTouched, setPromptTouched] = useState(false);
   const [fixKinds, setFixKinds] = useState<FixKind[]>([]);
   const [agentRuns, setAgentRuns] = useState<Run[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
@@ -590,6 +598,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     setPhase("baseline");
     setSelectedTasks(new Set(agent.tasks.map((t) => t.task_id)));
     setParentRunId(null);
+    setDetailRunId(null);
+    setBaselineFilter("");
+    setPromptDraft("");
+    setPromptTouched(false);
     setFixKinds([]);
     setError(null);
     setRunsError(null);
@@ -622,6 +634,32 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     [agent, agentRuns],
   );
 
+  const filteredBaselines = useMemo(() => {
+    const filtered = filterRunsByQuery(baselines, agent, baselineFilter);
+    if (!parentRunId) return filtered;
+    if (filtered.some((run) => run.run_id === parentRunId)) return filtered;
+    const selected = baselines.find((run) => run.run_id === parentRunId);
+    return selected ? [selected, ...filtered] : filtered;
+  }, [baselines, agent, baselineFilter, parentRunId]);
+
+  const selectedBaseline = useMemo(
+    () => baselines.find((run) => run.run_id === parentRunId) ?? null,
+    [baselines, parentRunId],
+  );
+
+  const selectedTask = useMemo(
+    () => (selectedBaseline && agent ? taskForRun(agent, selectedBaseline) : undefined),
+    [selectedBaseline, agent],
+  );
+
+  useEffect(() => {
+    if (!selectedTask) {
+      if (!promptTouched) setPromptDraft("");
+      return;
+    }
+    if (!promptTouched) setPromptDraft(selectedTask.prompt);
+  }, [selectedTask, promptTouched]);
+
   function toggleTask(id: string) {
     setSelectedTasks((prev) => {
       const next = new Set(prev);
@@ -633,7 +671,19 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   function selectPhase(next: RunPhase) {
     setPhase(next);
     setError(null);
-    if (!phaseNeedsBaselineParent(next)) setParentRunId(null);
+    if (!phaseNeedsBaselineParent(next)) {
+      setParentRunId(null);
+      setDetailRunId(null);
+      setPromptDraft("");
+      setPromptTouched(false);
+    }
+  }
+
+  function selectBaseline(runId: string) {
+    setParentRunId(runId);
+    setDetailRunId(runId);
+    setPromptTouched(false);
+    setError(null);
   }
 
   async function handleLaunch() {
@@ -644,6 +694,13 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       taskIds: [...selectedTasks],
       parentRunId,
       fixKinds,
+      promptOverride:
+        phaseNeedsBaselineParent(phase) &&
+        promptTouched &&
+        promptDraft.trim().length > 0 &&
+        (!selectedTask || promptDraft.trim() !== selectedTask.prompt)
+          ? promptDraft
+          : null,
     });
     if (!built.ok) {
       setError(built.message);
@@ -661,23 +718,27 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     }
   }
 
+  const promptOk =
+    !phaseNeedsBaselineParent(phase) ||
+    (!promptTouched && Boolean(selectedTask?.prompt)) ||
+    promptDraft.trim().length > 0;
   const launchReady =
     phase === "baseline"
       ? selectedTasks.size > 0
       : phase === "injected"
-        ? Boolean(parentRunId)
-        : Boolean(parentRunId) && fixKinds.length > 0;
+        ? Boolean(parentRunId) && promptOk
+        : Boolean(parentRunId) && fixKinds.length > 0 && promptOk;
 
   return (
     <Sheet open={!!agent} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">
+      <SheetContent side="bottom" className="flex flex-col h-[80vh] rounded-t-2xl p-0">
         <div className="shrink-0 px-8 pt-6 pb-5 border-b border-border/40">
           <p className="text-xs text-muted-foreground mb-0.5">Launch run</p>
           <SheetTitle className="font-mono text-base font-medium tracking-tight">{agent?.name ?? ""}</SheetTitle>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-[38%] shrink-0 border-r border-border/40 px-8 py-6">
+          <div className="w-[32%] shrink-0 border-r border-border/40 px-8 py-6">
             <p className="text-sm font-medium mb-3">Phase</p>
             <div className="flex flex-col gap-2">
               {(["baseline", "injected", "after_fix"] as RunPhase[]).map((p) => (
@@ -698,12 +759,12 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
             </div>
             {phase === "injected" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                Pick a completed baseline run. Injection applies to that task.
+                Pick a completed baseline. Review the task prompt, edit it if needed, then inject.
               </p>
             )}
             {phase === "after_fix" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                Owner already fixed the agent on their deploy. Pick one baseline row and at least one fix kind, then replay.
+                Owner already fixed the agent on their deploy. Pick one baseline, edit the prompt if needed, choose fix kinds, then replay.
               </p>
             )}
           </div>
@@ -731,45 +792,146 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                 </div>
               </div>
             ) : (
-              <div>
-                <p className="text-sm font-medium mb-3">
-                  {phase === "injected" ? "Baseline run to inject" : "Baseline run to replay"}
-                </p>
-                {loadingRuns ? (
-                  <p className="text-xs text-muted-foreground">Loading baselines…</p>
-                ) : runsError ? (
-                  <p className="text-xs text-destructive">{runsError}</p>
-                ) : baselines.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No completed baseline runs for this agent. Launch a baseline first.
-                  </p>
-                ) : (
-                  <div className="space-y-2" role="radiogroup" aria-label="Baseline runs">
-                    {baselines.map((run) => (
-                      <label
-                        key={run.run_id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors",
-                          parentRunId === run.run_id ? "border-foreground bg-muted/20" : "border-border/40",
-                        )}
-                      >
-                        <input
-                          type="radio"
-                          name="baseline-parent"
-                          checked={parentRunId === run.run_id}
-                          onChange={() => setParentRunId(run.run_id)}
-                          className="accent-primary shrink-0"
+              <>
+                <div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <p className="text-sm font-medium">
+                      {phase === "injected" ? "Baseline run to inject" : "Baseline run to replay"}
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {filteredBaselines.length}/{baselines.length}
+                    </span>
+                  </div>
+                  {loadingRuns ? (
+                    <p className="text-xs text-muted-foreground">Loading baselines…</p>
+                  ) : runsError ? (
+                    <p className="text-xs text-destructive">{runsError}</p>
+                  ) : baselines.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No completed baseline runs for this agent. Launch a baseline first.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+                        <Input
+                          value={baselineFilter}
+                          onChange={(event) => setBaselineFilter(event.target.value)}
+                          placeholder="Filter by title, task, status, prompt…"
+                          className="pl-9 h-9 text-sm"
+                          aria-label="Filter baseline runs"
                         />
-                        <span className="font-mono text-xs text-muted-foreground w-28 shrink-0 truncate" title={run.run_id}>
-                          {run.run_id.slice(0, 12)}…
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground/70 w-24 shrink-0 truncate">{run.task_id}</span>
-                        <span className="text-xs font-mono text-muted-foreground">{run.status}</span>
-                      </label>
-                    ))}
+                      </div>
+                      {filteredBaselines.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No baselines match this filter.</p>
+                      ) : (
+                        <div className="space-y-2" role="radiogroup" aria-label="Baseline runs">
+                          {filteredBaselines.map((run) => {
+                            const title = taskTitleForRun(agent, run);
+                            const task = taskForRun(agent, run);
+                            const open = detailRunId === run.run_id;
+                            const selected = parentRunId === run.run_id;
+                            return (
+                              <div
+                                key={run.run_id}
+                                className={cn(
+                                  "rounded-xl border transition-colors",
+                                  selected ? "border-foreground bg-muted/20" : "border-border/40",
+                                )}
+                              >
+                                <label className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20">
+                                  <input
+                                    type="radio"
+                                    name="baseline-parent"
+                                    checked={selected}
+                                    onChange={() => selectBaseline(run.run_id)}
+                                    className="accent-primary shrink-0 mt-1"
+                                  />
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-medium truncate">{title}</span>
+                                      <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
+                                      <span className={cn(
+                                        "text-[11px] font-mono",
+                                        run.status === "passed" && "text-green-600",
+                                        (run.status === "failed" || run.status === "error") && "text-red-500",
+                                      )}>
+                                        {run.status}
+                                      </span>
+                                      <span className="text-[11px] font-mono text-muted-foreground/70">
+                                        {formatRunDuration(run.duration_ms)}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                      {task?.prompt ?? "No prompt on agent for this task id."}
+                                    </p>
+                                    <p className="font-mono text-[10px] text-muted-foreground/50 truncate" title={run.run_id}>
+                                      {run.run_id}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      setDetailRunId((prev) => (prev === run.run_id ? null : run.run_id));
+                                      if (parentRunId !== run.run_id) selectBaseline(run.run_id);
+                                    }}
+                                  >
+                                    {open ? "Hide" : "Detail"}
+                                  </button>
+                                </label>
+                                {open && (
+                                  <div className="px-4 pb-3 pt-0 border-t border-border/20 space-y-2">
+                                    <p className="text-xs font-medium pt-2">Task prompt</p>
+                                    <pre className="text-xs whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-muted-foreground">
+                                      {task?.prompt ?? "—"}
+                                    </pre>
+                                    {run.error_message && (
+                                      <p className="text-xs text-destructive">{run.error_message}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {selectedBaseline && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Prompt for this launch</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Starts from the baseline task. Edit or add instructions before launch.
+                    </p>
+                    <textarea
+                      value={promptDraft}
+                      onChange={(event) => {
+                        setPromptTouched(true);
+                        setPromptDraft(event.target.value);
+                      }}
+                      rows={6}
+                      className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem]"
+                      aria-label="Prompt for this launch"
+                    />
+                    {selectedTask && promptTouched && promptDraft !== selectedTask.prompt && (
+                      <button
+                        type="button"
+                        className="mt-2 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                        onClick={() => {
+                          setPromptDraft(selectedTask.prompt);
+                          setPromptTouched(false);
+                        }}
+                      >
+                        Reset to task prompt
+                      </button>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             {phase === "after_fix" && (

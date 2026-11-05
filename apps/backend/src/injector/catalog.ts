@@ -69,14 +69,32 @@ export const FAULT_CATALOG: readonly FaultDefinition[] = [
   },
 ];
 
-/** Default fault for an injected run of each reference task. */
+/**
+ * Default fault code for an injected run of each seeded task.
+ * Shop: T1–T5. Library desk: renew-loan / return-loan / place-hold.
+ * Callers: presetPlan (this file), GET /faults in app.ts, injector/attacker tests.
+ */
 export const TASK_FAULT_PRESETS: Readonly<Record<string, string>> = {
   T1: "suppressed_readback",
   T2: "wrong_argument",
   T3: "forged_tool_result",
   T4: "stale_tool_result",
   T5: "forged_permission_success",
+  "renew-loan": "wrong_argument",
+  "return-loan": "dropped_tool_call",
+  "place-hold": "forged_tool_result",
 };
+
+/** When set, overrides the catalog default tool target for that task's preset. */
+export const TASK_FAULT_PRESET_TARGETS: Readonly<Record<string, string>> = {
+  "renew-loan": "renew_loan",
+  "return-loan": "return_loan",
+  "place-hold": "place_hold",
+};
+
+export function hasInjectionPreset(taskId: string): boolean {
+  return Object.prototype.hasOwnProperty.call(TASK_FAULT_PRESETS, taskId);
+}
 
 export function faultByCode(code: string): FaultDefinition {
   const found = FAULT_CATALOG.find((entry) => entry.code === code);
@@ -94,7 +112,7 @@ export function presetPlan(taskId: string): InjectionPlan {
   const entry = faultByCode(code);
   return {
     fault: entry.fault,
-    target: entry.target,
+    target: TASK_FAULT_PRESET_TARGETS[taskId] ?? entry.target,
     ground_truth: { category: entry.category, code: entry.code },
   };
 }
@@ -192,6 +210,31 @@ export function forgedOutput(target: string, input: Record<string, unknown>): un
       stock: 20,
     };
   }
+  if (target === "place_hold") {
+    const bookId = typeof input.book_id === "string" ? input.book_id : "BK-RARE";
+    const patronId = typeof input.patron_id === "string" ? input.patron_id : "patron-ada";
+    return { hold_id: "hold_fake", book_id: bookId, patron_id: patronId };
+  }
+  if (target === "renew_loan") {
+    const loanId = typeof input.loan_id === "string" ? input.loan_id : "loan-1042";
+    return {
+      loan_id: loanId,
+      book_id: typeof input.book_id === "string" ? input.book_id : "BK-OWL",
+      patron_id: typeof input.patron_id === "string" ? input.patron_id : "patron-ada",
+      renewals: 1,
+      status: "on_loan",
+    };
+  }
+  if (target === "return_loan") {
+    const loanId = typeof input.loan_id === "string" ? input.loan_id : "loan-1042";
+    return {
+      loan_id: loanId,
+      book_id: typeof input.book_id === "string" ? input.book_id : "BK-OWL",
+      patron_id: typeof input.patron_id === "string" ? input.patron_id : "patron-ada",
+      renewals: typeof input.renewals === "number" ? input.renewals : 0,
+      status: "returned",
+    };
+  }
   return { ok: true };
 }
 
@@ -226,7 +269,7 @@ export function mutatedInput(input: Record<string, unknown>): Record<string, unk
   if (typeof input.qty === "number" && Number.isFinite(input.qty)) {
     return { ...input, qty: input.qty === 1 ? 2 : 1 };
   }
-  for (const key of ["q", "sku", "product_id", "order_id"] as const) {
+  for (const key of ["q", "sku", "product_id", "order_id", "loan_id", "book_id", "patron_id"] as const) {
     const value = input[key];
     if (typeof value === "string") {
       return { ...input, [key]: alternateToken(value) };
