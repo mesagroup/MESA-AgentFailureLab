@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Pencil, Play, PlusCircle, RefreshCw, Search, Trash2, Upload } from "lucide-react";
+import { Pencil, Play, PlusCircle, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,17 +33,18 @@ import {
   taskTitleForRun,
   toggleLaunchFixKind,
 } from "@/lib/run-launch";
-import type { Agent, AgentInstanceKind, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
+import type { Agent, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 import { OtelImportPanel } from "@/pages/OtelImportPanel";
 import { TracePullPanel } from "@/pages/TracePullPanel";
+
+type AgentEditTab = "endpoints" | "otel" | "tasks";
 
 interface FormState {
   name: string;
   description: string;
   instance_base_url: string;
   test_instance_base_url: string;
-  instance_kind: AgentInstanceKind;
   tasks: AgentTask[];
   otel: OtelSourceDraft;
 }
@@ -60,10 +61,15 @@ const EMPTY_FORM: FormState = {
   description: "",
   instance_base_url: "",
   test_instance_base_url: "",
-  instance_kind: "external",
   tasks: blankTasks(),
   otel: emptyOtelDraft(),
 };
+
+const EDIT_TABS: { id: AgentEditTab; label: string }[] = [
+  { id: "endpoints", label: "Endpoints" },
+  { id: "otel", label: "OTel" },
+  { id: "tasks", label: "Tasks" },
+];
 
 function agentToForm(agent: Agent): FormState {
   return {
@@ -71,7 +77,6 @@ function agentToForm(agent: Agent): FormState {
     description: agent.description,
     instance_base_url: agent.instance.base_url,
     test_instance_base_url: agent.test_instance.base_url,
-    instance_kind: agent.instance.kind,
     tasks: structuredClone(agent.tasks),
     otel: otelDraftFromAgent(agent.otel),
   };
@@ -90,8 +95,8 @@ export function AgentsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [runAgent, setRunAgent] = useState<Agent | null>(null);
-  const [importAgent, setImportAgent] = useState<Agent | null>(null);
   const [pullAgent, setPullAgent] = useState<Agent | null>(null);
+  const [editTab, setEditTab] = useState<AgentEditTab>("endpoints");
 
   async function reload() {
     setAgents(await listAgents());
@@ -113,6 +118,7 @@ export function AgentsPage() {
     setErrors({});
     setOtelErrors({});
     setShowErrors(false);
+    setEditTab("endpoints");
     setSheetOpen(true);
   }
 
@@ -122,6 +128,7 @@ export function AgentsPage() {
     setErrors({});
     setOtelErrors({});
     setShowErrors(false);
+    setEditTab("endpoints");
     setSheetOpen(true);
   }
 
@@ -163,7 +170,11 @@ export function AgentsPage() {
     setErrors(errs);
     setOtelErrors(nextOtelErrors);
     setShowErrors(true);
-    return Object.keys(errs).length === 0 && !otelSourceHasErrors(nextOtelErrors);
+    const otelBad = otelSourceHasErrors(nextOtelErrors);
+    if (errs.instance_base_url) setEditTab("endpoints");
+    else if (otelBad) setEditTab("otel");
+    else if (errs.tasks) setEditTab("tasks");
+    return Object.keys(errs).length === 0 && !otelBad;
   }
 
   async function handleSave() {
@@ -173,7 +184,6 @@ export function AgentsPage() {
       description: form.description.trim(),
       instance_base_url: form.instance_base_url.trim(),
       test_instance_base_url: form.test_instance_base_url.trim(),
-      instance_kind: form.instance_kind,
       tasks: form.tasks,
       otel: otelSourceFromDraft(form.otel) ?? null,
     };
@@ -249,23 +259,13 @@ export function AgentsPage() {
           </div>
         ) : (
           <div>
-            {filtered.map((agent) => {
-              const isReference = agent.instance.kind === "reference";
-              return (
+            {filtered.map((agent) => (
                 <div
                   key={agent.agent_id}
                   className="group flex items-center gap-4 px-5 py-3.5 border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium">{agent.name}</span>
-                      <span className={cn(
-                        "text-xs font-mono",
-                        isReference ? "text-ring/70" : "text-muted-foreground/60"
-                      )}>
-                        {isReference ? "ref" : "ext"}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium">{agent.name}</span>
                     <p className="text-xs font-mono text-muted-foreground/60 truncate mt-0.5">
                       {agent.agent_id}
                     </p>
@@ -285,10 +285,6 @@ export function AgentsPage() {
                     <Button size="sm" variant="ghost" onClick={() => setPullAgent(agent)} title="Pull traces">
                       <RefreshCw className="h-3.5 w-3.5" />
                       <span className="hidden md:inline">Pull</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setImportAgent(agent)} title="Import OTel spans">
-                      <Upload className="h-3.5 w-3.5" />
-                      <span className="hidden md:inline">Import</span>
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setRunAgent(agent)} title="Launch run">
                       <Play className="h-3.5 w-3.5" />
@@ -315,8 +311,7 @@ export function AgentsPage() {
                     </Button>
                   </div>
                 </div>
-              );
-            })}
+            ))}
           </div>
         )}
       </div>
@@ -335,9 +330,9 @@ export function AgentsPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
             {/* Left — identity */}
-            <div className="w-[38%] shrink-0 overflow-y-auto px-8 py-6 space-y-5 border-r border-border/40">
+            <div className="md:w-[38%] shrink-0 overflow-y-auto px-8 py-6 space-y-5 border-b md:border-b-0 md:border-r border-border/40">
               <FormField label="Name" error={errors.name} required>
                 <Input
                   value={form.name}
@@ -346,30 +341,6 @@ export function AgentsPage() {
                   aria-invalid={!!errors.name}
                 />
               </FormField>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Kind</label>
-                <div className="flex gap-1 mt-1">
-                  {(["external", "reference"] as AgentInstanceKind[]).map((k) => {
-                    const active = form.instance_kind === k;
-                    return (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setField("instance_kind", k)}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-sm border transition-colors",
-                          active
-                            ? "bg-foreground text-background border-foreground"
-                            : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
-                        )}
-                      >
-                        {k}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
               <FormField label="Description">
                 <textarea
@@ -382,11 +353,33 @@ export function AgentsPage() {
               </FormField>
             </div>
 
-            {/* Right — endpoints + tasks */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-7">
-              <div>
-                <p className="text-xs text-muted-foreground mb-3">Endpoints</p>
-                <div className="space-y-2">
+            {/* Right — tabbed endpoints / otel / tasks */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="shrink-0 flex gap-1 px-8 pt-4 border-b border-border/40" role="tablist" aria-label="Agent settings">
+                {EDIT_TABS.map((tab) => {
+                  const active = editTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setEditTab(tab.id)}
+                      className={cn(
+                        "px-3 py-2 text-sm border-b-2 -mb-px transition-colors",
+                        active
+                          ? "border-foreground text-foreground font-medium"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-8 py-6">
+                <div className={cn("space-y-2", editTab !== "endpoints" && "hidden")}>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">Instance</span>
                     <div className="flex-1">
@@ -415,32 +408,46 @@ export function AgentsPage() {
                   )}
                   <p className="text-xs text-muted-foreground pl-[76px]">Test defaults to instance URL if empty.</p>
                 </div>
+
+                <div className={cn("space-y-7", editTab !== "otel" && "hidden")}>
+                  <OtelSourceFields
+                    draft={form.otel}
+                    errors={otelErrors}
+                    showErrors={showErrors}
+                    onChange={(key, value) => {
+                      const otel = { ...form.otel, [key]: value };
+                      setForm((current) => ({ ...current, otel }));
+                      if (showErrors) setOtelErrors(otelSourceErrors(otel));
+                    }}
+                  />
+                  {editing ? (
+                    <div className="space-y-3 border-t border-border/40 pt-6">
+                      <p className="text-xs text-muted-foreground">Import JSON spans for this agent.</p>
+                      <OtelImportPanel agentId={editing.agent_id} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground border-t border-border/40 pt-6">
+                      Save the agent, then import from Edit.
+                    </p>
+                  )}
+                </div>
+
+                <div className={cn("space-y-3", editTab !== "tasks" && "hidden")}>
+                  <AgentTasksEditor
+                    tasks={form.tasks}
+                    docs={editing?.docs}
+                    showErrors={showErrors}
+                    onChange={(tasks) => {
+                      setForm((current) => ({ ...current, tasks }));
+                      setErrors((current) => ({
+                        ...current,
+                        tasks: showErrors ? validateTasks(tasks) : undefined,
+                      }));
+                    }}
+                  />
+                  {errors.tasks && <p className="text-xs text-destructive">{errors.tasks}</p>}
+                </div>
               </div>
-
-              <OtelSourceFields
-                draft={form.otel}
-                errors={otelErrors}
-                showErrors={showErrors}
-                onChange={(key, value) => {
-                  const otel = { ...form.otel, [key]: value };
-                  setForm((current) => ({ ...current, otel }));
-                  if (showErrors) setOtelErrors(otelSourceErrors(otel));
-                }}
-              />
-
-              <AgentTasksEditor
-                tasks={form.tasks}
-                docs={editing?.docs}
-                showErrors={showErrors}
-                onChange={(tasks) => {
-                  setForm((current) => ({ ...current, tasks }));
-                  setErrors((current) => ({
-                    ...current,
-                    tasks: showErrors ? validateTasks(tasks) : undefined,
-                  }));
-                }}
-              />
-              {errors.tasks && <p className="text-xs text-destructive">{errors.tasks}</p>}
             </div>
           </div>
 
@@ -499,20 +506,6 @@ export function AgentsPage() {
         agent={runAgent}
         onClose={() => setRunAgent(null)}
       />
-
-      <Sheet open={!!importAgent} onOpenChange={(open) => { if (!open) setImportAgent(null); }}>
-        <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">
-          <div className="shrink-0 px-8 pt-6 pb-4 border-b border-border/40">
-            <p className="text-xs text-muted-foreground mb-0.5">Import OTel spans</p>
-            <SheetTitle className="font-mono text-base font-medium tracking-tight">
-              {importAgent?.name ?? ""}
-            </SheetTitle>
-          </div>
-          <div className="flex-1 overflow-y-auto px-8 py-6">
-            {importAgent ? <OtelImportPanel agentId={importAgent.agent_id} /> : null}
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <Sheet open={!!pullAgent} onOpenChange={(open) => { if (!open) setPullAgent(null); }}>
         <SheetContent side="bottom" className="flex flex-col h-[72vh] rounded-t-2xl p-0">

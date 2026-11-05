@@ -1,6 +1,5 @@
 import type {
   Agent,
-  AgentInstanceKind,
   AgentTask,
   FixKind,
   InjectionPlan,
@@ -82,7 +81,6 @@ export interface AgentDraft {
   description: string;
   instance_base_url: string;
   test_instance_base_url: string;
-  instance_kind: AgentInstanceKind;
   tasks?: AgentTask[];
   /**
    * Source to store. `null` drops a stored source on PUT.
@@ -117,7 +115,8 @@ export async function updateAgent(id: string, draft: AgentDraft): Promise<Agent>
     ...existing,
     name: draft.name,
     description: draft.description,
-    instance: { ...existing.instance, kind: draft.instance_kind, base_url: draft.instance_base_url },
+    // Keep existing instance.kind; FE no longer exposes or mutates kind.
+    instance: { ...existing.instance, base_url: draft.instance_base_url },
     test_instance: {
       ...existing.test_instance,
       base_url: draft.test_instance_base_url || draft.instance_base_url,
@@ -140,7 +139,8 @@ function draftToBody(draft: AgentDraft): Omit<Agent, "agent_id" | "created_at" |
   const body: Omit<Agent, "agent_id" | "created_at" | "updated_at"> = {
     name: draft.name,
     description: draft.description || draft.name,
-    instance: { kind: draft.instance_kind, base_url: draft.instance_base_url, runtime: "grok" },
+    // Schema still requires instance.kind; create always sends external until shared drops the field.
+    instance: { kind: "external", base_url: draft.instance_base_url, runtime: "grok" },
     test_instance: { base_url: draft.test_instance_base_url || draft.instance_base_url, runtime: "grok" },
     traces: { store: "path", path_or_url: "pending" },
     docs: { prompt_summary: "", tools: [], constraints: [], config_notes: "" },
