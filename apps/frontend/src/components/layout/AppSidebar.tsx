@@ -55,12 +55,13 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={to}>
                     <SidebarMenuButton
-                      tooltip={label}
+                      tooltip={to === "/robot-lab" ? "Robot Lab · Beta" : label}
                       isActive={isActive}
                       onClick={() => navigate(to)}
                     >
                       <Icon />
                       <span>{label}</span>
+                      {to === "/robot-lab" && <small className="rounded border px-1 text-xs group-data-[collapsible=icon]:hidden">Beta</small>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

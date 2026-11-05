@@ -34,9 +34,20 @@ export function Replay({ report }: { report: RobotReport }) {
   function jump(index: number) { play(false); seek(index); }
   const frame = frames[position];
   const step = report.steps[frame.step - 1];
+  const { layout } = report;
+  const visited = frames.slice(0, position + 1).map(f => f.world.cell ?? layout.docks.A);
+  const visible = {
+    ...layout,
+    signs: frame.world.seen ?? [],
+    obstacles: layout.obstacles.filter(wall => report.verdict === "route-blocked" || (position > 0 && visited.some(cell => {
+      const size = layout.scenario.size;
+      return Math.abs(cell % size - wall % size) + Math.abs(Math.floor(cell / size) - Math.floor(wall / size)) === 1;
+    }))),
+  };
   return <div className="grid gap-5 md:grid-cols-2">
     <div className="space-y-3">
-      <MapView layout={report.layout} world={frame.world} trail={frame.trail} blocked={frame.arrived && step?.blocked} />
+      <MapView layout={visible} world={frame.world} trail={frame.trail} blocked={frame.arrived && step?.blocked} />
+      {report.verdict === "route-blocked" && <p role="status">Mission failed: obstacles cut off dock B. No model decisions were required.</p>}
       <label className="flex gap-3 text-sm">Replay
         <input className="min-w-0 flex-1 accent-primary" type="range" min={0} max={end} value={position}
           aria-valuetext={`Action ${frame.step} of ${report.steps.length}, frame ${position} of ${end}`}
