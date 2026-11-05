@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canDeleteAgent, canEditAgent, deleteAgentErrorMessage, hrefAfterCreateRun } from "./agents-page.ts";
+import { canDeleteAgent, canEditAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch } from "./agents-page.ts";
 
 test("demo seeds are edited like any other agent and are not deleted", () => {
   for (const agentId of ["reference-shop", "external-library"]) {
@@ -15,6 +15,11 @@ test("successful launch opens /runs/:runId and falls back to /runs", () => {
   assert.equal(hrefAfterCreateRun([]), "/runs");
   assert.equal(hrefAfterCreateRun(undefined), "/runs");
   assert.equal(hrefAfterCreateRun([{ run: { run_id: "run-abc" } }]), "/runs/run-abc");
+});
+
+test("jury launch opens the attacked run and falls back to the security filter", () => {
+  assert.equal(hrefAfterJuryLaunch({ attacked: { run: { run_id: "run-attack" } } }), "/runs/run-attack");
+  assert.equal(hrefAfterJuryLaunch({}), "/runs?type=security");
 });
 
 test("seed DELETE 409 keeps a readable message", () => {

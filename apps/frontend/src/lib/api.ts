@@ -334,7 +334,7 @@ export async function postJuryCase(body: JuryRequestBody): Promise<JuryCaseRepor
     body: JSON.stringify(body),
   });
   if (!isJuryReport(report)) {
-    throw new Error("La risposta non contiene outcome.verifier. Non è un esito del verifier.");
+    throw new Error("The response is missing outcome.verifier. It is not a verifier result.");
   }
   return report;
 }
