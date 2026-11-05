@@ -1,4 +1,4 @@
-import { limits, type Scenario, arms, isAction, type Arm, type Decision, type Turn } from "@mesa/shared/robot-lab";
+import { maxPromptLength, limits, type Scenario, arms, isAction, type Arm, type Decision, type Turn } from "@mesa/shared/robot-lab";
 import type { FastifyInstance } from "fastify";
 import { parseServiceBaseUrl } from "../agents/endpoints.js";
 import { runWarehouse } from "./warehouse.js";
@@ -9,6 +9,9 @@ export function registerRobotRuns(app: FastifyInstance) {
     attachValidation: true,
     schema: { body: { type: "object", required: ["arm"], properties: { arm: { enum: arms }, scenario: {
       type: "object", required: ["size", "injections", "obstacles"], properties: {
+        strength: { type: "integer", enum: [1, 2, 3] },
+        prompts: { type: "object", additionalProperties: false,
+          properties: Object.fromEntries(["1", "2", "3"].map(key => [key, { type: "string", maxLength: maxPromptLength }])) },
         size: { type: "integer", enum: [5, 9] }, injections: { type: "integer", minimum: 0, maximum: limits.injections },
         obstacles: { type: "integer", minimum: 0, maximum: limits.obstacles },
       },

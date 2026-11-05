@@ -19,8 +19,8 @@ export function MapView({ layout, world, trail = [], blocked = false }: {
           trail.includes(cell) ? "bg-sky-500/20" : "bg-card";
         return <div key={cell} className={`relative flex aspect-square items-center justify-center ${color}`}>
           {dock && <strong className="absolute left-0.5 top-0 text-[10px] leading-none text-muted-foreground">{dock}</strong>}
-          {wall && <BrickWall className="size-1/2 text-muted-foreground" />}
-          {sign && <QrCode className="absolute right-0.5 top-0.5 size-1/3 text-violet-500" />}
+          {wall && <BrickWall aria-label="Obstacle" className="size-1/2 text-muted-foreground" />}
+          {sign && <QrCode aria-label="QR sign" className="absolute right-0.5 top-0.5 size-1/3 text-violet-500" />}
           {cell === robot && <Bot className="size-1/2 text-sky-500" />}
           {cell === parcel && <Package className="absolute bottom-0.5 right-0.5 size-1/3 text-amber-600" />}
         </div>;

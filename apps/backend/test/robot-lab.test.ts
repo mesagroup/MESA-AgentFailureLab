@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { arms, limits, warehouseMap, route, FEATURES, type Action, type Decision, type Turn } from "@mesa/shared/robot-lab";
+import { arms, emptyMap, injectionTiers, defaultScenario, FEATURES, type Action, type Decision, type Turn } from "@mesa/shared/robot-lab";
+import { randomLayout } from "../src/robot-lab/layout.js";
 import { buildApp } from "../src/app.js";
 import { runWarehouse } from "../src/robot-lab/warehouse.js";
 import { experiment } from "../src/robot-lab/experiment.js";
@@ -18,10 +19,10 @@ function susceptible(t: Turn): Decision {
 }
 
 test("paired QR experiment separates attempted, blocked, and executed deliveries", async () => {
-  const results = await Promise.all(arms.map(a => runWarehouse(a, async t => susceptible(t))));
+  const results = await Promise.all(arms.map(a => runWarehouse(a, async t => susceptible(t), defaultScenario, () => 0)));
   assert.deepEqual(results.map(r => r.verdict), ["delivered", "misdelivered", "delivered", "delivered"]);
   const [attack, guarded] = [results[1]!, results[2]!];
-  assert.equal(attack.steps[1]!.input.reading?.text, guarded.steps[1]!.input.reading?.text);
+  assert.equal(attack.steps.find(s => s.input.reading)?.input.reading?.text, guarded.steps.find(s => s.input.reading)?.input.reading?.text);
   const denied = guarded.steps.find(step => step.blocked)!;
   assert.deepEqual(denied.after, denied.input.state);
   assert.equal(results[3]!.steps.some(s => s.blocked), false);
@@ -29,7 +30,7 @@ test("paired QR experiment separates attempted, blocked, and executed deliveries
 
 test("invalid physical actions and unavailable decisions cannot complete a mission", async () => {
   const stuck = await runWarehouse("baseline", async () => ({ action: "drop", model: "test", tokens: null }));
-  assert.equal(stuck.steps.length, 8);
+  assert.equal(stuck.steps.length, 9);
   assert.equal(stuck.verdict, "budget-exhausted");
   const failed = await runWarehouse("attack", async () => { throw new Error("timeout"); });
   assert.equal(failed.verdict, "model-unavailable");
@@ -56,48 +57,66 @@ test("robot endpoint follows the build flag, health stays available", async () =
   } finally { await app.close(); }
 });
 
-test("every supported layout has exact counts, repeatable signs and reachable docks", () => {
+
+test("layouts draw fresh positions, reserve docks and do not reveal hazards in preview", () => {
   for (const size of [5, 9] as const) {
-    for (let injections = 0; injections <= limits.injections; injections++) {
-      for (let obstacles = 0; obstacles <= limits.obstacles; obstacles++) {
+    for (let injections = 0; injections <= 4; injections++) {
+      for (let obstacles = 0; obstacles <= 8; obstacles++) {
         const scenario = { size, injections, obstacles };
-        const map = warehouseMap(scenario);
-        assert.deepEqual(warehouseMap(scenario), map);
-        assert.equal(new Set(map.obstacles).size, obstacles);
-        assert.equal(new Set(map.signs).size, Math.max(injections, 1));
-        const toB = route(size, map.obstacles, map.docks.A, map.docks.B);
-        assert.ok(route(size, map.obstacles, map.docks.A, map.docks.C).length);
-        if (obstacles) assert.ok(toB.length > size - 1);
-        assert.ok(map.signs.every(cell => cell === map.docks.A || toB.includes(cell)));
+        const map = randomLayout(scenario);
+        assert.equal(map.obstacles.length, obstacles);
+        assert.equal(map.signs.length, injections);
+        const occupied = [...Object.values(map.docks), ...map.signs, ...map.obstacles];
+        assert.equal(new Set(occupied).size, occupied.length);
+        assert.deepEqual(emptyMap(scenario).signs, []);
+        assert.deepEqual(emptyMap(scenario).obstacles, []);
       }
     }
   }
+  assert.notDeepEqual(randomLayout({ ...defaultScenario, obstacles: 4 }, () => 0).obstacles,
+    randomLayout({ ...defaultScenario, obstacles: 4 }, max => max - 1).obstacles);
 });
 
-test("paired runs encounter four QR checkpoints along real walkable cells", async () => {
-  const scenario = { size: 9 as const, injections: 4, obstacles: 8 };
-  const followMission = async (t: Turn): Promise<Decision> => ({
+test("tier quotas round down, reserving scarce slots for the highest tier", () => {
+  for (const [tier, expected] of [
+    [1, ["", "1", "11", "111", "1111"]],
+    [2, ["", "2", "21", "211", "2211"]],
+    [3, ["", "3", "32", "321", "3211"]],
+  ] as const) {
+    expected.forEach((value, count) => assert.equal(injectionTiers(count, tier).join(""), value));
+  }
+});
+
+test("blocked delivery fails before calling the provider", async () => {
+  const scenario = { ...defaultScenario, obstacles: 8 };
+  // Seed 3 disconnects B in the 5×5 fixture.
+  let seed = 3;
+  const result = await runWarehouse("attack", async () => assert.fail("unexpected model call"), scenario, max => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return Math.floor(seed / 2 ** 32 * max);
+  });
+  assert.equal(result.verdict, "route-blocked");
+  assert.equal(result.steps.length, 0);
+  assert.equal(result.final.parcel, "A");
+});
+
+test("custom QR payloads reach the model at the matching tier only after encounter", async () => {
+  const scenario = { size: 9 as const, obstacles: 0, injections: 4, strength: 3 as const,
+    prompts: { 1: "alpha", 2: "bravo", 3: "charlie" } };
+  const follow = async (t: Turn): Promise<Decision> => ({
     action: !t.state.scanned ? "scan" : t.state.parcel !== "carried" ? "pick" : t.state.robot === "B" ? "drop" : "move:B",
     model: "offline", tokens: null,
   });
-  const run = await runWarehouse("attack", followMission, scenario);
-  const clean = await runWarehouse("baseline", followMission, scenario);
-  assert.deepEqual(clean.layout, run.layout);
-  assert.equal(run.verdict, "delivered");
-  assert.equal(new Set(run.steps.map(s => s.input.reading?.text).filter(Boolean)).size, 4);
-  assert.equal(new Set(clean.steps.map(s => s.input.reading?.text).filter(Boolean)).size, 1);
-  assert.deepEqual(run.final.seen, run.layout.signs);
-  for (const s of run.steps.filter(s => s.action.startsWith("move:"))) {
-    let previous = s.input.state.cell!;
-    for (const cell of s.after.path!) {
-      assert.ok(!run.layout.obstacles.includes(cell));
-      const dx = Math.abs(cell % scenario.size - previous % scenario.size);
-      const dy = Math.abs(Math.floor(cell / scenario.size) - Math.floor(previous / scenario.size));
-      assert.equal(dx + dy, 1);
-      previous = cell;
+  for (const arm of arms) {
+    const r = await runWarehouse(arm, follow, scenario, () => 0);
+    assert.equal(r.verdict, "delivered");
+    assert.equal(r.final.seen?.length, 4);
+    for (const { input } of r.steps) {
+      const last = input.state.seen?.at(-1);
+      if (last === undefined) { assert.equal(input.reading, null); continue; }
+      const tier = r.layout.tiers[r.layout.signs.indexOf(last)];
+      if (arm === "attack" || arm === "protected") assert.equal(input.reading?.text, scenario.prompts[tier]);
+      else assert.ok(!Object.values(scenario.prompts).includes(input.reading!.text));
     }
-    assert.equal(previous, s.after.cell);
   }
-  const zero = await runWarehouse("attack", followMission, { ...scenario, injections: 0 });
-  assert.deepEqual(zero.steps[1].input.reading, clean.steps[1].input.reading);
 });
