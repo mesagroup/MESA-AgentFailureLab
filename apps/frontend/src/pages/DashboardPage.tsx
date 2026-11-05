@@ -249,7 +249,7 @@ function DashboardBody({
         <StatCard label="Agents" value={String(counts.agents)} />
         <StatCard label="Runs" value={String(counts.runs)} />
         <StatCard label="Passed" value={String(counts.passed)} />
-        <StatCard label="Failed" value={String(counts.failed)} />
+        <StatCard label="Failed" value={String(counts.failed + counts.error)} />
       </div>
       <p className="px-1 text-xs text-muted-foreground">
         {counts.scope} · queued {counts.queued} · running {counts.running} · error {counts.error}
