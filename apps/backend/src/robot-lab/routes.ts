@@ -1,7 +1,18 @@
 import { maxPromptLength, limits, type Scenario, arms, isAction, type Arm, type Decision, type Turn } from "@mesa/shared/robot-lab";
 import type { FastifyInstance } from "fastify";
-import { parseServiceBaseUrl } from "../agents/endpoints.js";
+import { isLoopbackOrigin, parseServiceBaseUrl } from "../agents/endpoints.js";
 import { runWarehouse } from "./warehouse.js";
+
+function robotAgentOrigin(): string {
+  const configured = process.env.AGENTSERVICE_URL?.trim() ?? "";
+  const raw = configured.length > 0 ? configured : process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:3002";
+  if (raw.length === 0) throw new Error("AGENTSERVICE_URL is required in production.");
+  const origin = parseServiceBaseUrl(raw, "AGENTSERVICE_URL");
+  if (process.env.NODE_ENV === "production" && isLoopbackOrigin(origin)) {
+    throw new Error("AGENTSERVICE_URL must not be a loopback URL in production.");
+  }
+  return origin;
+}
 
 export function registerRobotRuns(app: FastifyInstance) {
   let busy = false;
@@ -19,7 +30,7 @@ export function registerRobotRuns(app: FastifyInstance) {
   }, async (req, reply) => {
     if (req.validationError) return reply.code(400).send({ message: "Choose a supported robot experiment." });
     if (busy) return reply.code(409).send({ message: "Another robot run is active." });
-    const origin = parseServiceBaseUrl(process.env.AGENTSERVICE_URL || "http://127.0.0.1:3002", "AGENTSERVICE_URL");
+    const origin = robotAgentOrigin();
     const signal = AbortSignal.timeout(90_000);
     async function decide(turn: Turn): Promise<Decision> {
       const { robot, parcel, delivered, scanned } = turn.state;

@@ -314,4 +314,60 @@ describe("jury HTTP planner", { concurrency: false }, () => {
       await app.close();
     }
   });
+
+  it("posts the seeded public agent origin instead of the fixture loopback", async () => {
+    const previousNode = process.env.NODE_ENV;
+    const previousAgent = process.env.AGENTSERVICE_URL;
+    process.env.NODE_ENV = "production";
+    process.env.AGENTSERVICE_URL = "https://mesa-agentservice.onrender.com";
+    const seen: string[] = [];
+    const app = buildApp({
+      logger: false,
+      mockBaseUrl: baseUrl,
+      store: new MemoryStore(),
+      agentEnv: { JURY_AGENT: "grok", AGENTSERVICE_URL: "https://mesa-agentservice.onrender.com" },
+      agentFetch: async (url) => {
+        const href = String(url);
+        seen.push(href);
+        if (href.endsWith("/health")) {
+          return new Response(JSON.stringify({ grok_configured: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({
+          executed: false,
+          actions: [],
+          refused: [],
+          answer: "I will not cancel.",
+          usage: { input_tokens: 4, output_tokens: 1, cost_usd: 0.001, latency_ms: 20 },
+          agent: "grok",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      },
+    });
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/attacker/jury-case",
+        payload: { include_baseline: false, permissions: ["read"] },
+      });
+      assert.equal(response.statusCode, 202);
+      const accepted = response.json();
+      let status = "running";
+      for (let i = 0; i < 20 && status === "running"; i += 1) {
+        const polled = await app.inject({ method: "GET", url: accepted.poll });
+        status = polled.json().status;
+        if (status === "running") await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      assert.equal(status, "done");
+      assert.equal(seen.some((href) => href.startsWith("http://127.0.0.1:3002")), false);
+      assert.ok(seen.some((href) => href === "https://mesa-agentservice.onrender.com/v1/tasks/run"));
+    } finally {
+      await app.close();
+      if (previousNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNode;
+      if (previousAgent === undefined) delete process.env.AGENTSERVICE_URL;
+      else process.env.AGENTSERVICE_URL = previousAgent;
+    }
+  });
 });

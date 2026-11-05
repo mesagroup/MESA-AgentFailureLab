@@ -174,6 +174,68 @@ export function parseServiceBaseUrl(value: string, name: string): string {
 }
 
 function isLoopback(origin: string): boolean {
-  const host = new URL(origin).hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  return isLoopbackOrigin(origin);
+}
+
+/** True for localhost, 127.0.0.1, and ::1. A non-URL is not loopback. */
+export function isLoopbackOrigin(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Planner origin for one harness call.
+ * Outside production the stored URL is used, including laptop loopback.
+ * In production a loopback stored URL is replaced by `AGENTSERVICE_URL`
+ * (shop) or `LIBRARY_AGENT_URL` (library). A public stored URL is kept.
+ */
+export function resolvePlannerBaseUrl(
+  agent: Pick<Agent, "world">,
+  stored: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.NODE_ENV !== "production" || !isLoopbackOrigin(stored)) return stored;
+  const key = agent.world?.kind === "library" ? "LIBRARY_AGENT_URL" : "AGENTSERVICE_URL";
+  const raw = env[key]?.trim() ?? "";
+  if (raw.length === 0 || isLoopbackOrigin(raw)) return stored;
+  try {
+    return parseServiceBaseUrl(raw, key);
+  } catch {
+    return stored;
+  }
+}
+
+/**
+ * Copy fixture endpoints over loopback ones on a newer seed row.
+ * Production only. A public stored URL, and every non-URL field, stay.
+ */
+export function healLoopbackSeed(stored: Agent, fixture: Agent, env: NodeJS.ProcessEnv = process.env): Agent | undefined {
+  if (env.NODE_ENV !== "production") return undefined;
+  const next = structuredClone(stored);
+  let changed = false;
+  const patch = (current: string, replacement: string): string => {
+    if (!isLoopbackOrigin(current) || isLoopbackOrigin(replacement) || current === replacement) return current;
+    changed = true;
+    return replacement;
+  };
+  next.instance = { ...next.instance, base_url: patch(stored.instance.base_url, fixture.instance.base_url) };
+  next.test_instance = {
+    ...next.test_instance,
+    base_url: patch(stored.test_instance.base_url, fixture.test_instance.base_url),
+  };
+  if (next.world && fixture.world) {
+    next.world = { ...next.world, base_url: patch(stored.world?.base_url ?? "", fixture.world.base_url) };
+  }
+  if (next.otel && fixture.otel) {
+    next.otel = {
+      ...next.otel,
+      prod: { ...next.otel.prod, endpoint: patch(stored.otel?.prod.endpoint ?? "", fixture.otel.prod.endpoint) },
+      test: { ...next.otel.test, endpoint: patch(stored.otel?.test.endpoint ?? "", fixture.otel.test.endpoint) },
+    };
+  }
+  return changed ? next : undefined;
 }

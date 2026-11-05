@@ -9,6 +9,7 @@ import {
   DEV_SEED_URLS,
   PRODUCTION_SEED_URLS,
   mockBaseUrlForAgent,
+  resolvePlannerBaseUrl,
   resolveSeedUrls,
 } from "../src/agents/endpoints.js";
 import { LIBRARY_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID, seedFixtures } from "../src/agents/store.js";
@@ -213,6 +214,51 @@ describe("seeded agent endpoints", () => {
       assert.equal(kept?.world?.base_url, DEV_SEED_URLS.MOCK_LIBRARY_URL);
     } finally {
       await agents.close();
+    }
+  });
+
+  it("keeps a laptop loopback planner URL outside production", () => {
+    const agent = loadReferenceAgent();
+    assert.equal(resolvePlannerBaseUrl(agent, agent.test_instance.base_url, {}), "http://127.0.0.1:3002");
+    assert.equal(
+      resolvePlannerBaseUrl(agent, "https://mesa-agentservice.onrender.com", { NODE_ENV: "production" }),
+      "https://mesa-agentservice.onrender.com",
+    );
+    assert.equal(
+      resolvePlannerBaseUrl(agent, "http://127.0.0.1:3002", {
+        NODE_ENV: "production",
+        AGENTSERVICE_URL: "https://mesa-agentservice.onrender.com",
+      }),
+      "https://mesa-agentservice.onrender.com",
+    );
+  });
+
+  it("replaces loopback on a newer production seed and keeps the edited name", async () => {
+    const previousNode = process.env.NODE_ENV;
+    const previousAgent = process.env.AGENTSERVICE_URL;
+    process.env.NODE_ENV = "production";
+    process.env.AGENTSERVICE_URL = "https://mesa-agentservice.onrender.com";
+    try {
+      const stale = loadReferenceAgent();
+      stale.name = "Edited shop";
+      stale.updated_at = "2099-01-01T00:00:00.000Z";
+      stale.instance.base_url = "http://127.0.0.1:3002";
+      stale.test_instance.base_url = "http://127.0.0.1:3002";
+      const agents = new MemoryAgentStore([stale]);
+      try {
+        const shop = await agents.get(REFERENCE_AGENT_ID);
+        assert.equal(shop?.name, "Edited shop");
+        assert.equal(shop?.instance.base_url, "https://mesa-agentservice.onrender.com");
+        assert.equal(shop?.test_instance.base_url, "https://mesa-agentservice.onrender.com");
+        assert.equal(shop?.world?.base_url, "https://mesa-mock-shop.onrender.com");
+      } finally {
+        await agents.close();
+      }
+    } finally {
+      if (previousNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNode;
+      if (previousAgent === undefined) delete process.env.AGENTSERVICE_URL;
+      else process.env.AGENTSERVICE_URL = previousAgent;
     }
   });
 });
