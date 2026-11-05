@@ -60,6 +60,7 @@ interface FormState {
   description: string;
   instance_base_url: string;
   test_instance_base_url: string;
+  github_repo_url: string;
   tasks: AgentTask[];
   otel: OtelSourceDraft;
 }
@@ -76,6 +77,7 @@ const EMPTY_FORM: FormState = {
   description: "",
   instance_base_url: "",
   test_instance_base_url: "",
+  github_repo_url: "",
   tasks: blankTasks(),
   otel: emptyOtelDraft(),
 };
@@ -92,6 +94,7 @@ function agentToForm(agent: Agent): FormState {
     description: agent.description,
     instance_base_url: agent.instance.base_url,
     test_instance_base_url: agent.test_instance.base_url,
+    github_repo_url: agent.github_repo_url ?? "",
     tasks: structuredClone(agent.tasks),
     otel: otelDraftFromAgent(agent.otel),
   };
@@ -207,6 +210,7 @@ export function AgentsPage() {
       description: form.description.trim(),
       instance_base_url: form.instance_base_url.trim(),
       test_instance_base_url: form.test_instance_base_url.trim(),
+      github_repo_url: form.github_repo_url.trim() || undefined,
       tasks: form.tasks,
       otel: otelSourceFromDraft(form.otel, {
         preserveSchemaId: editing?.otel?.schema_id,
@@ -451,6 +455,18 @@ export function AgentsPage() {
                     <p className="text-xs text-destructive pl-[76px]">{errors.instance_base_url}</p>
                   )}
                   <p className="text-xs text-muted-foreground pl-[76px]">Test defaults to instance URL if empty.</p>
+                  <div className="flex items-center gap-3 pt-2">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">GitHub</span>
+                    <div className="flex-1">
+                      <Input
+                        value={form.github_repo_url}
+                        onChange={(e) => setField("github_repo_url", e.target.value)}
+                        placeholder="https://github.com/org/repo"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-[76px]">Optional. Used to open diagnoses as GitHub issues.</p>
                 </div>
 
                 <div className={cn("space-y-7", editTab !== "otel" && "hidden")}>

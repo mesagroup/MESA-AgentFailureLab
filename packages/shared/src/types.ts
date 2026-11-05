@@ -397,6 +397,7 @@ export interface Agent {
    * Fixture fallback for schema remap A or B. Demo pull uses `otel.prod` and `otel.test` over HTTP.
    */
   otel_mock?: OtelMockConfig;
+  github_repo_url?: string;
   tasks: AgentTask[];
 }
 

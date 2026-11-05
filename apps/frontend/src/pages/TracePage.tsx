@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { ApiError, createRun, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
+import { ApiError, createRun, getAgent, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
 import {
   FIX_KIND_LABELS,
   afterFixRunBody,
@@ -16,7 +16,7 @@ import {
   type HarnessTaskResult,
 } from "@/lib/after-fix";
 import { isWorldBusy } from "@/lib/jury";
-import { adrFixForCategory, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
+import { adrFixForCategory, type Agent, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
 import { AfterFixPanel } from "@/pages/AfterFixPanel";
 import { TraceSourceBadge } from "@/pages/TraceSourceBadge";
 import { traceListSource } from "@/lib/traces";
@@ -216,6 +216,7 @@ export function TracePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [trace, setTrace] = useState<Trace | null>(null);
+  const [agent, setAgent] = useState<Agent | null>(null);
   const [snapshot, setSnapshot] = useState<HarnessSnapshot | null>(null);
   const [extraTraces, setExtraTraces] = useState<Trace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +227,8 @@ export function TracePage() {
   const [replayBusy, setReplayBusy] = useState(false);
   const [cleanTreated, setCleanTreated] = useState(false);
   const [replayPair, setReplayPair] = useState<HarnessTaskResult | null>(null);
+  const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+  const [issueFeedback, setIssueFeedback] = useState<string | null>(null);
   const afterParam = searchParams.get("after");
 
   async function load(id: string, silent = false) {
@@ -241,6 +244,8 @@ export function TracePage() {
       setSnapshot(merged.snapshot);
       setExtraTraces(merged.traces);
       if (!silent) setSelectedFixes(selectableFixKinds(nextTrace.diagnosis?.proposed_fixes));
+      const nextAgent = await getAgent(nextTrace.agent_id);
+      setAgent(nextAgent ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load trace");
       setTrace(null);
@@ -470,6 +475,27 @@ export function TracePage() {
                     </div>
                   </div>
                 )}
+                <div className="pt-1">
+                  {agent?.github_repo_url ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={() => { setIssueFeedback(null); setIssueDialogOpen(true); }}
+                      >
+                        Open as GitHub issue
+                      </Button>
+                      {issueFeedback && (
+                        <p className="text-xs text-green-500 mt-1.5 text-center">{issueFeedback}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Configure a GitHub repo URL on the agent to use this feature.
+                    </p>
+                  )}
+                </div>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">Diagnosis not available</p>
@@ -509,6 +535,60 @@ export function TracePage() {
 
         </div>
       </div>
+
+      {issueDialogOpen && trace.diagnosis && agent?.github_repo_url && (() => {
+        const d = trace.diagnosis;
+        const issueTitle = `[MESA] ${d.category}: ${trace.agent_id} — ${trace.task_id}`;
+        const issueBody = [
+          "## Fault diagnosis",
+          "",
+          `**Category:** ${d.category}`,
+          `**Confidence:** ${Math.round(d.confidence * 100)}%`,
+          `**Cause:** ${d.cause}`,
+          "",
+          "## Evidence",
+          ...d.evidence.map((e) => `- ${e}`),
+          "",
+          "## Proposed fixes",
+          ...d.proposed_fixes.map((f) => `- ${f}`),
+          "",
+          "## Trace",
+          `Agent: ${trace.agent_id}`,
+          `Task: ${trace.task_id}`,
+          `Status: ${trace.status}`,
+          `Trace ID: ${trace.trace_id}`,
+          `Link: ${window.location.origin}/traces/${trace.trace_id}`,
+        ].join("\n");
+        const repoUrl = agent.github_repo_url.replace(/\/$/, "");
+        const ghUrl = `${repoUrl}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+        return (
+          <dialog
+            open
+            className="fixed inset-0 z-50 m-auto w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl border border-border"
+            onClick={(e) => { if (e.target === e.currentTarget) setIssueDialogOpen(false); }}
+          >
+            <h2 className="text-sm font-semibold mb-1">Open as GitHub issue</h2>
+            <p className="text-xs text-muted-foreground mb-3">Review the composed issue before opening GitHub.</p>
+            <div className="rounded-lg bg-muted/40 p-3 mb-4 max-h-64 overflow-y-auto">
+              <p className="text-xs font-mono font-medium mb-2">{issueTitle}</p>
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">{issueBody}</pre>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIssueDialogOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  window.open(ghUrl, "_blank", "noopener,noreferrer");
+                  setIssueDialogOpen(false);
+                  setIssueFeedback("Issue opened in new tab");
+                }}
+              >
+                Open on GitHub
+              </Button>
+            </div>
+          </dialog>
+        );
+      })()}
 
       <AfterFixPanel
         proposed={proposed}
