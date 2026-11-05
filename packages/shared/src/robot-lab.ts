@@ -1,5 +1,5 @@
 // Change this one value, then rebuild and redeploy all three services.
-export const FEATURES = { robotLab: false } as const;
+export const FEATURES = { robotLab: true } as const;
 export const arms = ["baseline", "attack", "protected", "clean-control"] as const;
 export type Arm = typeof arms[number];
 export const actions = ["scan", "pick", "move:A", "move:B", "move:C", "drop"] as const;
