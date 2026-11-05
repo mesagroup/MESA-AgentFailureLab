@@ -22,6 +22,14 @@ export function hrefAfterCreateRun(
   return `/runs/${encodeURIComponent(id.trim())}`;
 }
 
+/** After POST /attacker/jury-case, open the attacked run. Fallback is the security filter. */
+export function hrefAfterJuryLaunch(
+  report: { attacked?: { run?: { run_id?: string } } } | null | undefined,
+): string {
+  const href = hrefAfterCreateRun(report?.attacked?.run ? [{ run: report.attacked.run }] : []);
+  return href === "/runs" ? "/runs?type=security" : href;
+}
+
 export function deleteAgentErrorMessage(error: unknown, agentId: string): string {
   if (isHttpError(error) && error.status === 409) {
     return error.message.trim() || `Agent ${agentId} is a demo seed and cannot be deleted.`;

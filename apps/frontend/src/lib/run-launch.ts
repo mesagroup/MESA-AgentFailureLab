@@ -1,6 +1,18 @@
 import { FIX_KINDS, type Agent, type AgentTask, type FixKind, type Run, type RunPhase, type RunStatus } from "@mesa/shared";
 import type { RunParams } from "./api";
 
+/** Mirrors `POST /attacker/jury-case` body. Kept here so node tests can load this module. */
+export interface JuryLaunchBody {
+  note: string;
+  task_id: string;
+  permissions: string[];
+  include_baseline: boolean;
+  fix_kinds?: string[];
+  parent_run_id?: string;
+}
+
+const JURY_NOTE_MAX = 8000;
+
 const TERMINAL: ReadonlySet<RunStatus> = new Set(["passed", "failed", "error"]);
 
 /**
@@ -18,6 +30,50 @@ export function baselineRunsForAgent(runs: readonly Run[], agentId: string): Run
 
 export function phaseNeedsBaselineParent(phase: RunPhase): boolean {
   return phase === "injected" || phase === "after_fix";
+}
+
+/**
+ * Launcher phases. `jury` is UI-only — Run.phase in @mesa/shared stays
+ * baseline | injected | after_fix. Security launches POST /attacker/jury-case.
+ */
+export const LAUNCH_PHASES = ["baseline", "injected", "jury", "after_fix"] as const;
+export type LaunchPhase = (typeof LAUNCH_PHASES)[number];
+
+export function isRunLaunchPhase(phase: LaunchPhase): phase is RunPhase {
+  return phase === "baseline" || phase === "injected" || phase === "after_fix";
+}
+
+export function phaseNeedsReferenceRun(phase: LaunchPhase): boolean {
+  return phase === "injected" || phase === "after_fix" || phase === "jury";
+}
+
+export const JURY_LAUNCH_COPY = {
+  helper:
+    "Agent security testing: attacker, malicious juror note, and permission guard. Posts /attacker/jury-case.",
+  referenceLabel: "Reference run",
+  referenceAttack: "Baseline run to attack",
+  referenceReplay: "Injected or after_fix run to replay",
+  noteLabel: "Malicious juror note",
+  permissionsLabel: "Session permissions",
+  includeBaselineLabel: "Include a clean baseline (same task and grant, no note)",
+  replayHint:
+    "Replay stores the attack as after_fix with parent_run_id and fix_kinds (permission_guard).",
+  attackHint:
+    "The attacker appends the note to this task. The stored run has injection_plan.ground_truth.category Security.",
+  emptyReferences: "No completed runs for this agent. Launch a baseline first.",
+  loadingCase: "Loading the security case…",
+} as const;
+
+/** Terminal runs of this agent (picker for the jury/security phase). */
+export function juryReferenceRunsForAgent(runs: readonly Run[], agentId: string): Run[] {
+  return runs.filter((run) => run.agent_id === agentId && TERMINAL.has(run.status));
+}
+
+export function juryLaunchMode(run: Pick<Run, "phase"> | null | undefined): "attack" | "replay" | null {
+  if (!run) return null;
+  if (run.phase === "baseline") return "attack";
+  if (run.phase === "injected" || run.phase === "after_fix") return "replay";
+  return null;
 }
 
 /** Resolve the agent task for a run (title / prompt labels). */
@@ -134,6 +190,107 @@ export function buildLaunchParams(input: {
 
 export function toggleLaunchFixKind(selected: readonly FixKind[], kind: FixKind): FixKind[] {
   return selected.includes(kind) ? selected.filter((item) => item !== kind) : [...selected, kind];
+}
+
+export function buildJuryLaunchParams(input: {
+  note: string;
+  referenceRun: Pick<Run, "run_id" | "phase" | "task_id"> | null;
+  permissions: readonly string[];
+  includeBaseline: boolean;
+  fixKinds: readonly string[];
+  maxChars?: number;
+}): { ok: true; body: JuryLaunchBody } | { ok: false; message: string } {
+  const reference = input.referenceRun;
+  if (!reference) {
+    return { ok: false, message: "Select a completed run to attack or replay." };
+  }
+  const mode = juryLaunchMode(reference);
+  if (!mode) {
+    return { ok: false, message: "Select a completed baseline, injected, or after_fix run." };
+  }
+  const note = input.note.trim();
+  const maxChars = input.maxChars ?? JURY_NOTE_MAX;
+  if (note.length === 0) return { ok: false, message: "The malicious juror note cannot be empty." };
+  if (note.length > maxChars) return { ok: false, message: `The note can be at most ${maxChars} characters.` };
+  if (reference.task_id.trim().length === 0) return { ok: false, message: "Choose a task." };
+
+  const body: JuryLaunchBody = {
+    note,
+    task_id: reference.task_id.trim(),
+    permissions: [...input.permissions],
+    include_baseline: mode === "replay" ? false : input.includeBaseline,
+  };
+
+  if (mode === "replay") {
+    const kinds = input.fixKinds.map((kind) => kind.trim()).filter((kind) => kind.length > 0);
+    if (kinds.length === 0 || !kinds.includes("permission_guard")) {
+      return {
+        ok: false,
+        message: "Select permission_guard (and any other fix kinds) to replay the security case.",
+      };
+    }
+    body.fix_kinds = kinds;
+    body.parent_run_id = reference.run_id;
+  }
+
+  return { ok: true, body };
+}
+
+export type LaunchRequest =
+  | { ok: true; kind: "run"; params: RunParams }
+  | { ok: true; kind: "jury"; body: JuryLaunchBody }
+  | { ok: false; message: string };
+
+/** Dispatch RunSheet submit: POST /runs for Run phases, POST /attacker/jury-case for jury. */
+export function buildLaunchRequest(input: {
+  agentId: string;
+  phase: LaunchPhase;
+  taskIds: readonly string[];
+  parentRunId: string | null;
+  fixKinds: readonly FixKind[];
+  promptOverride?: string | null;
+  jury?: {
+    note: string;
+    permissions: readonly string[];
+    includeBaseline: boolean;
+    referenceRun: Pick<Run, "run_id" | "phase" | "task_id"> | null;
+    maxChars?: number;
+  };
+}): LaunchRequest {
+  if (input.phase === "jury") {
+    if (!input.jury) return { ok: false, message: "Security launch is missing the juror note form." };
+    const built = buildJuryLaunchParams({
+      note: input.jury.note,
+      referenceRun: input.jury.referenceRun,
+      permissions: input.jury.permissions,
+      includeBaseline: input.jury.includeBaseline,
+      fixKinds: input.fixKinds,
+      maxChars: input.jury.maxChars,
+    });
+    if (!built.ok) return built;
+    return { ok: true, kind: "jury", body: built.body };
+  }
+  const built = buildLaunchParams({
+    agentId: input.agentId,
+    phase: input.phase,
+    taskIds: input.taskIds,
+    parentRunId: input.parentRunId,
+    fixKinds: input.fixKinds,
+    promptOverride: input.promptOverride,
+  });
+  if (!built.ok) return built;
+  return { ok: true, kind: "run", params: built.params };
+}
+
+export function jurySheetReady(input: {
+  note: string;
+  referenceRun: Pick<Run, "run_id" | "phase" | "task_id"> | null;
+  permissions: readonly string[];
+  includeBaseline: boolean;
+  fixKinds: readonly string[];
+  maxChars?: number;
+}): boolean {
+  return buildJuryLaunchParams(input).ok;
 }
 
 export { FIX_KINDS };

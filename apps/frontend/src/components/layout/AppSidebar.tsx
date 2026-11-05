@@ -1,4 +1,4 @@
-import { Activity, Bot, LayoutDashboard, Play, Shield, Zap } from "lucide-react";
+import { Activity, Bot, LayoutDashboard, Play, Zap, type LucideIcon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
@@ -10,14 +10,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { PRIMARY_NAV } from "@/lib/nav";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/jury", label: "Giuria", icon: Shield, exact: false },
-  { to: "/agents", label: "Agents", icon: Bot, exact: false },
-  { to: "/runs", label: "Runs", icon: Play, exact: false },
-  { to: "/traces", label: "Traces", icon: Activity, exact: false },
-];
+const NAV_ICONS: Record<(typeof PRIMARY_NAV)[number]["to"], LucideIcon> = {
+  "/": LayoutDashboard,
+  "/agents": Bot,
+  "/runs": Play,
+  "/traces": Activity,
+};
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -48,7 +48,8 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV.map(({ to, label, icon: Icon, exact }) => {
+              {PRIMARY_NAV.map(({ to, label, exact }) => {
+                const Icon = NAV_ICONS[to];
                 const isActive = exact ? pathname === to : pathname.startsWith(to);
                 return (
                   <SidebarMenuItem key={to}>

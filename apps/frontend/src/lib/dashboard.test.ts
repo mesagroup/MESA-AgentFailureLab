@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dashboardRunHref, isShoppingDemo, linkFor } from "./dashboard.ts";
+import { DASHBOARD_DESTINATIONS, dashboardRunHref, isShoppingDemo, linkFor } from "./dashboard.ts";
+import { SECURITY_RUNS_HREF } from "./security-runs.ts";
 
 test("a run with a first trace opens that trace id", () => {
   const href = dashboardRunHref(
@@ -37,4 +38,10 @@ test("the reference shop is the shopping demo", () => {
     isShoppingDemo({ agent_id: "other", name: "Planner", description: "Schedules jobs" }),
     false,
   );
+});
+
+test("dashboard destinations fold security into Runs, not /jury", () => {
+  assert.equal(DASHBOARD_DESTINATIONS.some((item) => item.to === "/jury" || item.title === "Giuria"), false);
+  assert.equal(DASHBOARD_DESTINATIONS[0]?.to, SECURITY_RUNS_HREF);
+  assert.equal(DASHBOARD_DESTINATIONS[0]?.title, "Security");
 });

@@ -11,8 +11,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun } from "@/lib/agents-page";
-import { createRun, deleteAgent, listAgents, listRuns, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
+import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch } from "@/lib/agents-page";
+import { createRun, deleteAgent, getJuryCase, listAgents, listRuns, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
 import {
   emptyOtelDraft,
   otelDraftFromAgent,
@@ -24,16 +24,29 @@ import {
 } from "@/lib/otel";
 import {
   FIX_KINDS,
+  JURY_LAUNCH_COPY,
+  LAUNCH_PHASES,
   baselineRunsForAgent,
-  buildLaunchParams,
+  buildLaunchRequest,
   filterRunsByQuery,
   formatRunDuration,
-  phaseNeedsBaselineParent,
+  juryLaunchMode,
+  juryReferenceRunsForAgent,
+  jurySheetReady,
+  phaseNeedsReferenceRun,
   taskForRun,
   taskTitleForRun,
   toggleLaunchFixKind,
+  type LaunchPhase,
 } from "@/lib/run-launch";
-import type { Agent, AgentTask, FixKind, OtelSourceAuthType, Run, RunPhase } from "@mesa/shared";
+import {
+  formDefaults,
+  isWorldBusy,
+  noteMaxChars,
+  permissionChoices,
+  type JuryCaseDescription,
+} from "@/lib/jury";
+import type { Agent, AgentTask, FixKind, OtelSourceAuthType, Run } from "@mesa/shared";
 import { AgentTasksEditor, blankTasks, validateTasks } from "@/pages/AgentTasksEditor";
 import { OtelImportPanel } from "@/pages/OtelImportPanel";
 import { TracePullPanel } from "@/pages/TracePullPanel";
@@ -630,7 +643,7 @@ function OtelSourceFields({
 
 function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void }) {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<RunPhase>("baseline");
+  const [phase, setPhase] = useState<LaunchPhase>("baseline");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [parentRunId, setParentRunId] = useState<string | null>(null);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
@@ -638,6 +651,13 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   const [promptDraft, setPromptDraft] = useState("");
   const [promptTouched, setPromptTouched] = useState(false);
   const [fixKinds, setFixKinds] = useState<FixKind[]>([]);
+  const [juryFixKinds, setJuryFixKinds] = useState<FixKind[]>(["permission_guard"]);
+  const [juryDescription, setJuryDescription] = useState<JuryCaseDescription | null>(null);
+  const [juryLoading, setJuryLoading] = useState(false);
+  const [juryLoadError, setJuryLoadError] = useState<string | null>(null);
+  const [juryNote, setJuryNote] = useState("");
+  const [juryPermissions, setJuryPermissions] = useState<string[]>([]);
+  const [juryIncludeBaseline, setJuryIncludeBaseline] = useState(true);
   const [agentRuns, setAgentRuns] = useState<Run[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
@@ -654,6 +674,12 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     setPromptDraft("");
     setPromptTouched(false);
     setFixKinds([]);
+    setJuryFixKinds(["permission_guard"]);
+    setJuryDescription(null);
+    setJuryLoadError(null);
+    setJuryNote("");
+    setJuryPermissions([]);
+    setJuryIncludeBaseline(true);
     setError(null);
     setRunsError(null);
     setLaunching(false);
@@ -693,6 +719,27 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     return selected ? [selected, ...filtered] : filtered;
   }, [baselines, agent, baselineFilter, parentRunId]);
 
+  const juryReferences = useMemo(
+    () => (agent ? juryReferenceRunsForAgent(agentRuns, agent.agent_id) : []),
+    [agent, agentRuns],
+  );
+
+  const filteredJuryReferences = useMemo(() => {
+    const filtered = filterRunsByQuery(juryReferences, agent, baselineFilter);
+    if (!parentRunId) return filtered;
+    if (filtered.some((run) => run.run_id === parentRunId)) return filtered;
+    const selected = juryReferences.find((run) => run.run_id === parentRunId);
+    return selected ? [selected, ...filtered] : filtered;
+  }, [juryReferences, agent, baselineFilter, parentRunId]);
+
+  const selectedJuryRun = useMemo(
+    () => juryReferences.find((run) => run.run_id === parentRunId) ?? null,
+    [juryReferences, parentRunId],
+  );
+  const juryMode = juryLaunchMode(selectedJuryRun);
+  const juryChoices = juryDescription ? permissionChoices(juryDescription) : [];
+  const juryMaxChars = noteMaxChars(juryDescription);
+
   const selectedBaseline = useMemo(
     () => baselines.find((run) => run.run_id === parentRunId) ?? null,
     [baselines, parentRunId],
@@ -720,15 +767,42 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     });
   }
 
-  function selectPhase(next: RunPhase) {
+  useEffect(() => {
+    if (!agent || phase !== "jury") return;
+    let cancelled = false;
+    setJuryLoading(true);
+    setJuryLoadError(null);
+    getJuryCase()
+      .then((description) => {
+        if (cancelled) return;
+        setJuryDescription(description);
+        const defaults = formDefaults(description);
+        setJuryNote((current) => (current.trim() ? current : defaults.note));
+        setJuryPermissions((current) => (current.length > 0 ? current : defaults.permissions));
+        setJuryIncludeBaseline(defaults.includeBaseline);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setJuryLoadError(err instanceof Error ? err.message : "Could not load the security case.");
+      })
+      .finally(() => {
+        if (!cancelled) setJuryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, phase]);
+
+  function selectPhase(next: LaunchPhase) {
     setPhase(next);
     setError(null);
-    if (!phaseNeedsBaselineParent(next)) {
+    if (!phaseNeedsReferenceRun(next)) {
       setParentRunId(null);
       setDetailRunId(null);
       setPromptDraft("");
       setPromptTouched(false);
     }
+    if (next === "jury") setJuryFixKinds(["permission_guard"]);
   }
 
   function selectBaseline(runId: string) {
@@ -740,19 +814,27 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
 
   async function handleLaunch() {
     if (!agent || launching) return;
-    const built = buildLaunchParams({
+    const runPhase = phase === "injected" || phase === "after_fix";
+    const built = buildLaunchRequest({
       agentId: agent.agent_id,
       phase,
       taskIds: [...selectedTasks],
       parentRunId,
-      fixKinds,
+      fixKinds: phase === "jury" ? juryFixKinds : fixKinds,
       promptOverride:
-        phaseNeedsBaselineParent(phase) &&
+        runPhase &&
         promptTouched &&
         promptDraft.trim().length > 0 &&
         (!selectedTask || promptDraft.trim() !== selectedTask.prompt)
           ? promptDraft
           : null,
+      jury: {
+        note: juryNote,
+        permissions: juryPermissions,
+        includeBaseline: juryIncludeBaseline,
+        referenceRun: selectedJuryRun,
+        maxChars: juryMaxChars,
+      },
     });
     if (!built.ok) {
       setError(built.message);
@@ -761,18 +843,30 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     setLaunching(true);
     setError(null);
     try {
-      const results = await createRun(built.params);
-      onClose();
-      navigate(hrefAfterCreateRun(results));
+      if (built.kind === "jury") {
+        const report = await postJuryCase(built.body);
+        onClose();
+        navigate(hrefAfterJuryLaunch(report));
+      } else {
+        const results = await createRun(built.params);
+        onClose();
+        navigate(hrefAfterCreateRun(results));
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Launch failed.");
+      const busyCode = juryDescription?.frontend?.http_409?.jury_and_runs;
+      if (phase === "jury" && isWorldBusy(e, busyCode)) {
+        setError("The mock world is busy with another run. Retry when it finishes. This is not a verifier failure.");
+      } else {
+        setError(e instanceof Error ? e.message : "Launch failed.");
+      }
     } finally {
       setLaunching(false);
     }
   }
 
   const promptOk =
-    !phaseNeedsBaselineParent(phase) ||
+    phase === "baseline" ||
+    phase === "jury" ||
     (!promptTouched && Boolean(selectedTask?.prompt)) ||
     promptDraft.trim().length > 0;
   const launchReady =
@@ -780,6 +874,15 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       ? selectedTasks.size > 0
       : phase === "injected"
         ? Boolean(parentRunId) && promptOk
+        : phase === "jury"
+          ? jurySheetReady({
+              note: juryNote,
+              referenceRun: selectedJuryRun,
+              permissions: juryPermissions,
+              includeBaseline: juryIncludeBaseline,
+              fixKinds: juryFixKinds,
+              maxChars: juryMaxChars,
+            }) && !juryLoading
         : Boolean(parentRunId) && fixKinds.length > 0 && promptOk;
 
   return (
@@ -793,13 +896,14 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         <div className="flex flex-1 overflow-hidden">
           <div className="w-[32%] shrink-0 border-r border-border/40 px-8 py-6">
             <p className="text-sm font-medium mb-3">Phase</p>
-            <div className="flex flex-col gap-2">
-              {(["baseline", "injected", "after_fix"] as RunPhase[]).map((p) => (
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Launch phase">
+              {LAUNCH_PHASES.map((p) => (
                 <button
                   key={p}
                   type="button"
                   disabled={launching}
                   onClick={() => selectPhase(p)}
+                  aria-pressed={phase === p}
                   className={cn(
                     "text-left px-4 py-2.5 rounded-xl border text-sm transition-colors disabled:opacity-50",
                     phase === p
@@ -807,7 +911,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                       : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
                   )}
                 >
-                  <span className="font-mono">{p}</span>
+                  <span className="font-mono">{p === "jury" ? "jury" : p}</span>
+                  {p === "jury" && (
+                    <span className="block text-[11px] mt-0.5 opacity-80">security</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -819,6 +926,11 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
             {phase === "after_fix" && (
               <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                 Owner already fixed the agent on their deploy. Pick one baseline, edit the prompt if needed, choose fix kinds, then replay.
+              </p>
+            )}
+            {phase === "jury" && (
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                {JURY_LAUNCH_COPY.helper}
               </p>
             )}
           </div>
@@ -845,6 +957,57 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                   ))}
                 </div>
               </div>
+            ) : phase === "jury" ? (
+              <JuryLaunchFields
+                agent={agent}
+                launching={launching}
+                loadingRuns={loadingRuns}
+                runsError={runsError}
+                juryLoading={juryLoading}
+                juryLoadError={juryLoadError}
+                filter={baselineFilter}
+                onFilter={setBaselineFilter}
+                references={filteredJuryReferences}
+                totalReferences={juryReferences.length}
+                selectedRunId={parentRunId}
+                selectedRun={selectedJuryRun}
+                detailRunId={detailRunId}
+                onSelectRun={(runId) => {
+                  if (launching) return;
+                  setParentRunId(runId);
+                  setDetailRunId(runId);
+                  setError(null);
+                }}
+                onToggleDetail={(runId) => {
+                  if (launching) return;
+                  setDetailRunId((prev) => (prev === runId ? null : runId));
+                  if (parentRunId !== runId) {
+                    setParentRunId(runId);
+                    setError(null);
+                  }
+                }}
+                note={juryNote}
+                onNote={setJuryNote}
+                maxChars={juryMaxChars}
+                permissions={juryPermissions}
+                choices={juryChoices.length > 0 ? juryChoices : ["read", "write:cart", "write:order", "write:order:cancel"]}
+                onTogglePermission={(permission) => {
+                  if (launching) return;
+                  setJuryPermissions((prev) => (
+                    prev.includes(permission)
+                      ? prev.filter((name) => name !== permission)
+                      : [...prev, permission]
+                  ));
+                }}
+                includeBaseline={juryIncludeBaseline}
+                onIncludeBaseline={setJuryIncludeBaseline}
+                mode={juryMode}
+                fixKinds={juryFixKinds}
+                onToggleFixKind={(kind) => {
+                  if (launching) return;
+                  setJuryFixKinds((prev) => toggleLaunchFixKind(prev, kind));
+                }}
+              />
             ) : (
               <>
                 <div>
@@ -1033,6 +1196,261 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function JuryLaunchFields({
+  agent,
+  launching,
+  loadingRuns,
+  runsError,
+  juryLoading,
+  juryLoadError,
+  filter,
+  onFilter,
+  references,
+  totalReferences,
+  selectedRunId,
+  selectedRun,
+  detailRunId,
+  onSelectRun,
+  onToggleDetail,
+  note,
+  onNote,
+  maxChars,
+  permissions,
+  choices,
+  onTogglePermission,
+  includeBaseline,
+  onIncludeBaseline,
+  mode,
+  fixKinds,
+  onToggleFixKind,
+}: {
+  agent: Agent | null;
+  launching: boolean;
+  loadingRuns: boolean;
+  runsError: string | null;
+  juryLoading: boolean;
+  juryLoadError: string | null;
+  filter: string;
+  onFilter: (value: string) => void;
+  references: Run[];
+  totalReferences: number;
+  selectedRunId: string | null;
+  selectedRun: Run | null;
+  detailRunId: string | null;
+  onSelectRun: (runId: string) => void;
+  onToggleDetail: (runId: string) => void;
+  note: string;
+  onNote: (value: string) => void;
+  maxChars: number;
+  permissions: string[];
+  choices: string[];
+  onTogglePermission: (permission: string) => void;
+  includeBaseline: boolean;
+  onIncludeBaseline: (value: boolean) => void;
+  mode: "attack" | "replay" | null;
+  fixKinds: FixKind[];
+  onToggleFixKind: (kind: FixKind) => void;
+}) {
+  const noteLen = note.trim().length;
+  return (
+    <div className="space-y-6" aria-busy={launching || juryLoading || loadingRuns}>
+      {juryLoading && <p className="text-xs text-muted-foreground">{JURY_LAUNCH_COPY.loadingCase}</p>}
+      {juryLoadError && <p className="text-xs text-destructive">{juryLoadError}</p>}
+
+      <div>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-sm font-medium">{JURY_LAUNCH_COPY.referenceLabel}</p>
+          <span className="text-xs text-muted-foreground">{references.length}/{totalReferences}</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          {mode === "replay" ? JURY_LAUNCH_COPY.replayHint : JURY_LAUNCH_COPY.attackHint}
+        </p>
+        {loadingRuns ? (
+          <p className="text-xs text-muted-foreground">Loading runs…</p>
+        ) : runsError ? (
+          <p className="text-xs text-destructive">{runsError}</p>
+        ) : totalReferences === 0 ? (
+          <p className="text-xs text-muted-foreground">{JURY_LAUNCH_COPY.emptyReferences}</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+              <Input
+                value={filter}
+                onChange={(event) => onFilter(event.target.value)}
+                placeholder="Filter by title, task, status, prompt…"
+                className="pl-9 h-9 text-sm"
+                aria-label="Filter reference runs"
+                disabled={launching}
+              />
+            </div>
+            {references.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No runs match this filter.</p>
+            ) : (
+              <div className="space-y-2" role="radiogroup" aria-label="Reference runs">
+                {references.map((run) => {
+                  const title = taskTitleForRun(agent, run);
+                  const task = taskForRun(agent, run);
+                  const open = detailRunId === run.run_id;
+                  const selected = selectedRunId === run.run_id;
+                  return (
+                    <div
+                      key={run.run_id}
+                      className={cn(
+                        "rounded-xl border transition-colors",
+                        selected ? "border-foreground bg-muted/20" : "border-border/40",
+                      )}
+                    >
+                      <label className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20">
+                        <input
+                          type="radio"
+                          name="jury-reference"
+                          checked={selected}
+                          disabled={launching}
+                          onChange={() => onSelectRun(run.run_id)}
+                          className="accent-primary shrink-0 mt-1"
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium truncate">{title}</span>
+                            <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
+                            <span className="font-mono text-[11px] text-muted-foreground">{run.phase}</span>
+                            <span className={cn(
+                              "text-[11px] font-mono",
+                              run.status === "passed" && "text-green-600",
+                              (run.status === "failed" || run.status === "error") && "text-red-500",
+                            )}>
+                              {run.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {task?.prompt ?? "No prompt on agent for this task id."}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={launching}
+                          className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 mt-0.5 disabled:opacity-50"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            onToggleDetail(run.run_id);
+                          }}
+                        >
+                          {open ? "Hide" : "Detail"}
+                        </button>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="jury-note" className="text-sm font-medium">{JURY_LAUNCH_COPY.noteLabel}</label>
+          <span className={cn("text-xs font-mono text-muted-foreground", noteLen > maxChars && "text-red-500")}>
+            {noteLen}/{maxChars}
+          </span>
+        </div>
+        <textarea
+          id="jury-note"
+          value={note}
+          disabled={launching}
+          onChange={(event) => onNote(event.target.value)}
+          rows={7}
+          className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem] disabled:opacity-50"
+        />
+        <p className="text-xs text-muted-foreground">
+          Untrusted text appended to the task prompt. A permission named in the note is not a grant.
+        </p>
+      </div>
+
+      <fieldset className="space-y-2" disabled={launching}>
+        <legend className="text-sm font-medium">{JURY_LAUNCH_COPY.permissionsLabel}</legend>
+        <div className="flex flex-wrap gap-2">
+          {choices.map((permission) => {
+            const active = permissions.includes(permission);
+            return (
+              <button
+                key={permission}
+                type="button"
+                aria-pressed={active}
+                disabled={launching}
+                onClick={() => onTogglePermission(permission)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-mono border transition-colors disabled:opacity-50",
+                  active
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {permission}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Session grant sent with the case. Empty is a grant of nothing. Unknown names are rejected by the harness.
+        </p>
+      </fieldset>
+
+      {mode !== "replay" && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={includeBaseline}
+            disabled={launching}
+            onChange={(event) => onIncludeBaseline(event.target.checked)}
+          />
+          <span>
+            {JURY_LAUNCH_COPY.includeBaselineLabel}
+            <span className="block text-xs text-muted-foreground">Default on for a first attack. Off when replaying.</span>
+          </span>
+        </label>
+      )}
+
+      {mode === "replay" && (
+        <div>
+          <p className="text-sm font-medium mb-3">Fix kinds</p>
+          <p className="text-xs text-muted-foreground mb-2">{JURY_LAUNCH_COPY.replayHint}</p>
+          <div className="flex flex-wrap gap-2">
+            {FIX_KINDS.map((kind) => {
+              const active = fixKinds.includes(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={active}
+                  disabled={launching}
+                  onClick={() => onToggleFixKind(kind)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-xs font-mono border transition-colors disabled:opacity-50",
+                    active
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {kind}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedRun && (
+        <p className="text-xs font-mono text-muted-foreground">
+          task {selectedRun.task_id} · {selectedRun.phase} · {mode ?? "pick a run"}
+        </p>
+      )}
+    </div>
   );
 }
 

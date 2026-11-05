@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,14 @@ import { listAgents, listRuns } from "@/lib/api";
 import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
 import { runListClickHref } from "@/lib/run-detail";
 import { formatRunDuration, taskForRun, taskTitleForRun } from "@/lib/run-launch";
+import {
+  SECURITY_BADGE_LABEL,
+  SECURITY_FILTER_COPY,
+  SECURITY_RUNS_HREF,
+  filterRunsByType,
+  isSecurityRun,
+  runsListTypeFromSearch,
+} from "@/lib/security-runs";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 
 function PhaseBadge({ phase }: { phase: RunPhase }) {
@@ -20,6 +28,14 @@ function PhaseBadge({ phase }: { phase: RunPhase }) {
   return (
     <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", styles[phase])}>
       {labels[phase]}
+    </span>
+  );
+}
+
+function SecurityBadge() {
+  return (
+    <span className="inline-flex items-center rounded-md border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-xs font-mono text-violet-500">
+      {SECURITY_BADGE_LABEL}
     </span>
   );
 }
@@ -48,6 +64,8 @@ function groupSummary(runs: Run[]) {
 }
 
 export function RunsPage() {
+  const [searchParams] = useSearchParams();
+  const listType = runsListTypeFromSearch(searchParams);
   const [runs, setRuns] = useState<Run[]>([]);
   const [agentMap, setAgentMap] = useState<Record<string, Agent>>({});
   const [loading, setLoading] = useState(true);
@@ -91,10 +109,24 @@ export function RunsPage() {
     };
   }, [runs]);
 
+  useEffect(() => {
+    if (listType !== "security") return;
+    const first = filterRunsByType(runs, "security")[0]?.agent_id;
+    if (!first) return;
+    setExpanded((prev) => {
+      if (prev.has(first)) return prev;
+      const next = new Set(prev);
+      next.add(first);
+      return next;
+    });
+  }, [listType, runs]);
+
+  const typedRuns = filterRunsByType(runs, listType);
+
   const filteredRuns = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!needle) return runs;
-    return runs.filter((run) => {
+    if (!needle) return typedRuns;
+    return typedRuns.filter((run) => {
       const agent = agentMap[run.agent_id];
       const task = taskForRun(agent, run);
       const haystack = [
@@ -107,10 +139,11 @@ export function RunsPage() {
         task?.title ?? "",
         task?.prompt ?? "",
         run.error_message ?? "",
+        isSecurityRun(run) ? "security" : "",
       ].join(" ").toLowerCase();
       return haystack.includes(needle);
     });
-  }, [runs, agentMap, filter]);
+  }, [typedRuns, agentMap, filter]);
 
   const groups = filteredRuns.reduce<{ agentId: string; runs: Run[] }[]>((acc, run) => {
     const existing = acc.find((g) => g.agentId === run.agent_id);
@@ -129,22 +162,56 @@ export function RunsPage() {
 
   return (
     <div className="px-5 pb-8 pt-4 max-w-5xl mx-auto space-y-4">
-      <div className="pb-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Runs</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Test history · Track 03 CHAOS.AI</p>
-        </div>
-        {!loading && runs.length > 0 && (
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-            <Input
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="Filter title, task, phase…"
-              className="pl-9 h-9 text-sm"
-              aria-label="Filter runs"
-            />
+      <div className="pb-2 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Runs</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Test history · Track 03 CHAOS.AI</p>
           </div>
+          {!loading && runs.length > 0 && (
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+              <Input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Filter title, task, phase…"
+                className="pl-9 h-9 text-sm"
+                aria-label="Filter runs"
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/runs"
+            className={cn(
+              "inline-flex items-center rounded-full border px-3 py-1 text-xs transition-colors",
+              listType === "all"
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            All
+          </Link>
+          <Link
+            to={SECURITY_RUNS_HREF}
+            className={cn(
+              "inline-flex items-center rounded-full border px-3 py-1 text-xs transition-colors",
+              listType === "security"
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {SECURITY_BADGE_LABEL}
+          </Link>
+        </div>
+        {listType === "security" && (
+          <p className="text-sm text-muted-foreground">
+            {SECURITY_FILTER_COPY.title}. {SECURITY_FILTER_COPY.detail}{" "}
+            <Link to="/agents" className="underline-offset-2 hover:underline">
+              {SECURITY_FILTER_COPY.launch}
+            </Link>
+          </p>
         )}
       </div>
 
@@ -154,12 +221,18 @@ export function RunsPage() {
         </div>
       ) : runs.length === 0 ? (
         <div className="rounded-2xl bg-card shadow-island py-16 text-center">
-          <p className="text-sm text-muted-foreground">No runs yet.</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">Launch a run from an agent to get started.</p>
+          <p className="text-sm text-muted-foreground">
+            {listType === "security" ? SECURITY_FILTER_COPY.empty : "No runs yet."}
+          </p>
+          {listType !== "security" && (
+            <p className="text-xs text-muted-foreground/60 mt-1">Launch a run from an agent to get started.</p>
+          )}
         </div>
       ) : groups.length === 0 ? (
         <div className="rounded-2xl bg-card shadow-island py-16 text-center">
-          <p className="text-sm text-muted-foreground">No runs match this filter.</p>
+          <p className="text-sm text-muted-foreground">
+            {listType === "security" ? SECURITY_FILTER_COPY.empty : "No runs match this filter."}
+          </p>
         </div>
       ) : (
         <div className="rounded-2xl bg-card shadow-island">
@@ -222,6 +295,7 @@ export function RunsPage() {
                                 <span className="text-sm font-medium truncate">{title}</span>
                                 <span className="font-mono text-[11px] text-muted-foreground">{run.task_id}</span>
                                 <PhaseBadge phase={run.phase} />
+                                {isSecurityRun(run) && <SecurityBadge />}
                                 <span className={cn(
                                   "text-xs font-mono",
                                   run.status === "passed" && "text-green-600",

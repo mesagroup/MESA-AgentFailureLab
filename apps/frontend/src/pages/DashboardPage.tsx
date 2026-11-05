@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
-import { Activity, Bot, Play, RefreshCw, Shield } from "lucide-react";
+import { Activity, Bot, Play, RefreshCw, Shield, type LucideIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
+import { DASHBOARD_DESTINATIONS, dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
 import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const DESTINATIONS = [
-  { to: "/jury", title: "Giuria", detail: "Nota malevola", icon: Shield },
-  { to: "/agents", title: "Agents", detail: "Registered agents", icon: Bot },
-  { to: "/runs", title: "Runs", detail: "Testa agente", icon: Play },
-  { to: "/traces", title: "Traces", detail: "Ispeziona traccia", icon: Activity },
-] as const;
+const DESTINATION_ICONS: Record<(typeof DASHBOARD_DESTINATIONS)[number]["to"], LucideIcon> = {
+  [DASHBOARD_DESTINATIONS[0].to]: Shield,
+  "/agents": Bot,
+  "/runs": Play,
+  "/traces": Activity,
+};
 
 type LoadState =
   | { phase: "loading" }
@@ -180,19 +180,22 @@ export function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {DESTINATIONS.map(({ to, title, detail, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="rounded-2xl bg-card shadow-island p-5 flex items-start gap-3 hover:bg-muted/40 transition-colors"
-          >
-            <Icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
-            <span>
-              <span className="block text-sm font-semibold">{title}</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">{detail}</span>
-            </span>
-          </Link>
-        ))}
+        {DASHBOARD_DESTINATIONS.map(({ to, title, detail }) => {
+          const Icon = DESTINATION_ICONS[to];
+          return (
+            <Link
+              key={to}
+              to={to}
+              className="rounded-2xl bg-card shadow-island p-5 flex items-start gap-3 hover:bg-muted/40 transition-colors"
+            >
+              <Icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <span>
+                <span className="block text-sm font-semibold">{title}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">{detail}</span>
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
       {state.phase === "loading" && <DashboardSkeleton />}
