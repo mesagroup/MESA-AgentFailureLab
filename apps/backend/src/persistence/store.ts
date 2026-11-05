@@ -10,6 +10,14 @@ export class ContractError extends Error {
   }
 }
 
+/** Insert-only trace write. Distinct from saveTrace, which replaces an existing id. */
+export class DuplicateTraceError extends Error {
+  constructor(readonly traceId: string) {
+    super(`Trace ${traceId} already exists.`);
+    this.name = "DuplicateTraceError";
+  }
+}
+
 /**
  * Run and Trace store. Writes are validated against the JSON Schemas.
  * The harness is still the only writer of verifier fields. This store does not
@@ -36,6 +44,11 @@ export interface RunStore {
    */
   listRunRecords(): Promise<Array<StoredDocument<Run>>>;
   saveTrace(trace: Trace): Promise<Trace>;
+  /**
+   * Insert a new trace. Does not replace. Throws DuplicateTraceError when the id exists.
+   * Used by POST /traces production import.
+   */
+  insertTrace(trace: Trace): Promise<Trace>;
   /** Atomically replace diagnosis only if the entire stored trace still matches expected. */
   saveDiagnosis(expected: Trace, diagnosis: Diagnosis): Promise<Trace | undefined>;
   getTrace(traceId: string): Promise<Trace | undefined>;

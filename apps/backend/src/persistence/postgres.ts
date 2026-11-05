@@ -5,6 +5,7 @@ import {
   assertRun,
   assertTrace,
   assertUtcTimestamp,
+  DuplicateTraceError,
   prepareImportedRun,
   prepareImportedTrace,
   readStoredRun,
@@ -110,6 +111,21 @@ export class PostgresRunStore implements RunStore {
            started_at = EXCLUDED.started_at`,
       [valid.trace_id, valid.run_id, valid.agent_id, JSON.stringify(valid), valid.started_at],
     );
+    return structuredClone(valid);
+  }
+
+  async insertTrace(trace: Trace): Promise<Trace> {
+    const valid = assertTrace(structuredClone(trace));
+    try {
+      await this.pool.query(
+        `INSERT INTO traces (trace_id, run_id, agent_id, document, started_at)
+         VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz)`,
+        [valid.trace_id, valid.run_id, valid.agent_id, JSON.stringify(valid), valid.started_at],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new DuplicateTraceError(valid.trace_id);
+      throw error;
+    }
     return structuredClone(valid);
   }
 
@@ -248,4 +264,8 @@ export class PostgresRunStore implements RunStore {
     this.closed = true;
     await this.pool.end();
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }

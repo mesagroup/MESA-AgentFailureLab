@@ -6,7 +6,7 @@
  * Validators live in `@mesa/shared/validate` so this entry stays free of Node built-ins.
  */
 
-export const CONTRACT_VERSION = "0.4.0";
+export const CONTRACT_VERSION = "0.5.0";
 
 /**
  * Demo agents inserted at startup.
@@ -47,6 +47,7 @@ export {
   TRACE_STATUSES,
   TRACE_STORE_KINDS,
   adrFixForCategory,
+  describeTraceSources,
   isFixKind,
 } from "./types.js";
 

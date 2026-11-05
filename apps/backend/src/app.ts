@@ -19,6 +19,7 @@ import { registerDiagnosisRoutes, type DiagnosisOptions } from "./diagnosis/rout
 import { registerEvalsetRoutes, type EvalsetGenerateOptions } from "./evalset/routes.js";
 import { filterTraces, parseTraceListQuery } from "./otel/present.js";
 import { registerOtelImportRoutes, type OtelRouteOptions } from "./otel/routes.js";
+import { registerTraceImportRoutes } from "./traces/import.js";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -101,6 +102,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOtelImportRoutes(app, agents, store, { fetchImpl: options.otelFetch, now: options.now });
   registerDiagnosisRoutes(app, store, agents, options.diagnosis);
   registerEvalsetRoutes(app, options.evalset);
+  // Production Trace import (#192). Isolated from POST /runs and jury-case.
+  registerTraceImportRoutes(app, store);
 
   app.get("/faults", async () => ({
     faults: FAULT_CATALOG.map((entry) => ({

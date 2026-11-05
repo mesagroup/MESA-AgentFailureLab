@@ -4,7 +4,7 @@
  * first pull fetches the full seed and a later pull uses `last_pull_at`.
  */
 
-import { TRACE_SOURCES, type Trace, type TraceSource } from "@mesa/shared";
+import { TRACE_SOURCES, describeTraceSources, type Trace, type TraceSource } from "@mesa/shared";
 
 export { TRACE_SOURCES, type TraceSource };
 
@@ -40,6 +40,7 @@ export const TRACE_SOURCE_LABELS: Record<TraceSource, string> = {
   demo_seed: "Demo seed",
   otel_prod: "OTel prod",
   otel_test: "OTel test",
+  production: "Production",
 };
 
 const PULL_ERROR_HINTS: Record<PullErrorKind, string> = {
@@ -129,7 +130,7 @@ export function traceListPath(
   if (filters.agentId.trim()) params.set("agent_id", filters.agentId.trim());
   if (filters.source) {
     if (!isTraceSource(filters.source)) {
-      return { ok: false, message: "source must be harness, demo_seed, otel_prod, or otel_test." };
+      return { ok: false, message: `source must be ${describeTraceSources()}.` };
     }
     params.set("source", filters.source);
   }
@@ -162,7 +163,7 @@ export function parseTraceList(body: unknown): { ok: true; traces: Trace[] } | {
     if (item.source !== undefined && !isTraceSource(typeof item.source === "string" ? item.source : undefined)) {
       return {
         ok: false,
-        message: `Trace list item ${index} has source ${JSON.stringify(item.source)}. Expected harness, demo_seed, otel_prod, or otel_test.`,
+        message: `Trace list item ${index} has source ${JSON.stringify(item.source)}. Expected ${describeTraceSources()}.`,
       };
     }
     traces.push(item as unknown as Trace);

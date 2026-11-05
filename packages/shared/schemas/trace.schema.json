@@ -75,9 +75,9 @@
       ]
     },
     "source": {
-      "description": "Where this trace was written. Optional: a document saved before the field still validates. harness is a harness or attacker run. demo_seed is a startup demo pair. otel_prod and otel_test are a telemetry pull. The pull copies outcome from the export and does not invent fault.labels.",
+      "description": "Where this trace was written. Optional: a document saved before the field still validates. harness is a harness or attacker run. demo_seed is a startup demo pair. otel_prod and otel_test are a telemetry pull. The pull copies outcome from the export and does not invent fault.labels. production is a POST /traces paste of an already valid Trace; the server stamps this value and rejects injector or attacker fault.*.",
       "type": "string",
-      "enum": ["harness", "demo_seed", "otel_prod", "otel_test"]
+      "enum": ["harness", "demo_seed", "otel_prod", "otel_test", "production"]
     }
   },
   "$defs": {

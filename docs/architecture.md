@@ -58,6 +58,7 @@ The harness client is `apps/backend/src/mock/`. On a shop run it calls tool rout
 | `diagnosis` | Grok, through the agent service only. It must not write `outcome.verifier` or `fault.labels`. |
 | `tasks[].evalset` | User data on the Agent document, stored by `POST /agents` and `PUT /agents/:agent_id`. Optional. Material a later Grok judgment may read for that task's Run or Trace. It is not a Trace field and it is not a writer of `outcome.verifier`. `POST /evalset/generate` proposes this object; the operator still saves the Agent. |
 | `Agent.otel` and `POST /agents/:agentId/otel/import` | User-registered source, plus a span batch mapped onto a Trace. The importer copies a supplied `outcome` and writes the empty production `fault`. It does not invent `fault.labels` or `outcome.verifier`, and it does not dial the endpoint. See [otel.md](otel.md). |
+| `POST /traces` | Paste/upload of an already valid Trace. The server stamps `source: production`, rejects injector/attacker `fault.*`, and inserts without overwrite. It does not run the mock verifier. See [production-import.md](production-import.md). |
 
 `diagnosis` stays null until that service fills it. A proposed fix counts only after a later run, once the agent owner has changed the agent on their own deploy, and the verifier passes.
 
@@ -99,7 +100,7 @@ The busy response is HTTP 409:
 }
 ```
 
-A verifier failure is HTTP 200. The saved trace has `outcome.verifier.passed` set to false, and the checks say why. The gate leaves the verifier, `outcome`, `fault`, and the check list alone. `POST /agents` also answers HTTP 409 when an id already exists; that body uses `error: "conflict"`. `POST /traces/:traceId/diagnose` does not take this gate. Its 409 bodies are `diagnosis_busy` and `trace_changed`.
+A verifier failure is HTTP 200. The saved trace has `outcome.verifier.passed` set to false, and the checks say why. The gate leaves the verifier, `outcome`, `fault`, and the check list alone. `POST /agents` also answers HTTP 409 when an id already exists; that body uses `error: "conflict"`. `POST /traces/:traceId/diagnose` does not take this gate. Its 409 bodies are `diagnosis_busy` and `trace_changed`. `POST /traces` (production import) also skips the gate; a 409 there is `conflict` on the trace id.
 
 `GET /agents`, `GET /runs`, `GET /traces`, and `GET /attacker/jury-case` leave the gate alone. Those reads still answer while a run holds it. The gate releases in a `finally` block on return, on a thrown error, on a harness timeout, and on a failed save. Stored runs and traces stay. The gate does not flush Postgres and does not delete earlier experiments.
 

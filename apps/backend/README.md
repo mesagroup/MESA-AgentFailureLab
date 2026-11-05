@@ -14,7 +14,7 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `diagnosis` | Produced by Grok in agentservice; the explicit stored-trace endpoint validates and persists only this field |
 | `tasks[].evalset` | User data on the Agent document. `POST /agents` and `PUT /agents/:agent_id` store it with the task. Optional. The verifier does not read it. `POST /evalset/generate` proposes a document and does not persist it. |
 | `Agent.otel` | Optional source config on the same Agent document. `POST /agents/:agentId/otel/import` maps a pasted span batch onto a Trace and a baseline Run. It copies a supplied `outcome.verifier` and writes an empty `fault.labels`. It does not dial `endpoint`. `POST /agents/:agentId/traces/pull` GETs `otel.prod` and `otel.test`, remaps shop schema A or library schema B, and upserts. It copies the export verdict and does not invent `fault.labels`. See [otel.md](../../docs/otel.md). |
-| `Trace.source` | `harness` on a harness or attacker run, `demo_seed` on the startup pairs, `otel_prod` or `otel_test` on a pull. Optional. A missing value still validates. |
+| `Trace.source` | `harness` on a harness or attacker run, `demo_seed` on the startup pairs, `otel_prod` or `otel_test` on a pull, `production` on `POST /traces`. Optional. A missing value still validates. The import route overwrites whatever `source` the client sent. |
 
 `outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. An `after_fix` run stores `fix_kinds` and copies that list onto the shared `AgentRunRequest` for `POST /v1/tasks/run`. Baseline and injected runs omit the field. The scripted action planner does not read it. `controlled_retry` is applied in `executeAttempt` on the same injector path. `pre_response_check` and `permission_guard` are for the agent service that receives the request.
 
@@ -172,7 +172,8 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
-| `GET` | `/traces`, `/traces/:traceId` | Stored traces. After a fresh boot this is the seven demo traces (four shop including `trace-t3-forged-checkout`, three library) |
+| `GET` | `/traces`, `/traces/:traceId` | Stored traces. After a fresh boot this is the seven demo traces (four shop including `trace-t3-forged-checkout`, three library). Filter `source` includes `production` |
+| `POST` | `/traces` | Production import. Body is one Trace. 201 stored document with `source: production`. 400 `invalid_trace` / `fault_forbidden`, 409 `conflict`, 413 `payload_too_large`. See [production-import.md](../../docs/production-import.md) |
 
 ### POST /runs
 
