@@ -190,9 +190,16 @@ export function RunDetailPage() {
       <section className="rounded-2xl bg-card shadow-island p-5 space-y-2">
         <h2 className="text-sm font-semibold">Trace</h2>
         {view.trace_href ? (
-          <Link to={view.trace_href} className="text-sm underline-offset-2 hover:underline">
-            Open full trace
-          </Link>
+          <div className="flex flex-wrap gap-4">
+            <Link to={view.trace_href} className="text-sm underline-offset-2 hover:underline">
+              Open full trace
+            </Link>
+            {view.analyze_href && (
+              <Link to={view.analyze_href} className="text-sm underline-offset-2 hover:underline">
+                Analyze trace
+              </Link>
+            )}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">{view.trace_empty ?? "No trace is stored for this run."}</p>
         )}

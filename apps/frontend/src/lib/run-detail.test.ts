@@ -116,6 +116,7 @@ test("verified run renders prompt, task, and each verifier check", () => {
   assert.equal(view.verifier?.checks.length, 2);
   assert.equal(view.verifier?.checks[0]?.name, "order_cancelled");
   assert.equal(view.trace_href, "/traces/trace-ok");
+  assert.equal(view.analyze_href, "/traces/trace-ok#analysis");
   assert.equal(view.trace_empty, null);
   assert.equal(view.verifier_empty, null);
   assert.equal(view.notes, null);
@@ -144,6 +145,7 @@ test("failed run keeps verifier checks prominent and shows a failed banner", () 
   assert.equal(view.verifier?.checks[0]?.passed, false);
   assert.equal(view.banners[0]?.kind, "failed");
   assert.equal(view.trace_href, "/traces/trace-fail");
+  assert.equal(view.analyze_href, "/traces/trace-fail#analysis");
 });
 
 test("error run with no trace still shows harness error and an empty verifier", () => {
@@ -157,6 +159,7 @@ test("error run with no trace still shows harness error and an empty verifier", 
     agent: agent(),
   });
   assert.equal(view.trace_href, null);
+  assert.equal(view.analyze_href, null);
   assert.match(view.trace_empty ?? "", /No trace/);
   assert.match(view.verifier_empty ?? "", /has none/);
   assert.equal(view.banners[0]?.kind, "error");
@@ -246,6 +249,16 @@ test("diagnosis notes stay off the verifier block", () => {
   assert.equal(view.notes?.title, "Diagnosis note");
   assert.equal(view.notes?.body, "Cancelled the wrong order.");
   assert.equal(view.verifier?.passed, true);
+});
+
+test("run detail page offers Open full trace and Analyze trace", () => {
+  const page = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../pages/RunDetailPage.tsx"),
+    "utf8",
+  );
+  assert.match(page, /Open full trace/);
+  assert.match(page, /Analyze trace/);
+  assert.match(page, /view\.analyze_href/);
 });
 
 test("nginx SPA fallback serves /runs/:runId as index.html", () => {

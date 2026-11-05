@@ -105,7 +105,7 @@ export function TracePullPanel({
     <section className="rounded-2xl bg-card shadow-island px-5 py-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold">Pull traces</h2>
+          <h2 id="pull-telemetry" className="text-sm font-semibold">Pull traces</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Fetches this agent's prod and test telemetry, then reloads the list. Leave the start time blank. The first pull fetches the full seed. A later pull uses the stored cursor.
           </p>

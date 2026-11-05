@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { ApiError, createRun, getAgent, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
+import { ApiError, createRun, diagnoseTrace, getAgent, getHarnessSnapshot, getRun, getTrace, type HarnessSnapshot } from "@/lib/api";
 import {
   FIX_KIND_LABELS,
   afterFixRunBody,
@@ -19,6 +19,7 @@ import { isWorldBusy } from "@/lib/jury";
 import { adrFixForCategory, type Agent, type FixKind, type Run, type Trace, type TraceStep, type FaultLabel } from "@mesa/shared";
 import { AfterFixPanel } from "@/pages/AfterFixPanel";
 import { TraceSourceBadge } from "@/pages/TraceSourceBadge";
+import { ANALYSIS_SECTION_ID, describeDiagnoseFailure, parentRunHref, TRACE_LIST_ROUTE } from "@/lib/trace-analysis";
 import { traceListSource } from "@/lib/traces";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -229,6 +230,8 @@ export function TracePage() {
   const [replayPair, setReplayPair] = useState<HarnessTaskResult | null>(null);
   const [issueDialogOpen, setIssueDialogOpen] = useState(false);
   const [issueFeedback, setIssueFeedback] = useState<string | null>(null);
+  const [diagnosePending, setDiagnosePending] = useState(false);
+  const [diagnoseError, setDiagnoseError] = useState<string | null>(null);
   const afterParam = searchParams.get("after");
 
   async function load(id: string, silent = false) {
@@ -258,6 +261,12 @@ export function TracePage() {
     if (!traceId) { setLoading(false); return; }
     void load(traceId);
   }, [traceId]);
+
+  useEffect(() => {
+    if (loading || !trace) return;
+    if (window.location.hash !== `#${ANALYSIS_SECTION_ID}`) return;
+    document.getElementById(ANALYSIS_SECTION_ID)?.scrollIntoView({ block: "start" });
+  }, [loading, trace]);
 
   const runs = snapshot?.runs ?? [];
   const proposed = selectableFixKinds(trace?.diagnosis?.proposed_fixes);
@@ -320,6 +329,21 @@ export function TracePage() {
     }
   }
 
+  async function runDiagnosis() {
+    if (!trace) return;
+    setDiagnosePending(true);
+    setDiagnoseError(null);
+    try {
+      const next = await diagnoseTrace(trace.trace_id);
+      setTrace(next);
+      setSelectedFixes(selectableFixKinds(next.diagnosis?.proposed_fixes));
+    } catch (e) {
+      setDiagnoseError(describeDiagnoseFailure(e));
+    } finally {
+      setDiagnosePending(false);
+    }
+  }
+
   if (!traceId) {
     return (
       <div className="px-5 pb-8 max-w-6xl mx-auto pt-2">
@@ -327,6 +351,9 @@ export function TracePage() {
         <p className="text-sm text-muted-foreground mt-0.5">
           Open a run to inspect its stored trace.
         </p>
+        <Link to={TRACE_LIST_ROUTE} className="text-sm underline-offset-2 hover:underline mt-3 inline-block">
+          All traces
+        </Link>
       </div>
     );
   }
@@ -358,6 +385,7 @@ export function TracePage() {
   );
 
   const failedChecks = trace.outcome.verifier.checks.filter((c) => !c.passed);
+  const runLink = parentRunHref(trace.run_id);
 
   return (
     <div className="px-5 pb-8 max-w-6xl mx-auto space-y-4">
@@ -374,6 +402,18 @@ export function TracePage() {
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {trace.agent_id} · {trace.task_id}
+            {runLink && (
+              <>
+                {" · "}
+                <Link to={runLink} className="underline-offset-2 hover:underline">
+                  Open parent run
+                </Link>
+              </>
+            )}
+            {" · "}
+            <Link to={TRACE_LIST_ROUTE} className="underline-offset-2 hover:underline">
+              All traces
+            </Link>
           </p>
         </div>
       </div>
@@ -437,10 +477,10 @@ export function TracePage() {
         {/* Right: diagnosis + verifier */}
         <div className="space-y-4">
 
-          {/* Diagnosis */}
-          <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
+          {/* Analysis / Diagnosis — always visible; CTA when diagnosis is absent */}
+          <div id={ANALYSIS_SECTION_ID} className="rounded-2xl bg-card shadow-island p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">Diagnosis</span>
+              <span className="text-xs font-medium">Analysis</span>
               {trace.diagnosis && (
                 <span className="text-xs font-mono text-muted-foreground">
                   {Math.round(trace.diagnosis.confidence * 100)}% confidence
@@ -498,7 +538,22 @@ export function TracePage() {
                 </div>
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">Diagnosis not available</p>
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Diagnosis not available</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={diagnosePending}
+                  aria-busy={diagnosePending}
+                  onClick={() => void runDiagnosis()}
+                >
+                  {diagnosePending ? "Running diagnosis…" : "Run diagnosis"}
+                </Button>
+                {diagnoseError && (
+                  <p role="alert" className="text-xs text-destructive leading-relaxed">{diagnoseError}</p>
+                )}
+              </div>
             )}
           </div>
 
