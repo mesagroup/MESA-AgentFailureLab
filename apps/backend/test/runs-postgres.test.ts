@@ -8,7 +8,7 @@ import pg from "pg";
 import { postgresPoolConfig, quoteIdent } from "../src/agents/postgres.js";
 import { buildApp } from "../src/app.js";
 import { PostgresRunStore } from "../src/persistence/postgres.js";
-import { ContractError } from "../src/persistence/store.js";
+import { ContractError, DuplicateTraceError } from "../src/persistence/store.js";
 import { diagnosis, diagnosisRun, diagnosisTrace } from "./diagnosis-fixtures.js";
 
 /**
@@ -219,6 +219,20 @@ describe(
       await app.close();
     }
   });
+  it("insertTrace refuses a second copy without replacing the row", async () => {
+    const runs = store;
+    assert.ok(runs);
+    const trace = { ...baselineTrace(), trace_id: "trace-insert-only-pg" };
+    const first = await runs.insertTrace({ ...trace, source: "production" });
+    assert.equal(first.source, "production");
+    await assert.rejects(runs.insertTrace({ ...trace, source: "harness" }), (error: unknown) => {
+      assert.ok(error instanceof DuplicateTraceError);
+      assert.equal(error.traceId, trace.trace_id);
+      return true;
+    });
+    assert.equal((await runs.getTrace(trace.trace_id))?.source, "production");
+  });
+
   it("persists diagnosis across pools and atomically rejects stale updates", async () => {
     const runs = store;
     assert.ok(runs);

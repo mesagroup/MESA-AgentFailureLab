@@ -51,11 +51,18 @@ export type TraceStatus = (typeof TRACE_STATUSES)[number];
 
 /**
  * Where a Trace was written.
- * Absent on documents saved before the field. A missing value is not a fifth source.
+ * Absent on documents saved before the field. A missing value is not an extra source.
  */
-export const TRACE_SOURCES = ["harness", "demo_seed", "otel_prod", "otel_test"] as const;
+export const TRACE_SOURCES = ["harness", "demo_seed", "otel_prod", "otel_test", "production"] as const;
 
 export type TraceSource = (typeof TRACE_SOURCES)[number];
+
+/** Human list for query/error copy: `harness, demo_seed, otel_prod, otel_test, or production`. */
+export function describeTraceSources(): string {
+  const last = TRACE_SOURCES[TRACE_SOURCES.length - 1];
+  if (TRACE_SOURCES.length <= 1) return last ?? "";
+  return `${TRACE_SOURCES.slice(0, -1).join(", ")}, or ${last}`;
+}
 
 export const STEP_TYPES = ["message", "tool_call", "tool_result", "system"] as const;
 
@@ -177,7 +184,8 @@ export interface Trace {
   /**
    * Writer of this document. Omit on traces saved before the field.
    * `otel_prod` and `otel_test` are a telemetry pull. That pull does not invent
-   * `outcome.verifier` or `fault.labels`.
+   * `outcome.verifier` or `fault.labels`. `production` is `POST /traces` import.
+   * The import route stamps `production` server-side and rejects non-empty `fault.*`.
    */
   source?: TraceSource;
 }

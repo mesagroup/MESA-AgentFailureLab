@@ -1,4 +1,4 @@
-import { TRACE_SOURCES, type Trace, type TraceSource } from "@mesa/shared";
+import { TRACE_SOURCES, describeTraceSources, type Trace, type TraceSource } from "@mesa/shared";
 import { DEMO_SEED_TRACE_IDS } from "../persistence/demo-seed.js";
 import { isRecord } from "../util.js";
 
@@ -36,7 +36,7 @@ export function parseTraceListQuery(
   }
   if (query.source !== undefined) {
     if (typeof query.source !== "string" || !(TRACE_SOURCES as readonly string[]).includes(query.source)) {
-      return { ok: false, message: "source must be harness, demo_seed, otel_prod, or otel_test." };
+      return { ok: false, message: `source must be ${describeTraceSources()}.` };
     }
     value.source = query.source as TraceSource;
   }

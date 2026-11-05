@@ -12,15 +12,19 @@ The tool lists are the reference plan (`basePlan` in `apps/agentservice/src/fixe
 
 ## Import
 
+Backend: `POST /traces` ([docs/production-import.md](../../../../docs/production-import.md)). The server validates, rejects non-empty `fault.*`, stamps `source: "production"`, and inserts (409 if the id exists). Upload/paste UI is #51.
+
 1. Upload or paste one JSON file.
 2. Validate it with `validateTrace` from `@mesa/shared/validate`.
-3. Open it in trace inspect.
+3. `POST /traces` with that object.
+4. Open `/traces/:traceId` from the 201 body.
 
-How to read the result:
+How to read the result (production outcome criterion):
 
-- `fault.injected` is false, `fault.labels` is empty, and `fault.attacker.used` is false with `payload_id: null`. That empty label list is the production mark. The steps do not name an injector.
-- `diagnosis` is null until a diagnosis is requested. Grok writes `diagnosis` and leaves `outcome.verifier` alone.
-- `outcome.verifier` is the pass/fail authority. `outcome.success` equals `outcome.verifier.passed`. All three traces have status `completed` and a passing verifier. `outcome.agent_claimed_success` records what the agent asserted.
+- `fault.injected` is false, `fault.labels` is empty, and `fault.attacker.used` is false with `payload_id: null`. That empty label list is the production mark. The steps do not name an injector. The lab injector did not write this document.
+- `diagnosis` is null until `POST /traces/:traceId/diagnose`. Grok writes `diagnosis` and leaves `outcome.verifier` alone.
+- `outcome.verifier` is **present because the schema requires it**. On these fixtures it is a copied mock snapshot, not a verifier run that happened at import time. For a real production paste it is whatever the client supplied. It is **not** lab ground truth. `outcome.success` still equals `outcome.verifier.passed` as a document constraint. `fix_verified` / injected before-after does not apply.
+- `outcome.agent_claimed_success` records what the agent asserted.
 
 Leave these files out of the eval manifest. The eval set scores a ground-truth label in `fault.labels`, and these traces leave that list empty.
 

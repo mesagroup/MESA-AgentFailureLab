@@ -11,6 +11,7 @@ import {
   RUN_STATUSES,
   TASK_EVALSET_VERSION,
   TASK_PERMISSIONS,
+  describeTraceSources,
   TRACE_SOURCES,
   TRACE_STATUSES,
   type Agent,
@@ -52,6 +53,7 @@ describe("schema enums match the TypeScript constants", () => {
     assert.deepEqual(runDefs.fixKind?.enum, [...FIX_KINDS]);
     assert.deepEqual(traceDefs.traceStatus?.enum, [...TRACE_STATUSES]);
     assert.deepEqual(traceSchema.properties?.source?.enum, [...TRACE_SOURCES]);
+    assert.equal(describeTraceSources(), "harness, demo_seed, otel_prod, otel_test, or production");
     assert.deepEqual(runSchema.properties?.phase?.enum, [...RUN_PHASES]);
     assert.deepEqual(runSchema.properties?.status?.enum, [...RUN_STATUSES]);
   });
@@ -115,6 +117,10 @@ describe("examples", () => {
     assertOk(tagged, "otel_prod");
     if (!tagged.ok) return;
     assert.equal(tagged.value.source, "otel_prod");
+    const production = validateTrace({ ...omitted.value, source: "production" });
+    assertOk(production, "production");
+    if (!production.ok) return;
+    assert.equal(production.value.source, "production");
     const rejected = validateTrace({ ...omitted.value, source: "prod" });
     assert.equal(rejected.ok, false);
   });

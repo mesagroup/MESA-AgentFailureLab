@@ -44,7 +44,7 @@ openAgentStore(env)          openRunStore(env)
        migrate() then seed          migrate(); index.ts then seedDemoRunsAndTraces
 buildApp({ agents, store })
   registerAgentRoutes
-  GET /runs, GET /traces, POST /runs, POST /attacker/jury-case
+  GET /runs, GET /traces, POST /traces, POST /runs, POST /attacker/jury-case
 ```
 
 Both openers read the same variable. A blank or missing `DATABASE_URL` is memory for both. A URL is Postgres for both. `src/index.ts` opens the agent store first (migrate, then seed), then the run store (migrate), then `seedDemoRunsAndTraces` (insert-if-missing). The second migrate sees the files already recorded and does not run them again. On shutdown the process closes the run store, then the agent store.
@@ -84,6 +84,7 @@ Writes that fail `validateAgent` throw `AgentValidationError` (HTTP 400). A dupl
 | `listRuns()` | First-save order, then `run_id` |
 | `listRunsByAgent(agentId)` | That agent's runs, oldest first. This is the `runs (agent_id, created_at)` lookup. It is not a separate HTTP route |
 | `saveTrace(trace)` | `validateTrace`, then insert or replace by `trace_id`. A replace keeps the first-insert time and refreshes `started_at` from the document |
+| `insertTrace(trace)` | `validateTrace`, then insert only. Throws `DuplicateTraceError` when the id exists. Used by `POST /traces` |
 | `getTrace(traceId)` | One trace, or absent |
 | `listTraces()` | First-save order, then `trace_id` |
 | `listTracesByRun(runId)` | Traces for that run, oldest first. This is the `traces (run_id)` lookup. It is not a separate HTTP route |
@@ -265,7 +266,9 @@ No auth. Bodies are JSON. `Content-Type: application/json`.
 
 ### `GET /runs`, `GET /runs/:runId`, `GET /traces`, `GET /traces/:traceId`
 
-`GET /traces` is `{ "traces": [ ... ] }`, oldest first. One trace is the Trace document. Optional query: `agent_id`, `source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`), `since`, and `until` (inclusive bounds on `started_at`). A bad value is HTTP 400. `GET /runs/:runId` is the Run document alone.
+`GET /traces` is `{ "traces": [ ... ] }`, oldest first. One trace is the Trace document. Optional query: `agent_id`, `source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`, `production`), `since`, and `until` (inclusive bounds on `started_at`). A bad value is HTTP 400. `GET /runs/:runId` is the Run document alone.
+
+`POST /traces` inserts a production Trace (201). Duplicates are 409 `conflict` (no upsert). Injector `fault.*` is 400 `fault_forbidden`. Body over 1 MiB is 413. The route uses `insertTrace` on the same store as harness and OTel pull. It does not create a Run. See [production-import.md](production-import.md).
 
 `GET /runs` is the dashboard snapshot from `src/harness/session.ts` ([#79](https://github.com/mesagroup/MESA-AgentFailureLab/pull/79)). The store still supplies the documents. `sessionView` reverses the store order and attaches links and counts. It does not score the run. `outcome.verifier` on `trace_links` is copied from the stored trace.
 

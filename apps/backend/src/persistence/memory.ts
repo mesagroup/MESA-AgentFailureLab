@@ -4,6 +4,7 @@ import {
   assertRun,
   assertTrace,
   assertUtcTimestamp,
+  DuplicateTraceError,
   orderPreservingTimestamp,
   prepareImportedRun,
   prepareImportedTrace,
@@ -11,7 +12,7 @@ import {
   type StoredDocument,
 } from "./store.js";
 
-export { ContractError } from "./store.js";
+export { ContractError, DuplicateTraceError } from "./store.js";
 export type { RunStore, RunStoreKind } from "./store.js";
 
 function clone<T>(value: T): T {
@@ -61,6 +62,15 @@ export class MemoryStore implements RunStore {
 
   async saveTrace(trace: Trace): Promise<Trace> {
     const valid = assertTrace(clone(trace));
+    this.traces.set(valid.trace_id, valid);
+    return clone(valid);
+  }
+
+  async insertTrace(trace: Trace): Promise<Trace> {
+    const valid = assertTrace(clone(trace));
+    if (this.traces.has(valid.trace_id)) {
+      throw new DuplicateTraceError(valid.trace_id);
+    }
     this.traces.set(valid.trace_id, valid);
     return clone(valid);
   }

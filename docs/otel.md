@@ -2,7 +2,7 @@
 
 An agent may register an OTel source. A separate import batch turns a minimal span shape into a lab Trace. The importer does not dial the source, and it does not invent `fault.labels` or `outcome.verifier`.
 
-`CONTRACT_VERSION` `0.4.0` adds optional `Trace.source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`). Documents that omit `source` still validate. `tasks[].evalset` and `Agent.otel` stay optional.
+`CONTRACT_VERSION` `0.5.0` keeps optional `Trace.source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`, `production`). Documents that omit `source` still validate. `tasks[].evalset` and `Agent.otel` stay optional. Paste/upload of an already valid Trace is [`POST /traces`](production-import.md), not this pull.
 
 ## Source on the agent
 
@@ -291,13 +291,13 @@ The mock HTTP routes serve one export per source. Shop pull imports prod T1 (`sh
 | Query | Meaning |
 | --- | --- |
 | `agent_id` | Exact `Trace.agent_id`. |
-| `source` | `harness`, `demo_seed`, `otel_prod`, or `otel_test`. |
+| `source` | `harness`, `demo_seed`, `otel_prod`, `otel_test`, or `production`. |
 | `since` | Inclusive lower bound on `started_at` (ISO-8601). |
 | `until` | Inclusive upper bound on `started_at`. |
 
 A bad `source`, `since`, or `until` is HTTP 400 `invalid_request`.
 
-`Trace.source` is set by the writer: the harness and the attacker write `harness`, startup demo pairs write `demo_seed`, and this pull writes `otel_prod` or `otel_test`. `POST /agents/:agentId/otel/import` does not set `source`. A document that omits `source` still validates. The list filter treats that omission as `harness`, except a known demo seed trace id, which it treats as `demo_seed`. The stored JSON is not rewritten to add the field.
+`Trace.source` is set by the writer: the harness and the attacker write `harness`, startup demo pairs write `demo_seed`, this pull writes `otel_prod` or `otel_test`, and `POST /traces` stamps `production`. `POST /agents/:agentId/otel/import` does not set `source`. A document that omits `source` still validates. The list filter treats that omission as `harness`, except a known demo seed trace id, which it treats as `demo_seed`. The stored JSON is not rewritten to add the field.
 
 ```bash
 curl -s -X POST http://127.0.0.1:3001/agents/reference-shop/traces/pull \

@@ -59,9 +59,11 @@ test("list tags use Trace.source, then the demo seed ids", () => {
   const seeded = sampleTrace({ trace_id: DEMO_SEED_TRACE_IDS[0], agent_id: "reference-shop", started_at: "2026-11-03T14:12:08.014Z" });
   const harness = sampleTrace({ trace_id: "trace-harness-1", agent_id: "reference-shop", started_at: "2026-11-05T08:00:00.000Z", source: "harness" });
   const pulled = sampleTrace({ trace_id: "shop-a-prod-t1", agent_id: "reference-shop", started_at: "2026-11-03T14:12:08.014Z", source: "otel_prod" });
+  const production = sampleTrace({ trace_id: "trace-t1-prod-search-001", agent_id: "reference-shop", started_at: "2026-11-03T14:12:08.000Z", source: "production" });
   assert.equal(traceListSource(seeded), "demo_seed");
   assert.equal(traceListSource(harness), "harness");
   assert.equal(traceListSource(pulled), "otel_prod");
+  assert.equal(traceListSource(production), "production");
 
   const parsed = parseTraceList({ traces: [seeded, pulled] });
   assert.equal(parsed.ok, true);
