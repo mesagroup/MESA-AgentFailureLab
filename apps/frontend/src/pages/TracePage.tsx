@@ -99,9 +99,10 @@ function CollapsibleJson({ value }: { value: unknown }) {
   );
 }
 
-function StepRow({ step, culpritIds }: { step: TraceStep; culpritIds: Set<string> }) {
+function StepRow({ step, culpritIds, diagnosisStepIds }: { step: TraceStep; culpritIds: Set<string>; diagnosisStepIds: Set<string> }) {
   const [expanded, setExpanded] = useState(false);
   const isCulprit = culpritIds.has(step.step_id);
+  const isDiagnosis = !isCulprit && diagnosisStepIds.has(step.step_id);
   const hasContent = !!step.content;
   const isExpandable = hasContent && (step.content?.length ?? 0) > 120;
 
@@ -109,7 +110,8 @@ function StepRow({ step, culpritIds }: { step: TraceStep; culpritIds: Set<string
     <div
       className={cn(
         "relative flex gap-3 px-5 py-3.5 border-b border-border/30 last:border-0",
-        isCulprit && "bg-amber-500/5 border-l-2 border-l-amber-400 pl-[18px]"
+        isCulprit && "bg-amber-500/5 border-l-2 border-l-amber-400 pl-[18px]",
+        isDiagnosis && "bg-indigo-500/5 border-l-2 border-l-indigo-400 pl-[18px]"
       )}
     >
       {/* Type dot */}
@@ -129,6 +131,9 @@ function StepRow({ step, culpritIds }: { step: TraceStep; culpritIds: Set<string
           )}
           {isCulprit && (
             <span className="text-xs font-mono text-amber-500 font-medium">culprit</span>
+          )}
+          {isDiagnosis && (
+            <span className="text-xs font-mono text-indigo-400 font-medium">diagnosis</span>
           )}
           <span className="text-xs font-mono text-muted-foreground/40 ml-auto">{fmt(step.timestamp)}</span>
         </div>
@@ -341,6 +346,12 @@ export function TracePage() {
     trace.fault.labels.map((l: FaultLabel) => l.step_id).filter(Boolean)
   );
 
+  const diagnosisStepIds = new Set<string>(
+    trace.diagnosis?.step_id && !culpritIds.has(trace.diagnosis.step_id)
+      ? [trace.diagnosis.step_id]
+      : []
+  );
+
   const failedChecks = trace.outcome.verifier.checks.filter((c) => !c.passed);
 
   return (
@@ -413,7 +424,7 @@ export function TracePage() {
               <span className="text-xs text-muted-foreground">{trace.steps.length}</span>
             </div>
             {trace.steps.map((step) => (
-              <StepRow key={step.step_id} step={step} culpritIds={culpritIds} />
+              <StepRow key={step.step_id} step={step} culpritIds={culpritIds} diagnosisStepIds={diagnosisStepIds} />
             ))}
           </div>
         </div>
@@ -422,42 +433,48 @@ export function TracePage() {
         <div className="space-y-4">
 
           {/* Diagnosis */}
-          {trace.diagnosis && (
-            <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">Diagnosis</span>
+          <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium">Diagnosis</span>
+              {trace.diagnosis && (
                 <span className="text-xs font-mono text-muted-foreground">
                   {Math.round(trace.diagnosis.confidence * 100)}% confidence
                 </span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <FaultCategoryBadge category={trace.diagnosis.category} />
-              </div>
-              <p className="text-xs text-foreground/80 leading-relaxed">{trace.diagnosis.cause}</p>
-              {trace.diagnosis.evidence.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5">Evidence</p>
-                  <ul className="space-y-1">
-                    {trace.diagnosis.evidence.map((e, i) => (
-                      <li key={i} className="text-xs text-muted-foreground font-mono leading-relaxed">
-                        — {e}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {trace.diagnosis.proposed_fixes.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5">Proposed fixes</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {trace.diagnosis.proposed_fixes.map((fix) => (
-                      <FixBadge key={fix} fix={fix} />
-                    ))}
-                  </div>
-                </div>
               )}
             </div>
-          )}
+            {trace.diagnosis ? (
+              <>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <FaultCategoryBadge category={trace.diagnosis.category} />
+                </div>
+                <p className="text-xs text-foreground/80 leading-relaxed">{trace.diagnosis.cause}</p>
+                {trace.diagnosis.evidence.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1.5">Evidence</p>
+                    <ul className="space-y-1">
+                      {trace.diagnosis.evidence.map((e, i) => (
+                        <li key={i} className="text-xs text-muted-foreground font-mono leading-relaxed">
+                          — {e}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {trace.diagnosis.proposed_fixes.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1.5">Proposed fixes</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {trace.diagnosis.proposed_fixes.map((fix) => (
+                        <FixBadge key={fix} fix={fix} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">Diagnosis not available</p>
+            )}
+          </div>
 
           {/* Verifier outcome */}
           <div className="rounded-2xl bg-card shadow-island p-5 space-y-3">
