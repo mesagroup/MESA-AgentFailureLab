@@ -9,6 +9,7 @@ export interface JuryLaunchBody {
   include_baseline: boolean;
   fix_kinds?: string[];
   parent_run_id?: string;
+  prompt_override?: string;
 }
 
 const JURY_NOTE_MAX = 8000;
@@ -81,6 +82,9 @@ export const JURY_LAUNCH_COPY = {
     "The attacker appends the note to this task. The stored run has injection_plan.ground_truth.category Security.",
   emptyReferences: "No completed runs for this agent. Launch a baseline first.",
   loadingCase: "Loading the security case…",
+  promptLabel: "Prompt for this launch",
+  promptHelper: "Starts from the reference task. Edit before launch.",
+  promptReset: "Reset to task prompt",
 } as const;
 
 /** Terminal runs of this agent (picker for the jury/security phase). */
@@ -218,6 +222,7 @@ export function buildJuryLaunchParams(input: {
   includeBaseline: boolean;
   fixKinds: readonly string[];
   maxChars?: number;
+  promptOverride?: string | null;
 }): { ok: true; body: JuryLaunchBody } | { ok: false; message: string } {
   const reference = input.referenceRun;
   if (!reference) {
@@ -252,6 +257,9 @@ export function buildJuryLaunchParams(input: {
     body.parent_run_id = reference.run_id;
   }
 
+  const promptOverride = input.promptOverride?.trim();
+  if (promptOverride) body.prompt_override = promptOverride;
+
   return { ok: true, body };
 }
 
@@ -285,6 +293,7 @@ export function buildLaunchRequest(input: {
       includeBaseline: input.jury.includeBaseline,
       fixKinds: input.fixKinds,
       maxChars: input.jury.maxChars,
+      promptOverride: input.promptOverride,
     });
     if (!built.ok) return built;
     return { ok: true, kind: "jury", body: built.body };

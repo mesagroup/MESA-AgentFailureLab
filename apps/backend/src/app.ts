@@ -160,6 +160,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         taskId: parsed.taskId,
         permissions: parsed.permissions,
         parentRunId: parsed.parentRunId,
+        promptOverride: parsed.promptOverride,
         afterWorldSetup: options.afterWorldSetup,
       });
     } catch (error) {
@@ -249,6 +250,7 @@ function parseJuryRequest(body: unknown):
       taskId?: string;
       permissions?: string[];
       parentRunId?: string;
+      promptOverride?: string;
     }
   | { ok: false; message: string } {
   if (body === undefined || body === null) return { ok: true, includeBaseline: true };
@@ -289,6 +291,13 @@ function parseJuryRequest(body: unknown):
     }
     parentRunId = body.parent_run_id.trim();
   }
+  let promptOverride: string | undefined;
+  if (body.prompt_override !== undefined) {
+    if (typeof body.prompt_override !== "string" || body.prompt_override.trim() === "") {
+      return { ok: false, message: "prompt_override must be a non-empty string." };
+    }
+    promptOverride = body.prompt_override;
+  }
   return {
     ok: true,
     includeBaseline: body.include_baseline === undefined ? true : body.include_baseline,
@@ -297,6 +306,7 @@ function parseJuryRequest(body: unknown):
     taskId,
     permissions,
     parentRunId,
+    promptOverride,
   };
 }
 
