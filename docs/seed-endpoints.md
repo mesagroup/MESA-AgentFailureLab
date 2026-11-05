@@ -64,7 +64,9 @@ The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 
 | `reference-shop` | T1, T3, T2 | [`examples/otel/shop-schema-a`](../packages/shared/examples/otel/shop-schema-a) (`mesa.otel.shop.a`) |
 | `external-library` | `renew-loan`, `return-loan`, `place-hold` | [`examples/otel/library-schema-b`](../packages/shared/examples/otel/library-schema-b) (`mesa.otel.library.b`) |
 
-Each Trace names its `agent_id` and `run_id`. Each Run is `phase: baseline` with `trace_ids` of that one Trace. `fault.labels` is empty (production mark from the remap). `outcome.verifier` is copied from the export `verdict` ([ADR-001](../adr/001-mock-verifier-grok.md)). The injector is the only writer of `fault.*`.
+Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. Each Run is `phase: baseline` with `trace_ids` of that one Trace. `fault.labels` is empty (production mark from the remap). `outcome.verifier` is copied from the export `verdict` ([ADR-001](../adr/001-mock-verifier-grok.md)). The injector is the only writer of `fault.*`.
+
+`POST /agents/:agentId/traces/pull` is a separate path. It GETs the mock OTel URL and upserts by trace id. Shop HTTP serves prod T1 and test T2. Library HTTP serves renew and return. A pull of those ids retags the demo row `otel_prod` or `otel_test` and does not insert a second row. Shop T3 and library place-hold stay `demo_seed` because those files are not on the HTTP route. See [otel.md](otel.md#pull-traces).
 
 Both demo agents already carry dual `otel.prod` / `otel.test` sources (`auth.type: none`) and `otel_mock` fixture fallbacks from those PRs. Seed URL overlay still rewrites the HTTP endpoints from `MOCK_SHOP_URL` / `MOCK_LIBRARY_URL`.
 

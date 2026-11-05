@@ -89,7 +89,7 @@ describe(
       );
       assert.deepEqual(
         versions.rows.map((row) => row.version),
-        ["001_agents.sql", "002_runs.sql", "003_traces.sql"],
+        ["001_agents.sql", "002_runs.sql", "003_traces.sql", "004_otel_pull_cursors.sql"],
       );
 
       const indexes = await inspect.query<{ indexname: string }>(

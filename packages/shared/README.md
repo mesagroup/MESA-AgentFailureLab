@@ -10,7 +10,7 @@ JSON Schema is the source of truth for **Trace**, **Agent**, and **Run**. TypeSc
 
 Package exports:
 
-- `@mesa/shared` — `CONTRACT_VERSION` (`0.3.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, and `OtelSourceConfig`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`), `planShopTask`, `FIX_KINDS`, `isFixKind`, and `ADR_FIX_BY_CATEGORY` / `adrFixForCategory` (ADR-002 MVP map: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`).
+- `@mesa/shared` — `CONTRACT_VERSION` (`0.4.0`), `TASK_EVALSET_VERSION` (`1`), `OTEL_SOURCE_VERSION` (`1`), `OTEL_IMPORT_VERSION` (`1`), `TRACE_SOURCES`, `GROK_FORBIDDEN_WRITE_PATHS`, and the TypeScript types, including `AgentRunRequest`, `TaskEvalset`, `TaskEvalCase`, `OtelSourceConfig`, and optional `Trace.source`. This entry does not load Ajv, so the frontend can import it. It also exports the check registry (`CHECK_TYPES`, `CHECK_REGISTRY`), `planShopTask`, `FIX_KINDS`, `isFixKind`, and `ADR_FIX_BY_CATEGORY` / `adrFixForCategory` (ADR-002 MVP map: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`).
 - `@mesa/shared/otel` — `mapOtelImport`, `remapShopSchemaA`, `readShopOtelMock`, `pullShopOtelMock`, `remapLibrarySchemaB`, and `readLibraryOtelMock`. This entry loads Ajv. The generic mapper maps an OTel import batch onto Traces. Schema A maps shop fixtures or a GET from mock-shop. Schema B maps library fixtures or a GET from mock-library. Each remap then runs `validateTrace`.
 - `@mesa/shared/validate` — Ajv validators (`validateTrace`, `validateAgent`, `validateRun`) and the loaded schema objects.
 - `@mesa/shared/schemas/trace.schema.json` (and `agent`, `run`).
@@ -111,7 +111,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 | `cases[].expectation` | yes | What the judge should look for in the Trace or Run. Not a world-state assertion. |
 | `cases[].rubric` | no | How to score the expectation. Free text. |
 
-`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. Proposing cases is `POST /evalset/generate` (agentservice, proxied by the backend). That route does not persist the Agent. `validateTaskEvalset` in `@mesa/shared/validate` checks a standalone object of that shape (including duplicate `case_id` values). The backend diagnose path may send it next to a Trace; it is still not a Trace field. `CONTRACT_VERSION` stays `0.3.0` for this HTTP envelope.
+`POST /agents` and `PUT /agents/:agent_id` store the field with the rest of the task. Clients that omit it still validate. Proposing cases is `POST /evalset/generate` (agentservice, proxied by the backend). That route does not persist the Agent. `validateTaskEvalset` in `@mesa/shared/validate` checks a standalone object of that shape (including duplicate `case_id` values). The backend diagnose path may send it next to a Trace; it is still not a Trace field. Optional `Trace.source` is `CONTRACT_VERSION` `0.4.0`. Documents that omit it still validate. The evalset HTTP envelope did not by itself add a Trace field.
 
 ### OTel source
 

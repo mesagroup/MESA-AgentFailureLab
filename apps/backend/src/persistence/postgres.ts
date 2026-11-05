@@ -1,4 +1,4 @@
-import type { Diagnosis, Run, Trace } from "@mesa/shared";
+import type { Diagnosis, OtelMockChannel, Run, Trace } from "@mesa/shared";
 import pg from "pg";
 import { applyMigrations, postgresPoolConfig, quoteIdent } from "../agents/postgres.js";
 import {
@@ -210,11 +210,32 @@ export class PostgresRunStore implements RunStore {
     return existing ? "updated" : "inserted";
   }
 
-  /** Deletes every trace, then every run, in the current search_path. Not an HTTP route. */
+  /** Deletes cursors, then every trace, then every run, in the current search_path. Not an HTTP route. */
   async deleteAllRunsAndTraces(): Promise<{ runs: number; traces: number }> {
+    await this.pool.query("DELETE FROM otel_pull_cursors");
     const traces = await this.pool.query("DELETE FROM traces");
     const runs = await this.pool.query("DELETE FROM runs");
     return { traces: traces.rowCount ?? 0, runs: runs.rowCount ?? 0 };
+  }
+
+  async getOtelPullCursor(agentId: string, source: OtelMockChannel): Promise<string | undefined> {
+    const result = await this.pool.query<{ last_pull_at: Date | string }>(
+      "SELECT last_pull_at FROM otel_pull_cursors WHERE agent_id = $1 AND source = $2",
+      [agentId, source],
+    );
+    const row = result.rows[0];
+    return row ? timestampToIso(row.last_pull_at, "otel_pull_cursors.last_pull_at") : undefined;
+  }
+
+  async setOtelPullCursor(agentId: string, source: OtelMockChannel, lastPullAt: string): Promise<void> {
+    const at = assertUtcTimestamp(lastPullAt, "last_pull_at");
+    await this.pool.query(
+      `INSERT INTO otel_pull_cursors (agent_id, source, last_pull_at)
+       VALUES ($1, $2, $3::timestamptz)
+       ON CONFLICT (agent_id, source) DO UPDATE
+       SET last_pull_at = EXCLUDED.last_pull_at`,
+      [agentId, source, at],
+    );
   }
 
   /** Deletes every run and trace in the current search_path. Tests only. Not an HTTP route. */

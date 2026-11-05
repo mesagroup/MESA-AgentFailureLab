@@ -2,7 +2,7 @@
 
 An agent may register an OTel source. A separate import batch turns a minimal span shape into a lab Trace. The importer does not dial the source, and it does not invent `fault.labels` or `outcome.verifier`.
 
-`CONTRACT_VERSION` `0.3.0` carries this field together with `tasks[].evalset`. Both are optional. Clients that omit them still validate.
+`CONTRACT_VERSION` `0.4.0` adds optional `Trace.source` (`harness`, `demo_seed`, `otel_prod`, `otel_test`). Documents that omit `source` still validate. `tasks[].evalset` and `Agent.otel` stay optional.
 
 ## Source on the agent
 
@@ -178,4 +178,133 @@ Laptop URLs:
 - `http://127.0.0.1:8788/internal/otel/traces?source=prod`
 - `http://127.0.0.1:8788/internal/otel/traces?source=test`
 
-`bindSeedAgent` rewrites those hosts from `MOCK_LIBRARY_URL` together with `world.base_url`. Issue #154 owns a later lab traces pull route.
+`bindSeedAgent` rewrites those hosts from `MOCK_LIBRARY_URL` together with `world.base_url`.
+
+## Pull traces
+
+`POST /agents/:agentId/traces/pull` reads `Agent.otel.prod` and `Agent.otel.test`, remaps the body, runs `validateTrace`, and upserts Trace and its baseline Run. This is the Refresh action. It does not take the mock-world gate and it does not call Grok.
+
+The route does not invent `outcome.verifier` or `fault.labels` ([ADR-001](../adr/001-mock-verifier-grok.md)). Shop schema A uses `remapShopSchemaA`. Library schema B uses `remapLibrarySchemaB`. Both copy the export `verdict` onto `outcome` and write the production fault mark (`injected: false`, `labels: []`). `diagnosis` stays null. A stored trace that already has injector or attacker labels is left in place and reported as `conflict`. An existing `diagnosis` is kept when the incoming trace has `diagnosis: null`.
+
+`otel.schema_id` selects the remap: `mesa.otel.shop.a` or `mesa.otel.library.b`. The mock response header is not the selector.
+
+### Request
+
+`agentId` is the same path parameter as the other agent routes.
+
+```json
+{ "sources": ["prod", "test"], "since": "2026-11-01T00:00:00.000Z" }
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `sources` | no | `prod`, `test`, or both. Default both. Duplicates are rejected. |
+| `since` | no | Inclusive ISO-8601 lower bound for this call. Overrides the stored cursor for this call only. |
+
+An empty object `{}` pulls both sources. Unknown fields, a bad `since`, or a `since` after the server clock are HTTP 400 `invalid_request`.
+
+### Window and `last_pull_at`
+
+The cursor is per agent and per source. It is not a field on Agent or Trace. Postgres stores it in `otel_pull_cursors`. Memory keeps it on the run store. `db:reset` deletes the cursors with the runs and traces.
+
+| Situation | `since` sent to the endpoint |
+| --- | --- |
+| Body includes `since` | That instant. |
+| No body `since`, and this source has `last_pull_at` | The stored cursor. |
+| No body `since`, and this source has never pulled successfully | `since` is omitted. The mock returns its whole seed. |
+
+The first pull omits `since` on purpose. The shop demo spans are `2026-11-03T14:12:08.014Z`, which is before `reference-shop` `created_at` (`2026-11-04T09:00:00.000Z`) and outside a rolling 24 hours on a later clock. Sending either of those as the first lower bound would drop the demo spans and look like an empty pull. A later pull sends `last_pull_at`, which is the server time at the start of the last successful pull, so only spans at or after that instant come back.
+
+A successful source, including one that returns no spans, stores `last_pull_at`. Auth, network, remap, validation, and conflict failures do not move that source's cursor.
+
+`GET /agents/:agentId/otel/cursors` returns the stored cursors and does not fetch:
+
+```json
+{
+  "agent_id": "reference-shop",
+  "prod": { "tag": "otel_prod", "last_pull_at": "2026-11-05T08:40:00.000Z" },
+  "test": { "tag": "otel_test", "last_pull_at": null }
+}
+```
+
+### Fetch
+
+The lab GETs `otel.prod.endpoint` or `otel.test.endpoint` and adds `since` when the window has a lower bound. The seeded URLs already include `source=prod` or `source=test`. Redirects are not followed. The call waits at most 10 seconds.
+
+`auth.type: bearer` reads `process.env[auth.token_env]` and sends `Authorization: Bearer …`. A missing or blank env var is an `auth` error and does not call the endpoint. The token is not written onto the agent. `auth.type: none` sends no credential.
+
+`otel_mock.mode: fixture` is a dev fallback. It runs only when the TCP connection fails (refused, timeout, DNS) and `otel_mock.schema_id` matches `otel.schema_id`. The response then says `transport: "fixture"` and includes the HTTP error in `message`. HTTP 4xx and 5xx, auth failures, and a body that fails remap do not fall back. The primary demo path is the mock HTTP route above.
+
+### Response
+
+HTTP 200 even when a source fails. Counts are the sum across sources. `errors` repeats each source error so the client does not have to walk `sources` to find a failure. An empty window is `empty: true` and `failed: 0`, with `message` saying there were no spans. It is not an error and it is not a silent `[]`.
+
+```json
+{
+  "agent_id": "reference-shop",
+  "imported": 1,
+  "skipped": 1,
+  "failed": 0,
+  "sources": [
+    {
+      "source": "prod",
+      "tag": "otel_prod",
+      "transport": "http",
+      "since": null,
+      "until": "2026-11-05T08:40:00.000Z",
+      "previous_last_pull_at": null,
+      "last_pull_at": "2026-11-05T08:40:00.000Z",
+      "imported": 1,
+      "skipped": 0,
+      "failed": 0,
+      "empty": false,
+      "message": "Imported 1 trace.",
+      "trace_ids": ["shop-a-prod-t1"],
+      "errors": []
+    }
+  ],
+  "errors": []
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `imported` | Inserted, or replaced because the mapped document differed. A demo seed row pulled again is updated in place and tagged `otel_prod` or `otel_test`. |
+| `skipped` | The same trace id was already stored and the mapped document was unchanged. No second row. |
+| `failed` | Remap, validation, auth, network, or conflict. Nothing from that item was written. |
+| `errors[].kind` | `network`, `auth`, `remap`, `validation`, or `conflict`. |
+| `transport` | `http`, `fixture`, or `none` when the source failed before a body was read. |
+
+| Status | Body | When |
+| --- | --- | --- |
+| 200 | The object above | The body was accepted. Check `failed` and `errors`. |
+| 400 | `{ "error": "invalid_request", "message" }` | Bad `sources` or `since`. |
+| 400 | `{ "error": "otel_not_configured", "message" }` | The agent has no `otel` object. |
+| 404 | `{ "error": "not_found", "message" }` | Unknown agent. |
+
+The mock HTTP routes serve one export per source. Shop pull imports prod T1 (`shop-a-prod-t1`) and test T2 (`shop-a-test-t2`). Library pull imports renew (`lib-b-prod-renew`) and return (`lib-b-test-return`). The extra demo files (shop T3, library place-hold) stay `demo_seed` until a later export serves them. Re-pull does not insert a second copy of an id.
+
+### List
+
+`GET /traces` stays `{ "traces": Trace[] }`, oldest first. Optional filters:
+
+| Query | Meaning |
+| --- | --- |
+| `agent_id` | Exact `Trace.agent_id`. |
+| `source` | `harness`, `demo_seed`, `otel_prod`, or `otel_test`. |
+| `since` | Inclusive lower bound on `started_at` (ISO-8601). |
+| `until` | Inclusive upper bound on `started_at`. |
+
+A bad `source`, `since`, or `until` is HTTP 400 `invalid_request`.
+
+`Trace.source` is set by the writer: the harness and the attacker write `harness`, startup demo pairs write `demo_seed`, and this pull writes `otel_prod` or `otel_test`. `POST /agents/:agentId/otel/import` does not set `source`. A document that omits `source` still validates. The list filter treats that omission as `harness`, except a known demo seed trace id, which it treats as `demo_seed`. The stored JSON is not rewritten to add the field.
+
+```bash
+curl -s -X POST http://127.0.0.1:3001/agents/reference-shop/traces/pull \
+  -H 'content-type: application/json' \
+  -d '{}'
+curl -s 'http://127.0.0.1:3001/traces?agent_id=reference-shop&source=otel_prod'
+curl -s http://127.0.0.1:3001/agents/reference-shop/otel/cursors
+```
+
+Frontend Refresh should POST this route, show `imported`, `skipped`, `failed`, and `errors[].message`, then reload `GET /traces` with the agent and source filters. The button does not belong to this change.
