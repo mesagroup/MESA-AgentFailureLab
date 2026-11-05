@@ -349,6 +349,38 @@ export async function diagnoseTrace(id: string): Promise<Trace> {
   return parsed.trace;
 }
 
+// --- Eval ---
+
+export interface EvalMethodStats {
+  hits: number;
+  total: number;
+  rate: number;
+}
+
+export interface EvalMetric {
+  id: string;
+  label: string;
+  baseline: EvalMethodStats;
+  grok: EvalMethodStats;
+}
+
+export interface EvalResults {
+  schema_version: number;
+  generated_at: string;
+  definitions: Record<string, string>;
+  measurement: Record<string, unknown>;
+  dataset: {
+    scored_count: number;
+    categories: string[];
+    category_counts: Record<string, number>;
+  };
+  metrics: EvalMetric[];
+}
+
+export async function getEvalResults(): Promise<EvalResults> {
+  return backendFetch<EvalResults>("/eval/results");
+}
+
 /** Case description. Does not start a run. `structured` feeds the form. */
 export async function getJuryCase(): Promise<JuryCaseDescription> {
   return backendFetch<JuryCaseDescription>("/attacker/jury-case");
