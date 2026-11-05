@@ -19,7 +19,7 @@ import { runJuryCase } from "./attacker/run-case.js";
 import { parseAgentResponse, tasksRunUrl, type AgentRunRequest } from "./agent/http.js";
 import { publicErrorMessage } from "./net/fetch-error.js";
 import { fetchWithTransientRetry } from "./net/transient-fetch.js";
-import { agentUsesShopPlanner, anyPlannerRequested, plannerFlagForRole, roleForRun, runtimeLabel, runtimeSnapshot, flagRequestsGrok, type PlannerRole } from "./agent/runtime.js";
+import { agentUsesShopPlanner, anyPlannerRequested, plannerFlagForRole, runtimeSnapshot, flagRequestsGrok, type PlannerRole } from "./agent/runtime.js";
 import { acceptWhenGated, readAgentJob } from "./harness/grok-job.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
 import { createHttpMockClient, type MockShopClient } from "./mock/client.js";
@@ -247,7 +247,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       // generate-dataset passes scripted and does not use this default.
       const driver = parsed.value.driver ?? "auto";
       const taskIds = replay.value?.taskIds ?? parsed.value.taskIds;
-      const role = roleForRun(parsed.value.phase, null);
+      // Clean run, inject fault, and verify fix share LAB_AGENT. FIX_AGENT is the
+      // later prompt-patch path, not this shop planner.
+      const role: PlannerRole = "lab";
       const choice = await choosePlanner(agentEnv, agentFetch, role, registered);
       const timeoutMs = parsed.value.timeoutMs ?? (choice.mode === "grok" ? harnessTimeout(role) : undefined);
       const runOptions = {
@@ -300,8 +302,9 @@ async function choosePlanner(
     return { mode: "scripted", label: AGENT_RUNTIME_LABELS.scripted };
   }
   const configured = await probeGrokConfigured(env, fetchImpl);
+  if (configured === true) return { mode: "grok", label: AGENT_RUNTIME_LABELS.grok };
   if (configured === false) return { mode: "no_key", label: AGENT_RUNTIME_LABELS.noKey };
-  return { mode: "grok", label: runtimeLabel(true, configured) };
+  return { mode: "scripted", label: AGENT_RUNTIME_LABELS.scripted };
 }
 
 const grokProbeCache = new Map<string, { at: number; value: boolean | null }>();

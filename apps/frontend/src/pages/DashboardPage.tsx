@@ -32,15 +32,18 @@ function formatLatency(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
-function rowLatency(run: Run, link: RunTraceLink | undefined): { label: string; title: string } {
-  const traceMs = link?.traces[0]?.totals.latency_ms;
-  if (typeof traceMs === "number") {
-    return { label: formatLatency(traceMs), title: "First trace totals.latency_ms" };
+function rowLatency(run: Run, link: RunTraceLink | undefined): { label: string; title: string; usage: string | null } {
+  const totals = link?.traces[0]?.totals;
+  const usage = totals && (totals.tokens_in > 0 || totals.tokens_out > 0 || totals.cost_usd > 0)
+    ? `${totals.tokens_in} in / ${totals.tokens_out} out · $${totals.cost_usd.toFixed(4)}`
+    : null;
+  if (totals && typeof totals.latency_ms === "number") {
+    return { label: formatLatency(totals.latency_ms), title: usage ?? "First trace totals.latency_ms", usage };
   }
   if (typeof run.duration_ms === "number") {
-    return { label: formatLatency(run.duration_ms), title: "Run duration_ms" };
+    return { label: formatLatency(run.duration_ms), title: "Run duration_ms", usage: null };
   }
-  return { label: "—", title: "No latency yet" };
+  return { label: "—", title: "No latency yet", usage: null };
 }
 
 function taskTitle(agents: Agent[], run: Run): string {
@@ -402,6 +405,7 @@ function DashboardBody({
                       <TableCell><VerifierCell link={link} /></TableCell>
                       <TableCell className="text-right font-mono text-xs text-muted-foreground" title={latency.title}>
                         {latency.label}
+                        {latency.usage && <div className="text-[10px] text-muted-foreground/80">{latency.usage}</div>}
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground" title={when ?? ""}>
                         {when ? relativeTime(when) : "—"}
