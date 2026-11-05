@@ -61,9 +61,10 @@ describe("GET /eval/results", () => {
       assert.equal(body.metrics.length, 4);
       const category = body.metrics.find((row: { id: string }) => row.id === "category_accuracy");
       assert.ok(category);
-      assert.equal(category.hits, 4);
-      assert.equal(category.total, 19);
-      assert.equal(category.rate, 4 / 19);
+      assert.ok(isRecord(category.baseline));
+      assert.equal(category.baseline.hits, 4);
+      assert.equal(category.baseline.total, 19);
+      assert.equal(category.baseline.rate, 4 / 19);
       assert.ok(isRecord(body.report));
       assert.equal(body.report.schema_version, 1);
       assert.ok(isRecord(body.baseline));
