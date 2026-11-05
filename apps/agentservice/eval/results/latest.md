@@ -1,46 +1,46 @@
 <!-- eval-scoreboard:start -->
-Set valutato: 19 trace, 7 categorie (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security).
+Scored set: 19 traces, 7 categories (Plan, ToolUse, Context, Reasoning, Execution, Verification, Security).
 
-Provenienza: 2 fixture già nel repository (`packages/shared/examples/injected-failed-trace.json`, `apps/backend/fixtures/jury/attacked-trace.json`) e 17 trace del harness scriptato. Rigenerare le trace del harness e il manifest con `pnpm generate-dataset` (mock in loopback, driver `scripted`, fault del catalogo). Poi `pnpm eval` riscrive questa sezione.
+Provenance: 2 fixtures already in the repository (`packages/shared/examples/injected-failed-trace.json`, `apps/backend/fixtures/jury/attacked-trace.json`) and 17 traces from the scripted harness. Regenerate the harness traces and the manifest with `pnpm generate-dataset` (loopback mock, `scripted` driver, catalog faults). Then `pnpm eval` rewrites this section.
 
-I conteggi del baseline solo-regole sono stati ricalcolati dopo la [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). Quella PR smette di copiare i marker dell'iniettore negli step, e `pnpm generate-dataset` ha rigenerato le trace del harness su quel codice.
+The rules-only baseline counts were recomputed after [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44). That PR stopped copying injector markers into steps, and `pnpm generate-dataset` regenerated the harness traces on that code.
 
-Il ground truth è l'unica etichetta in `fault.labels`. Se `fault.attacker.used` è true, la fonte nel manifest è `fault.attacker`: quell'oggetto non ha una categoria e ADR-002 attribuisce l'etichetta all'attaccante. Il valutatore legge `fault`. Il prompt di Grok no.
+Ground truth is the single label in `fault.labels`. If `fault.attacker.used` is true, the source in the manifest is `fault.attacker`: that object has no category, and ADR-002 assigns the label to the attacker. The evaluator reads `fault`. Grok's prompt does not.
 
-### Definizioni
-- `category_accuracy`: La categoria predetta è uguale all'unica categoria in `fault.labels`. Astensione e diagnosi fallita contano come errori. Il denominatore è ogni trace del set.
-- `step_accuracy_exact`: Lo `step_id` predetto è uguale allo `step_id` dell'etichetta.
-- `step_accuracy_tolerance_1`: La differenza assoluta di `step.index` fra predizione ed etichetta è al massimo 1, incluso l'esatto. Uno `step_id` che non è sulla trace è un errore.
-- `proposed_fix_hit_rate`: `proposed_fixes` contiene il fix ADR-002 della categoria etichettata: Execution → `controlled_retry`, Verification → `pre_response_check`, Security → `permission_guard`. Plan, ToolUse, Context e Reasoning non hanno un fix MVP e restano fuori dal denominatore. Un fix in più non annulla l'hit. Non è il replay del verificatore.
-- `mean_latency_ms`: Media aritmetica di una sola passata, dopo che la trace è già caricata. Non è una mediana e non è un benchmark.
-- `tokens_and_cost`: Token e `cost_usd` sono solo quelli riportati dal provider. Se l'usage manca il valore resta assente. I token non vengono convertiti in un prezzo.
+### Definitions
+- `category_accuracy`: Predicted category equals the single fault.labels category. Abstain and a failed diagnosis are misses. The denominator is every scored trace.
+- `step_accuracy_exact`: Predicted step_id equals the labelled step_id.
+- `step_accuracy_tolerance_1`: Absolute difference of step.index between the prediction and the labelled step is at most 1, including an exact match. A predicted step_id that is not on the trace is a miss.
+- `proposed_fix_hit_rate`: The ADR-002 fix for the labelled category appears in proposed_fixes. Execution → controlled_retry, Verification → pre_response_check, Security → permission_guard. Plan, ToolUse, Context, and Reasoning have no MVP fix and are excluded. Extra proposed fixes do not cancel a hit. This is a proposal match, not a verifier replay.
+- `mean_latency_ms`: Arithmetic mean of one pass over the scored traces. The timer wraps rulesBaseline or diagnoseTrace after the trace is already loaded. This is a description of that pass, not a tuned benchmark and not a median of repeated trials.
+- `tokens_and_cost`: Input and output tokens and cost_usd are whatever the provider reported. Missing usage stays null. Token counts are not converted into a price. Failed diagnoses still add tokens when the provider returned usage before the response was rejected.
 
-La baseline solo-regole prende il primo finding di `diagnosisFindings`, in quest'ordine. Senza finding il metodo si astiene.
+The rules-only baseline takes the first finding from `diagnosisFindings`, in this order. With no finding the method abstains.
 - false_success_claim → Verification / pre_response_check
 - tool_error → Execution / controlled_retry
 - repeated_tool_call → Reasoning / (none)
 - timeout → Execution / controlled_retry
 
-> **Colonna Grok — live** (`grok-3`), una passata. Errori nel denominatore: 0.
+> **Grok column — live** (`grok-3`), one pass. Errors in the denominator: 0.
 
-| Metrica | Baseline (solo regole) | Grok |
+| Metric | Baseline (rules only) | Grok |
 | --- | --- | --- |
-| Accuratezza di categoria | 4/19 | 5/19 |
-| Step esatto | 5/19 | 5/19 |
-| Step entro ±1 | 10/19 | 13/19 |
-| Hit del fix proposto | 4/7 | 7/7 |
-| Fix non applicabile | 12 | 12 |
-| Latenza media (ms) | 0.042 | 9852.200 |
-| Token in/out | n/a | 19746/1339 |
-| Costo USD | n/a | 0.045721 |
+| Category accuracy | 4/19 | 5/19 |
+| Exact step | 5/19 | 5/19 |
+| Step within ±1 | 10/19 | 13/19 |
+| Proposed-fix hit | 4/7 | 7/7 |
+| Fix not applicable | 12 | 12 |
+| Mean latency (ms) | 0.042 | 9852.200 |
+| Tokens in/out | n/a | 19746/1339 |
+| Cost USD | n/a | 0.045721 |
 <!-- eval-scoreboard:end -->
 
 <!-- eval-limits:start -->
-- Hint dell'iniettore in 0/19 trace. Prima della [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) erano 13/19: i marker negli step (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) arrivavano a Grok. Quella PR (@diamanti-sg) non li copia più. Questo eval non modifica `apps/backend`.
-- Il driver scriptato dà poca varietà finché non entra l'agent di riferimento ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` non copia quell'agent.
-- L'efficacia del fix richiede il replay del verificatore ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). La riga del fix nella tabella dice solo se la proposta contiene il fix ADR-002 della categoria etichettata.
-- Una sola passata (conteggio: 1). ADR-001 esclude l'aggregazione multi-run.
-- Costo Grok riportato dal provider: 0.045721 USD (totale), token in/out 19746/1339. La baseline solo-regole non riporta token né costo.
+- Injector hints in 0/19 traces. Before [PR #44](https://github.com/mesagroup/MESA-AgentFailureLab/pull/44) they were 13/19: markers in the steps (`Injected execution drop…`, `Injector skipped`, `forged: true`, `stale: true`, `injected: true`) reached Grok. That PR (@diamanti-sg) no longer copies them. This eval does not change `apps/backend`.
+- The scripted driver has little variety until the reference agent lands ([PR #21](https://github.com/mesagroup/MESA-AgentFailureLab/pull/21)). `pnpm generate-dataset` does not copy that agent.
+- Fix effectiveness needs the verifier replay ([#15](https://github.com/mesagroup/MESA-AgentFailureLab/issues/15)). The fix row in the table only says whether the proposal contains the ADR-002 fix for the labelled category.
+- One pass (count: 1). ADR-001 excludes multi-run aggregation.
+- Grok cost reported by the provider: 0.045721 USD (total), tokens in/out 19746/1339. The rules-only baseline reports neither tokens nor cost.
 <!-- eval-limits:end -->
 
 ## Definitions (en)

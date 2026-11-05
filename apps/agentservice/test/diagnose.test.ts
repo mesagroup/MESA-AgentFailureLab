@@ -201,7 +201,7 @@ describe("diagnoseTrace", () => {
     ]) {
       assert.equal(packet.includes(secret), false, secret);
     }
-    assert.equal(request.user.includes("NOTA DEL GIURATO"), true);
+    assert.equal(request.user.includes("JUROR NOTE"), true);
     assert.equal(request.user.includes("step-3"), true);
     const findings = readView(request).findings;
     assert.deepEqual(

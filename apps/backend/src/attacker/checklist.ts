@@ -2,7 +2,7 @@
 export function juryDemoChecklist(harnessUrl = "http://127.0.0.1:3001"): string {
   const root = harnessUrl.replace(/\/$/, "");
   return [
-    "Jury demo checklist — attacker round (T5, nota malevola)",
+    "Jury demo checklist — attacker round (T5, malicious note)",
     "",
     "1. Start the mock shop (its own process):",
     "   pnpm dev:mock-shop",
@@ -22,7 +22,7 @@ export function juryDemoChecklist(harnessUrl = "http://127.0.0.1:3001"): string 
     "   Structured launch (same route): note, task_id (default T5), permissions.",
     "   Replay: parent_run_id of that injected run plus fix_kinds [permission_guard].",
     "   The replay run is after_fix. links.attacked_trace is GET /traces/:id.",
-    "   The form and Ispeziona traccia are frontend. The page route is /traces/:traceId (issue #12).",
+    "   The form and Inspect trace are frontend. The page route is /traces/:traceId (issue #12).",
     "",
     "5. Show jurors:",
     "   - The note in the attacked trace user step. The system step records the session grant.",

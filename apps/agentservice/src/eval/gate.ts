@@ -10,25 +10,25 @@ export const BASELINE_PATH = "apps/agentservice/eval/baseline.json";
 export const GATED_METRICS = [
   {
     id: "category_accuracy",
-    scoreboard: "Accuratezza di categoria",
+    scoreboard: "Category accuracy",
     hitsKey: "category_correct",
     totalKey: "scored",
   },
   {
     id: "step_accuracy_exact",
-    scoreboard: "Step esatto",
+    scoreboard: "Exact step",
     hitsKey: "step_exact",
     totalKey: "scored",
   },
   {
     id: "step_accuracy_tolerance_1",
-    scoreboard: "Step entro ±1",
+    scoreboard: "Step within ±1",
     hitsKey: "step_tolerance_1",
     totalKey: "scored",
   },
   {
     id: "proposed_fix_hit_rate",
-    scoreboard: "Hit del fix proposto",
+    scoreboard: "Proposed-fix hit",
     hitsKey: "fix_hits",
     totalKey: "fix_applicable",
   },

@@ -8,7 +8,7 @@ const payload = {
   schema_version: 1,
   generated_at: "2026-11-04T14:05:27.488Z",
   dataset: { scored_count: 19, categories: ["Plan"], category_counts: { Plan: 2 } },
-  metrics: [{ id: "category_accuracy", label: "Accuratezza di categoria", hits: 4, total: 19, rate: 4 / 19 }],
+  metrics: [{ id: "category_accuracy", label: "Category accuracy", hits: 4, total: 19, rate: 4 / 19 }],
   report: { schema_version: 1 },
   baseline: { schema_version: 1, metrics: [] },
 };

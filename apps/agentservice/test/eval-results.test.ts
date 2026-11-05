@@ -40,10 +40,10 @@ const validBaseline = {
     note: "Exact match.",
   },
   metrics: [
-    { id: "category_accuracy", scoreboard: "Accuratezza di categoria", hits: 4, total: 19 },
-    { id: "step_accuracy_exact", scoreboard: "Step esatto", hits: 5, total: 19 },
-    { id: "step_accuracy_tolerance_1", scoreboard: "Step entro ±1", hits: 10, total: 19 },
-    { id: "proposed_fix_hit_rate", scoreboard: "Hit del fix proposto", hits: 4, total: 7 },
+    { id: "category_accuracy", scoreboard: "Category accuracy", hits: 4, total: 19 },
+    { id: "step_accuracy_exact", scoreboard: "Exact step", hits: 5, total: 19 },
+    { id: "step_accuracy_tolerance_1", scoreboard: "Step within ±1", hits: 10, total: 19 },
+    { id: "proposed_fix_hit_rate", scoreboard: "Proposed-fix hit", hits: 4, total: 7 },
   ],
 };
 
