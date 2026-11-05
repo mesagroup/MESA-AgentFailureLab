@@ -7,6 +7,8 @@ import { useTheme } from "@/hooks/use-theme";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { JuryPage } from "@/pages/JuryPage";
+import { RUNS_DETAIL_ROUTE, RUNS_LIST_ROUTE } from "@/lib/run-detail";
+import { RunDetailPage } from "@/pages/RunDetailPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { TracePage } from "@/pages/TracePage";
 
@@ -31,8 +33,8 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/jury" element={<JuryPage />} />
             <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/runs" element={<RunsPage />} />
-            <Route path="/runs/:runId" element={<RunsPage />} />
+            <Route path={RUNS_LIST_ROUTE} element={<RunsPage />} />
+            <Route path={RUNS_DETAIL_ROUTE} element={<RunDetailPage />} />
             <Route path="/traces/:traceId" element={<TracePage />} />
             <Route path="/traces" element={<TracePage />} />
           </Routes>

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
 import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
+import { runListClickHref } from "@/lib/run-detail";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 
 function PhaseBadge({ phase }: { phase: RunPhase }) {
@@ -45,19 +46,26 @@ function groupSummary(runs: Run[]) {
 }
 
 export function RunsPage() {
-  const { runId } = useParams<{ runId?: string }>();
-  const navigate = useNavigate();
   const [runs, setRuns] = useState<Run[]>([]);
   const [agentMap, setAgentMap] = useState<Record<string, Agent>>({});
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const openedFirstGroup = useRef(false);
 
   async function fetchAll() {
     try {
       const [fetchedRuns, fetchedAgents] = await Promise.all([listRuns(), listAgents()]);
-      setRuns(fetchedRuns.sort((a, b) => b.run_id.localeCompare(a.run_id)));
+      const sorted = fetchedRuns.sort((a, b) => b.run_id.localeCompare(a.run_id));
+      setRuns(sorted);
       setAgentMap(Object.fromEntries(fetchedAgents.map((a) => [a.agent_id, a])));
+      if (!openedFirstGroup.current) {
+        const firstAgent = sorted[0]?.agent_id;
+        if (firstAgent) {
+          openedFirstGroup.current = true;
+          setExpanded(new Set([firstAgent]));
+        }
+      }
     } catch {
       // keep existing state
     } finally {
@@ -66,18 +74,6 @@ export function RunsPage() {
   }
 
   useEffect(() => { fetchAll(); }, []);
-
-  useEffect(() => {
-    if (!runId) return;
-    const run = runs.find((item) => item.run_id === runId);
-    if (!run) return;
-    setExpanded((prev) => {
-      if (prev.has(run.agent_id)) return prev;
-      const next = new Set(prev);
-      next.add(run.agent_id);
-      return next;
-    });
-  }, [runId, runs]);
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === "queued" || r.status === "running");
@@ -107,18 +103,9 @@ export function RunsPage() {
     });
   }
 
-  function handleRunClick(run: Run) {
-    const traceId = run.trace_ids[0];
-    if (traceId) {
-      navigate(`/traces/${encodeURIComponent(traceId)}`);
-      return;
-    }
-    navigate(`/runs/${encodeURIComponent(run.run_id)}`);
-  }
-
   return (
-    <div className="px-5 pb-8 max-w-5xl mx-auto space-y-4">
-      <div className="pt-2 pb-2">
+    <div className="px-5 pb-8 pt-4 max-w-5xl mx-auto space-y-4">
+      <div className="pb-2">
         <h1 className="text-xl font-semibold">Runs</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Test history · Track 03 CHAOS.AI</p>
       </div>
@@ -133,7 +120,7 @@ export function RunsPage() {
           <p className="text-xs text-muted-foreground/60 mt-1">Launch a run from an agent to get started.</p>
         </div>
       ) : (
-        <div className="rounded-2xl bg-card shadow-island overflow-hidden">
+        <div className="rounded-2xl bg-card shadow-island">
           {groups.map(({ agentId, runs: agentRuns }, idx) => {
             const agent = agentMap[agentId];
             const isOpen = expanded.has(agentId);
@@ -175,39 +162,39 @@ export function RunsPage() {
 
                 {/* Expanded runs */}
                 {isOpen && (
-                  <div className="border-t border-border/20 bg-muted/10">
+                  <div className="border-t border-border/20 bg-muted/10 pt-1">
                     {agentRuns.map((run) => (
                       <div
                         key={run.run_id}
-                        onClick={() => handleRunClick(run)}
-                        className={cn(
-                          "pl-9 pr-5 py-3 border-b border-border/15 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer",
-                          run.run_id === runId && "bg-muted/40",
-                        )}
+                        className="pl-9 pr-5 py-3 border-b border-border/15 last:border-0 first:pt-3.5 hover:bg-muted/30 transition-colors"
                       >
-                      <div className="flex items-center gap-4">
-                        <StatusDot status={run.status} />
-                        <span className="font-mono text-xs text-muted-foreground/50 w-28 shrink-0 truncate">
-                          {run.run_id.slice(0, 12)}…
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground/40 w-36 shrink-0 truncate">
-                          {run.task_id}
-                        </span>
-                        <PhaseBadge phase={run.phase} />
-                        <span className={cn(
-                          "text-xs font-mono",
-                          run.status === "passed" && "text-green-600",
-                          (run.status === "failed" || run.status === "error") && "text-red-500",
-                          run.status === "running" && "text-blue-500",
-                          run.status === "queued" && "text-muted-foreground/40",
-                        )}>
-                          {run.status}
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground/40 ml-auto shrink-0">
-                          {run.duration_ms != null ? `${(run.duration_ms / 1000).toFixed(2)}s` : "—"}
-                        </span>
-                      </div>
-                      <RunLineage run={run} peers={agentRuns} />
+                        <Link
+                          to={runListClickHref(run)}
+                          title={run.run_id}
+                          className="flex items-center gap-4"
+                        >
+                          <StatusDot status={run.status} />
+                          <span className="font-mono text-xs text-muted-foreground/50 w-28 shrink-0 truncate" title={run.run_id}>
+                            {run.run_id.slice(0, 12)}…
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground/40 w-36 shrink-0 truncate">
+                            {run.task_id}
+                          </span>
+                          <PhaseBadge phase={run.phase} />
+                          <span className={cn(
+                            "text-xs font-mono",
+                            run.status === "passed" && "text-green-600",
+                            (run.status === "failed" || run.status === "error") && "text-red-500",
+                            run.status === "running" && "text-blue-500",
+                            run.status === "queued" && "text-muted-foreground/40",
+                          )}>
+                            {run.status}
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground/40 ml-auto shrink-0">
+                            {run.duration_ms != null ? `${(run.duration_ms / 1000).toFixed(2)}s` : "—"}
+                          </span>
+                        </Link>
+                        <RunLineage run={run} peers={agentRuns} />
                       </div>
                     ))}
                   </div>
