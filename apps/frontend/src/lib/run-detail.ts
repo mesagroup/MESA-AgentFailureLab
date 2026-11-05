@@ -46,6 +46,7 @@ export interface RunDetailView {
   notes: RunNotesView | null;
   trace_id: string | null;
   trace_href: string | null;
+  analyze_href: string | null;
   trace_empty: string | null;
   started_at: string | null;
   ended_at: string | null;
@@ -171,6 +172,7 @@ export function buildRunDetailView(input: {
     notes: notesFromTrace(trace),
     trace_id: traceId,
     trace_href: traceId ? `/traces/${encodeURIComponent(traceId)}` : null,
+    analyze_href: traceId ? `/traces/${encodeURIComponent(traceId)}#analysis` : null,
     trace_empty,
     started_at: trace?.started_at ?? null,
     ended_at: trace?.ended_at ?? null,

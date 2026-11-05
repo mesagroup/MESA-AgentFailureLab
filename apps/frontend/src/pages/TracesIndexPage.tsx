@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listAgents, listTraceIndex } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { tracesIndexEmptyCopy } from "@/lib/trace-analysis";
 import {
   TRACE_SOURCES,
   describeTraceListFailure,
@@ -197,11 +198,7 @@ export function TracesIndexPage() {
       ) : visible.length === 0 ? (
         <div className="rounded-2xl bg-card shadow-island py-16 text-center px-5">
           <p className="text-sm text-muted-foreground">
-            {loadError
-              ? "The list could not be loaded."
-              : filtersActive
-                ? "No traces match these filters."
-                : "No traces yet. Pull traces for an agent, or launch a run."}
+            {tracesIndexEmptyCopy(loadError ? "error" : filtersActive ? "filtered" : "none")}
           </p>
         </div>
       ) : (

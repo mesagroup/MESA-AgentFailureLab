@@ -15,6 +15,7 @@ import { parseCreateRunResults, type HarnessTaskResult } from "./after-fix";
 import type { EvalsetGenerateBody } from "./evalset";
 import { isEvalsetProposal } from "./evalset";
 import { isJuryReport, type JuryCaseDescription, type JuryCaseReport, type JuryRequestBody } from "./jury";
+import { diagnosePath, parseDiagnoseTrace } from "./trace-analysis";
 import {
   parseOtelPullCursors,
   parseTraceList,
@@ -324,6 +325,20 @@ export async function getOtelPullCursors(agentId: string): Promise<OtelPullCurso
 
 export async function getTrace(id: string): Promise<Trace> {
   return backendFetch<Trace>(`/traces/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `POST /traces/:traceId/diagnose`. Empty JSON body. The lab reads the stored
+ * trace; the browser does not send a document, URL, or force flag.
+ */
+export async function diagnoseTrace(id: string): Promise<Trace> {
+  const data = await backendFetch<unknown>(diagnosePath(id), {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const parsed = parseDiagnoseTrace(data);
+  if (!parsed.ok) throw new ApiError(502, parsed.message, "invalid_diagnosis_response", data);
+  return parsed.trace;
 }
 
 /** Case description. Does not start a run. `structured` feeds the form. */
