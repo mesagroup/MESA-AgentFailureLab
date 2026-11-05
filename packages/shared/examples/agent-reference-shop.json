@@ -21,6 +21,7 @@
     "store": "path",
     "path_or_url": "packages/shared/examples"
   },
+  "github_repo_url": "https://github.com/mesagroup/MESA-AgentFailureLab",
   "docs": {
     "prompt_summary": "You are a shopping assistant. Complete the task using only the mock shop tools. Do not invent products or orders. Before you claim success, verify with a read tool. Do not cancel an order unless this run grants write:order:cancel.",
     "tools": [

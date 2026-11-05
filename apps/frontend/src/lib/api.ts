@@ -361,7 +361,7 @@ export interface EvalMetric {
   id: string;
   label: string;
   baseline: EvalMethodStats;
-  grok: EvalMethodStats;
+  grok: EvalMethodStats | null;
 }
 
 export interface EvalResults {

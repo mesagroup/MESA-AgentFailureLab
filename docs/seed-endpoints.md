@@ -49,7 +49,8 @@ The fixtures' `updated_at` values are unchanged by a URL overlay. Boot still fol
 | Document fails the Agent schema | Rewrite from the fixture |
 | `updated_at` earlier than the fixture | Rewrite from the fixture |
 | `updated_at` equal to the fixture, and the runtime or world URL differs | Rewrite from the fixture, including the URLs for this process |
-| `updated_at` newer than the fixture | Keep the row, including a name or URL changed with PUT |
+| `updated_at` newer than the fixture | Keep the row, including a name or URL changed with PUT. If `github_repo_url` is missing on `reference-shop`, copy it from the fixture and leave every other field |
+| `github_repo_url` already set | Leave it, including an operator value that is not the fixture URL |
 
 An edit in the Agents page is a PUT. That sets `updated_at` to the time of the save, which is newer than the fixture, so the next boot keeps it. Change the URL in that form when a host changes and the row was already edited. An unedited seed picks up a new environment on the next boot because its timestamp still matches the fixture and the origins differ.
 
@@ -67,7 +68,9 @@ The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 
 
 Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. OTel remap Runs are `phase: baseline` with empty `fault.labels` and `diagnosis: null`. The storyboard pair is `phase: injected`, `fault.injected: true`, label `forged_tool_result` (written in the fixture by the injector, [ADR-002](../adr/002-fault-injection-and-fixes.md)), and a non-null `diagnosis` with `proposed_fixes: ["pre_response_check"]` (Grok-shaped field only, [ADR-001](../adr/001-mock-verifier-grok.md)). `outcome.verifier` on remaps is copied from the export `verdict`. On the storyboard fixture it is the failed `order_created` check. The injector is the only writer of `fault.*`.
 
-Storyboard scenes 6–8 open `/traces/trace-t3-forged-checkout`. Scene 8 replays `POST /runs` `phase: after_fix` with `parent_run_id: run-t3-injected-001` and `fix_kinds: ["pre_response_check"]` (omit `injection` so the parent `forged_tool_result` is copied, including `at_step: 4`). The treated T3 plan is `get_cart`, `checkout`, confirming `get_cart`, then a second `checkout`. The injector spends the forge on the first checkout; the second call hits the mock so `order_created` can pass. Needs `test_instance` (`AGENTSERVICE_URL`) answering `/health`. Viewing the diagnosis does not need a live run.
+Storyboard scenes 6–8 open `/traces/trace-t3-forged-checkout`. Scene 7 needs `reference-shop.github_repo_url` (`https://github.com/mesagroup/MESA-AgentFailureLab` on the fixture). Boot copies that field onto a stored seed that lacks it and does not overwrite an operator-set URL. Demo Run/Trace ids are still insert-if-missing: a present `trace-t3-forged-checkout` / `run-t3-injected-001` is not rewritten (no backfill of `proposed_fixes` or `at_step`). Delete those two rows if an old seed is missing them, then restart.
+
+Scene 8 replays `POST /runs` `phase: after_fix` with `parent_run_id: run-t3-injected-001` and `fix_kinds: ["pre_response_check"]` (omit `injection` so the parent `forged_tool_result` is copied, including `at_step: 4`). The treated T3 plan is `get_cart`, `checkout`, confirming `get_cart`, then a second `checkout`. The injector spends the forge on the first checkout; the second call hits the mock so `order_created` can pass. Needs `test_instance` (`AGENTSERVICE_URL`) answering `/health`. Viewing the diagnosis and opening the GitHub issue does not need a live run.
 
 `POST /agents/:agentId/traces/pull` is a separate path. It GETs the mock OTel URL and upserts by trace id. Shop HTTP serves prod T1 and test T2. Library HTTP serves renew and return. A pull of those ids retags the demo row `otel_prod` or `otel_test` and does not insert a second row. Shop T3 and library place-hold stay `demo_seed` because those files are not on the HTTP route. See [otel.md](otel.md#pull-traces).
 
@@ -92,3 +95,5 @@ curl -fsS https://mesa-mock-library.onrender.com/health
 ```
 
 `GET /health` on the backend reports `mock_base_url`. That is `MOCK_SHOP_URL`. It does not call the shop. `GET /agents/reference-shop` and `GET /agents/external-library` show the origins stored for that process.
+
+Scene 7: after the backend process that includes this seed restarts, `GET /agents/reference-shop` should include `github_repo_url`. No Render Dashboard env change is required. The field is on the Agent document, not an env var. An operator-set URL is not overwritten. Demo traces are not rewritten.

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { metricsFromSummary, parseBaseline, type EvalBaselineFile, type GatedSummaryCounts } from "./gate.js";
+import { GATED_METRICS, metricsFromSummary, parseBaseline, type EvalBaselineFile, type GatedSummaryCounts } from "./gate.js";
 
 export const DEFAULT_LATEST_PATH = fileURLToPath(new URL("../../eval/results/latest.json", import.meta.url));
 export const DEFAULT_BASELINE_PATH = fileURLToPath(new URL("../../eval/baseline.json", import.meta.url));
@@ -13,9 +13,8 @@ export interface EvalResultsFiles {
 export interface EvalResultsMetric {
   id: ReturnType<typeof metricsFromSummary>[number]["id"];
   label: string;
-  hits: number;
-  total: number;
-  rate: number;
+  baseline: { hits: number; total: number; rate: number };
+  grok: { hits: number; total: number; rate: number } | null;
 }
 
 export interface EvalResultsDataset {
@@ -140,13 +139,23 @@ function parseLatestReport(
   }
   const baseline = parseBaselineSummary(methods.baseline);
   if (!baseline.ok) return baseline;
-  const metrics = metricsFromSummary(baseline.summary).map((metric) => ({
-    id: metric.id,
-    label: metric.scoreboard,
-    hits: metric.hits,
-    total: metric.total,
-    rate: metric.hits / metric.total,
-  }));
+  const grokParsed = parseBaselineSummary(methods.grok);
+  const grokSummary = grokParsed.ok ? grokParsed.summary : null;
+  const baselineMetrics = metricsFromSummary(baseline.summary);
+  const metrics = baselineMetrics.map((bm) => {
+    const gated = GATED_METRICS.find((g) => g.id === bm.id)!;
+    const grokHits = grokSummary ? grokSummary[gated.hitsKey] : null;
+    const grokTotal = grokSummary ? grokSummary[gated.totalKey] : null;
+    return {
+      id: bm.id,
+      label: bm.scoreboard,
+      baseline: { hits: bm.hits, total: bm.total, rate: bm.total > 0 ? bm.hits / bm.total : 0 },
+      grok:
+        grokHits !== null && grokTotal !== null
+          ? { hits: grokHits, total: grokTotal, rate: grokTotal > 0 ? grokHits / grokTotal : 0 }
+          : null,
+    };
+  });
   return {
     ok: true,
     generated_at: value.generated_at,
