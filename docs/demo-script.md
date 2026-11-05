@@ -314,8 +314,6 @@ Il replay con `permission_guard` è un altro POST: fase `after_fix`, `fix_kinds`
 
 ## E. Storyboard video (~4:30)
 
-Taglio registrato provvisorio: [`docs/demo/demo-chaos-ai-it-v2.mp4`](demo/demo-chaos-ai-it-v2.mp4).
-
 | # | Durata | A schermo | Voce (1–2 frasi) | CTA / transizione |
 |---|---|---|---|---|
 | 1 | 0:00–0:20 | Titolo CHAOS.AI. Chat dell'agente: "Ordine piazzato ✅". Accanto lo shop: nessun ordine. | "Il tuo agente dice che ha finito. Ma l'ha fatto davvero?" | → "Ecco come lo scopriamo." |
