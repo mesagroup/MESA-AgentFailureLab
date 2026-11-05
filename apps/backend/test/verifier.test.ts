@@ -385,6 +385,34 @@ describe("verifier", () => {
     assert.match(on.verifier.checks[0]!.detail, /qty 1; expected 2/);
   });
 
+  it("claim_consistent matches the claim to the other checks", () => {
+    const world = [{ name: "cart_empty", description: "empty" }];
+    const claim = [...world, { name: "claim_consistent", description: "claim" }];
+    const empty = snapshot({ carts: [], orders: [], observations: [] });
+    const full = snapshot({
+      carts: [{ session_id: "sess-a", items: [{ product_id: "SKU-MUG-01", sku: "SKU-MUG-01", name: "Mug", qty: 1, unit_price_usd: 12 }], total_usd: 12 }],
+      orders: [],
+      observations: [],
+    });
+    const agree = verifyOutcome({
+      checks: claim,
+      snapshot: empty,
+      sessionId: "sess-a",
+      permissions: ["read"],
+      agentClaimedSuccess: true,
+    });
+    assert.equal(agree.verifier.checks.find((check) => check.name === "claim_consistent")?.passed, true);
+    const lie = verifyOutcome({
+      checks: claim,
+      snapshot: full,
+      sessionId: "sess-a",
+      permissions: ["read"],
+      agentClaimedSuccess: true,
+    });
+    assert.equal(lie.verifier.checks.find((check) => check.name === "claim_consistent")?.passed, false);
+    assert.equal(lie.verifier.passed, false);
+  });
+
   it("fails unknown check names", () => {
     const outcome = verifyOutcome({
       checks: [{ name: "not_a_check", description: "no" }],
