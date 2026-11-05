@@ -1,5 +1,6 @@
 import type { FaultLabel, FixKind, InjectionPlan, TraceStep } from "@mesa/shared";
 import { describeToolCall, type MockShopClient } from "../mock/client.js";
+import { publicErrorMessage } from "../net/fetch-error.js";
 import {
   droppedOutput,
   faultByCode,
@@ -266,7 +267,7 @@ export async function executeAttempt(args: {
             status: 0,
             body: {
               error: "timeout",
-              message: error instanceof Error ? error.message : "Shop request failed before a response.",
+              message: publicErrorMessage(error, "Shop request failed before a response."),
             },
             dispatched: !(error instanceof TypeError),
           };
@@ -332,7 +333,7 @@ export async function executeAttempt(args: {
           status: 0,
           body: {
             error: "timeout",
-            message: error instanceof Error ? error.message : "Shop request failed before a response.",
+            message: publicErrorMessage(error, "Shop request failed before a response."),
           },
           dispatched: !(error instanceof TypeError),
         };

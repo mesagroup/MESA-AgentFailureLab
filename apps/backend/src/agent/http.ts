@@ -1,4 +1,5 @@
 import { GROK_AGENT_HTTP_TIMEOUT_MS, type AgentRunRequest, type AgentTask, type FixKind } from "@mesa/shared";
+import { fetchWithTransientRetry, type TransientFetchOptions } from "../net/transient-fetch.js";
 import { isRecord } from "../util.js";
 import type { PlannedAction } from "./scripted.js";
 
@@ -105,18 +106,33 @@ export async function runRemoteAgent(
   baseUrl: string,
   request: AgentRunRequest,
   fetchImpl: typeof fetch = fetch,
+  wake?: Pick<TransientFetchOptions, "sleep" | "now" | "budgetMs">,
 ): Promise<AgentRunResponse> {
-  const response = await fetchImpl(tasksRunUrl(baseUrl), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(request),
-    signal: AbortSignal.timeout(agentHttpTimeoutMs(request)),
-  });
+  const url = tasksRunUrl(baseUrl);
+  const response = await fetchWithTransientRetry(
+    fetchImpl,
+    url,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(agentHttpTimeoutMs(request)),
+    },
+    { ...wake, label: `Agent service ${requestPath(url)}` },
+  );
   if (!response.ok) {
     throw new Error(`Agent ${baseUrl} returned ${response.status}.`);
   }
   const parsed: unknown = await response.json();
   return parseAgentResponse(parsed);
+}
+
+function requestPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
 }
 
 export function parseAgentResponse(value: unknown): AgentRunResponse {

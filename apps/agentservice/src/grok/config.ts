@@ -1,6 +1,9 @@
+import { GROK_MODEL_ID } from "@mesa/shared";
+
 /**
  * Environment boundary for the diagnosis client.
  * `GROK_MODEL` is read here and nowhere else. Callers receive `modelName`.
+ * Unset, diagnosis uses the same Grok 4.6 id as the shop planner.
  */
 
 export interface DiagnosisConfig {
@@ -10,7 +13,7 @@ export interface DiagnosisConfig {
   timeoutMs: number;
 }
 
-const DEFAULT_MODEL = "grok-3";
+const DEFAULT_MODEL = GROK_MODEL_ID;
 const DEFAULT_BASE_URL = "https://api.x.ai/v1";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;

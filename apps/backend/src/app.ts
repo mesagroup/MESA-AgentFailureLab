@@ -17,6 +17,8 @@ import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { describeJuryCase } from "./attacker/jury-note.js";
 import { runJuryCase } from "./attacker/run-case.js";
 import { parseAgentResponse, tasksRunUrl, type AgentRunRequest } from "./agent/http.js";
+import { publicErrorMessage } from "./net/fetch-error.js";
+import { fetchWithTransientRetry } from "./net/transient-fetch.js";
 import { agentUsesShopPlanner, anyPlannerRequested, plannerFlagForRole, roleForRun, runtimeLabel, runtimeSnapshot, flagRequestsGrok, type PlannerRole } from "./agent/runtime.js";
 import { acceptWhenGated, readAgentJob } from "./harness/grok-job.js";
 import { FAULT_CATALOG, TASK_FAULT_PRESETS } from "./injector/catalog.js";
@@ -102,7 +104,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(409).send({ error: WORLD_BUSY_ERROR, message: error.message });
     }
     request.log.error(error);
-    const message = error instanceof Error ? error.message : "Internal harness error";
+    const message = publicErrorMessage(error, "Internal harness error");
     reply.code(500).send({ error: "error", message });
   });
 
@@ -337,12 +339,18 @@ function agentServiceOrigin(env: NodeJS.ProcessEnv): string | null {
 
 function grokCallAgent(fetchImpl: typeof fetch) {
   return async (baseUrl: string, request: AgentRunRequest) => {
-    const response = await fetchImpl(tasksRunUrl(baseUrl), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...request, agent: "grok" }),
-      signal: AbortSignal.timeout(GROK_AGENT_HTTP_TIMEOUT_MS),
-    });
+    const url = tasksRunUrl(baseUrl);
+    const response = await fetchWithTransientRetry(
+      fetchImpl,
+      url,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...request, agent: "grok" }),
+        signal: AbortSignal.timeout(GROK_AGENT_HTTP_TIMEOUT_MS),
+      },
+      { label: `Agent service ${new URL(url).pathname}` },
+    );
     if (!response.ok) throw new Error(`Jury Grok agent returned ${response.status}.`);
     return parseAgentResponse(await response.json());
   };
@@ -368,7 +376,7 @@ function replyForHarnessFailure(error: unknown, reply: FastifyReply) {
   if (error instanceof ContractError) {
     return reply.code(500).send({ error: "error", message: error.message });
   }
-  const message = error instanceof Error ? error.message : "Bad request";
+  const message = publicErrorMessage(error, "Bad request");
   return reply.code(400).send({ error: "invalid_request", message });
 }
 

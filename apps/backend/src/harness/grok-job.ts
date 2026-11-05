@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publicErrorMessage } from "../net/fetch-error.js";
 import { WORLD_BUSY_ERROR, WorldBusyError } from "./world-gate.js";
 
 export interface AcceptedJob {
@@ -115,8 +116,7 @@ function errorCode(error: unknown): string {
 
 function errorMessage(error: unknown): string {
   if (error instanceof WorldBusyError) return error.message;
-  if (error instanceof Error && error.message.trim().length > 0) return error.message;
-  return "Grok run failed.";
+  return publicErrorMessage(error, "Grok run failed.");
 }
 
 function evictOldJobs(): void {

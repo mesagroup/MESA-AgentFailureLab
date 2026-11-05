@@ -6,6 +6,7 @@ import { agentRunRequest, type AgentRunRequest, type AgentRunResponse } from "..
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { AGENT_RUNTIME_LABELS, agentRuntimeLine, type AgentTaskCheck } from "@mesa/shared";
 import { executeAttempt, traceBounds } from "../harness/execute.js";
+import { publicErrorMessage } from "../net/fetch-error.js";
 import { prepareWorld } from "../harness/world.js";
 import { withWorldGate } from "../harness/world-gate.js";
 import type { MockShopClient } from "../mock/client.js";
@@ -255,7 +256,7 @@ async function commitBuilt(input: BuiltAttempt): Promise<JuryAttempt> {
       permissions: input.permissions,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Harness error";
+    const message = publicErrorMessage(error, "Harness error");
     await input.store.saveRun({
       ...running,
       status: "error",

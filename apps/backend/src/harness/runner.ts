@@ -12,6 +12,7 @@ import {
 import { AGENT_RUNTIME_LABELS, agentRuntimeLine } from "@mesa/shared";
 import { permissionsFor, scriptedActions, type PlannedAction } from "../agent/scripted.js";
 import { normalizePlan, presetPlan } from "../injector/catalog.js";
+import { publicErrorMessage } from "../net/fetch-error.js";
 import type { MockShopClient } from "../mock/client.js";
 import { ContractError, type RunStore } from "../persistence/memory.js";
 import { taskById } from "../reference-agent.js";
@@ -328,7 +329,7 @@ async function runOne(
       driver,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Harness error";
+    const message = publicErrorMessage(error, "Harness error");
     await options.store.saveRun({
       ...running,
       status: "error",
