@@ -1,13 +1,13 @@
 import { Moon, Sun } from "lucide-react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useTheme } from "@/hooks/use-theme";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { JuryPage } from "@/pages/JuryPage";
 import { RUNS_DETAIL_ROUTE, RUNS_LIST_ROUTE } from "@/lib/run-detail";
+import { JURY_LEGACY_PATH, juryLegacyRedirectTo } from "@/lib/security-runs";
 import { RunDetailPage } from "@/pages/RunDetailPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { TracePage } from "@/pages/TracePage";
@@ -32,7 +32,7 @@ function AppShell() {
         <main>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/jury" element={<JuryPage />} />
+            <Route path={JURY_LEGACY_PATH} element={<Navigate to={juryLegacyRedirectTo()} replace />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path={RUNS_LIST_ROUTE} element={<RunsPage />} />
             <Route path={RUNS_DETAIL_ROUTE} element={<RunDetailPage />} />

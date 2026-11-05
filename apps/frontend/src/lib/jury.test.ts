@@ -149,6 +149,7 @@ test("world_busy is not a verifier failure and diagnose 409s stay distinct", () 
   assert.match(baselineSourceLabel("frozen"), /frozen/);
   assert.equal(sameVerdictLabel(null), "—");
   assert.equal(sameVerdictLabel(false), "no");
+  assert.equal(sameVerdictLabel(true), "yes");
 });
 
 test("the reference shop supplies task choices, with the case default kept", () => {
@@ -169,7 +170,7 @@ test("the reference shop supplies task choices, with the case default kept", () 
     { id: "T1", title: "Uno" },
     { id: "T5", title: "Permessi" },
   ]);
-  assert.equal(validateJuryForm({ ...form, note: "   " }), "La nota del giurato non può essere vuota.");
+  assert.equal(validateJuryForm({ ...form, note: "   " }), "The malicious juror note cannot be empty.");
 });
 
 test("a stored session round-trips", () => {

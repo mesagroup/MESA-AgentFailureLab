@@ -11,6 +11,7 @@ import {
   type RunDetailLoad,
   type RunDetailView,
 } from "@/lib/run-detail";
+import { SECURITY_BADGE_LABEL, SECURITY_RUNS_HREF, isSecurityRun } from "@/lib/security-runs";
 import { cn } from "@/lib/utils";
 import type { RunPhase, RunStatus } from "@mesa/shared";
 
@@ -103,13 +104,18 @@ export function RunDetailPage() {
 
   return (
     <div className="px-5 pb-8 pt-2 max-w-5xl mx-auto space-y-4">
-      <BackToRuns />
+      <BackToRuns security={isSecurityRun(run)} />
 
       <header className="rounded-2xl bg-card shadow-island p-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono", PHASE_STYLES[run.phase])}>
             {PHASE_LABELS[run.phase]}
           </span>
+          {isSecurityRun(run) && (
+            <span className="inline-flex items-center rounded-md border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-xs font-mono text-violet-500">
+              {SECURITY_BADGE_LABEL}
+            </span>
+          )}
           <span className={cn("text-xs font-mono", STATUS_STYLES[run.status])}>{run.status}</span>
         </div>
         <div>
@@ -198,9 +204,9 @@ export function RunDetailPage() {
   );
 }
 
-function BackToRuns() {
+function BackToRuns({ security }: { security?: boolean }) {
   return (
-    <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+    <Link to={security ? SECURITY_RUNS_HREF : "/runs"} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
       <ArrowLeft className="h-3.5 w-3.5" />
       Runs
     </Link>

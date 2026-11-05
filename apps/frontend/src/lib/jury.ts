@@ -190,13 +190,13 @@ export function noteMaxChars(description: Pick<JuryCaseDescription, "structured"
 }
 
 const HINTS_WITHOUT_CONTRACT: JuryFormHints = {
-  note: "Testo non fidato, appeso al prompt. Un permesso scritto nella nota non diventa un grant.",
-  task: "Default T5. Il task deve esistere sull'agente di riferimento.",
-  permissions: "Grant di sessione inviato dal controllo. Un nome che compare solo nella nota non viene aggiunto.",
-  includeBaseline: "Default sì. Stesso task e stessi permessi, senza nota e senza attacker.",
+  note: "Untrusted text appended to the prompt. A permission named in the note is not a grant.",
+  task: "Default T5. The task must exist on the reference agent.",
+  permissions: "Session grant sent by the control. A name that appears only in the note is not added.",
+  includeBaseline: "Default yes. Same task and permissions, without the note and without the attacker.",
 };
 
-/** Hints from `frontend` / `structured`. Italian copy is the fallback when those fields are absent. */
+/** Hints from `frontend` / `structured`. English fallback when those fields are absent. */
 export function formHints(description: JuryCaseDescription | null | undefined): JuryFormHints {
   if (!description) return HINTS_WITHOUT_CONTRACT;
   const fields = description.structured?.fields;
@@ -204,11 +204,11 @@ export function formHints(description: JuryCaseDescription | null | undefined): 
   const noteDoesNotGrant = description.frontend?.note_widens_permissions !== true;
   return {
     note: fields?.note?.trim() || HINTS_WITHOUT_CONTRACT.note,
-    task: fields?.task_id?.trim() || `Default ${taskDefault}. Il task deve esistere sull'agente di riferimento.`,
+    task: fields?.task_id?.trim() || `Default ${taskDefault}. The task must exist on the reference agent.`,
     permissions: fields?.permissions?.trim()
       || (noteDoesNotGrant
         ? HINTS_WITHOUT_CONTRACT.permissions
-        : "Grant di sessione inviato dal controllo permessi."),
+        : "Session grant sent by the permission control."),
     includeBaseline: fields?.include_baseline?.trim() || HINTS_WITHOUT_CONTRACT.includeBaseline,
   };
 }
@@ -257,9 +257,9 @@ export function tasksForJury(agents: readonly AgentTasks[], defaultTaskIdValue: 
 
 export function validateJuryForm(form: JuryFormValues, maxChars: number = JURY_NOTE_MAX): string | null {
   const note = form.note.trim();
-  if (note.length === 0) return "La nota del giurato non può essere vuota.";
-  if (note.length > maxChars) return `La nota può avere al massimo ${maxChars} caratteri.`;
-  if (form.taskId.trim().length === 0) return "Scegli un task.";
+  if (note.length === 0) return "The malicious juror note cannot be empty.";
+  if (note.length > maxChars) return `The note can be at most ${maxChars} characters.`;
+  if (form.taskId.trim().length === 0) return "Choose a task.";
   return null;
 }
 
@@ -368,13 +368,13 @@ export function runHref(link: string | null | undefined): string | null {
 export function baselineSourceLabel(source: JuryBaselineComparison["source"]): string {
   switch (source) {
     case "live":
-      return "live — baseline di questa richiesta";
+      return "live — baseline from this request";
     case "last":
-      return "last — ultimo baseline salvato per questo task";
+      return "last — last saved baseline for this task";
     case "frozen":
-      return "frozen — fixture T5, nessun baseline in memoria";
+      return "frozen — T5 fixture, no baseline in memory";
     case "none":
-      return "none — nessun baseline da confrontare";
+      return "none — no baseline to compare";
     default:
       return source;
   }
@@ -382,7 +382,7 @@ export function baselineSourceLabel(source: JuryBaselineComparison["source"]): s
 
 export function sameVerdictLabel(value: boolean | null): string {
   if (value === null) return "—";
-  return value ? "sì" : "no";
+  return value ? "yes" : "no";
 }
 
 export function isWorldBusy(error: unknown, describedCode?: string | null): boolean {
