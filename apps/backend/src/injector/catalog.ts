@@ -93,6 +93,16 @@ export const TASK_FAULT_PRESET_TARGETS: Readonly<Record<string, string>> = {
   "place-hold": "place_hold",
 };
 
+/**
+ * When set, overrides the catalog `fault` sentence for that task's preset.
+ * Shared codes like `forged_tool_result` keep a shop-oriented default; library
+ * tasks need their own copy so live inject matches the seeded storyboard.
+ */
+export const TASK_FAULT_PRESET_FAULTS: Readonly<Record<string, string>> = {
+  "renew-loan": "Replace the renew_loan tool result with a successful renewal that the mock did not apply.",
+  "place-hold": "Replace the place_hold tool result with a successful hold that the mock did not create.",
+};
+
 export function hasInjectionPreset(taskId: string): boolean {
   return Object.prototype.hasOwnProperty.call(TASK_FAULT_PRESETS, taskId);
 }
@@ -112,7 +122,7 @@ export function presetPlan(taskId: string): InjectionPlan {
   }
   const entry = faultByCode(code);
   return {
-    fault: entry.fault,
+    fault: TASK_FAULT_PRESET_FAULTS[taskId] ?? entry.fault,
     target: TASK_FAULT_PRESET_TARGETS[taskId] ?? entry.target,
     ground_truth: { category: entry.category, code: entry.code },
   };

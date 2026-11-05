@@ -4,7 +4,7 @@ The demo store is **exactly these two agents**. Boot does not insert a third id 
 
 `reference-shop` and `external-library` are real agents. On boot the backend copies each fixture and writes the runtime and mock origins for this process onto the row. The harness calls `POST {runtime}/v1/tasks/run`. It does not store that path on the agent. The origin is `instance.base_url` for `baseline` and `test_instance.base_url` for `injected` and `after_fix`. Both seeds set those two fields to the same origin.
 
-Boot also inserts demo Run and Trace pairs when those ids are missing: three shop traces remapped from schema A (`prod` T1/T3 and `test` T2), three library traces remapped from schema B (renew, return, hold), and the storyboard T3 injected checkout (`trace-t3-forged-checkout`) with a canned Grok-shaped `diagnosis` and `proposed_fixes`. `GET /traces` lists them. A present id is kept, including an operator edit. Other runs and traces are not deleted. See [Demo traces](#demo-traces).
+Boot also inserts demo Run and Trace pairs when those ids are missing: three shop traces remapped from schema A (`prod` T1/T3 and `test` T2), three library traces remapped from schema B (renew, return, hold), the storyboard T3 injected checkout (`trace-t3-forged-checkout`), and the library renew forge punch (`trace-renew-forged-loan`, #189) — both storyboard pairs carry a canned Grok-shaped `diagnosis` and `proposed_fixes`. `GET /traces` lists them. A present id is kept, including an operator edit. Other runs and traces are not deleted. See [Demo traces](#demo-traces).
 
 The fixture files keep the laptop defaults so the JSON is a valid agent without a process environment:
 
@@ -58,15 +58,16 @@ An edit in the Agents page is a PUT. That sets `updated_at` to the time of the s
 
 ## Demo traces
 
-The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 and #163 with `remapShopSchemaA` / `remapLibrarySchemaB`, then inserts the resulting Trace and baseline Run when that id is missing. It also inserts the existing T3 forged-checkout example pair (not an OTel remap) for storyboard scenes 6–8.
+The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 and #163 with `remapShopSchemaA` / `remapLibrarySchemaB`, then inserts the resulting Trace and baseline Run when that id is missing. It also inserts the T3 forged-checkout and renew-loan forge example pairs (not OTel remaps) for the product demo storyboard.
 
 | Agent | Tasks | Source |
 | --- | --- | --- |
 | `reference-shop` | T1, T3, T2 | [`examples/otel/shop-schema-a`](../packages/shared/examples/otel/shop-schema-a) (`mesa.otel.shop.a`) |
 | `external-library` | `renew-loan`, `return-loan`, `place-hold` | [`examples/otel/library-schema-b`](../packages/shared/examples/otel/library-schema-b) (`mesa.otel.library.b`) |
 | `reference-shop` | T3 injected (`trace-t3-forged-checkout` / `run-t3-injected-001`) | [`examples/injected-failed-trace.json`](../packages/shared/examples/injected-failed-trace.json) + [`examples/run-injected.json`](../packages/shared/examples/run-injected.json) |
+| `external-library` | renew injected (`trace-renew-forged-loan` / `run-renew-injected-001`) | [`examples/injected-renew-failed-trace.json`](../packages/shared/examples/injected-renew-failed-trace.json) + [`examples/run-renew-injected.json`](../packages/shared/examples/run-renew-injected.json) |
 
-Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. OTel remap Runs are `phase: baseline` with empty `fault.labels` and `diagnosis: null`. The storyboard pair is `phase: injected`, `fault.injected: true`, label `forged_tool_result` (written in the fixture by the injector, [ADR-002](../adr/002-fault-injection-and-fixes.md)), and a non-null `diagnosis` with `proposed_fixes: ["pre_response_check"]` (Grok-shaped field only, [ADR-001](../adr/001-mock-verifier-grok.md)). `outcome.verifier` on remaps is copied from the export `verdict`. On the storyboard fixture it is the failed `order_created` check. The injector is the only writer of `fault.*`.
+Each Trace names its `agent_id` and `run_id` and is tagged `source: demo_seed`. OTel remap Runs are `phase: baseline` with empty `fault.labels` and `diagnosis: null`. Storyboard pairs are `phase: injected`, `fault.injected: true`, label `forged_tool_result` (written in the fixture by the injector, [ADR-002](../adr/002-fault-injection-and-fixes.md)), and a non-null `diagnosis` with `proposed_fixes: ["pre_response_check"]` (Grok-shaped field only, [ADR-001](../adr/001-mock-verifier-grok.md)). `outcome.verifier` on remaps is copied from the export `verdict`. On the shop storyboard fixture it is the failed `order_created` check; on the library punch it is failed `loan_renewed`. The injector is the only writer of `fault.*`.
 
 Storyboard scenes 6–8 open `/traces/trace-t3-forged-checkout`. Scene 7 needs `reference-shop.github_repo_url` (`https://github.com/mesagroup/MESA-AgentFailureLab` on the fixture). Boot copies that field onto a stored seed that lacks it and does not overwrite an operator-set URL. Demo Run/Trace ids are still insert-if-missing: a present `trace-t3-forged-checkout` / `run-t3-injected-001` is not rewritten (no backfill of `proposed_fixes` or `at_step`). Delete those two rows if an old seed is missing them, then restart.
 

@@ -74,6 +74,8 @@ describe("fault catalog", () => {
     assert.equal(presetPlan("place-hold").ground_truth.code, "forged_tool_result");
     assert.equal(presetPlan("renew-loan").target, "renew_loan");
     assert.equal(presetPlan("renew-loan").ground_truth.code, "forged_tool_result");
+    assert.match(presetPlan("renew-loan").fault, /renew_loan/);
+    assert.equal(presetPlan("renew-loan").fault.includes("checkout"), false);
     assert.equal(presetPlan("return-loan").target, "return_loan");
     assert.deepEqual(forgedOutput("renew_loan", { loan_id: "loan-1042" }), {
       loan_id: "loan-1042",

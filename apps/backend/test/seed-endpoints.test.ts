@@ -66,9 +66,10 @@ describe("seeded agent endpoints", () => {
         body.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length,
         4,
       );
+      // 3 OTel remaps + renew forged storyboard (#189). Test-only; DEMO_SEED_TRACE_IDS is source of truth.
       assert.equal(
         body.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length,
-        3,
+        4,
       );
     } finally {
       await app.close();
