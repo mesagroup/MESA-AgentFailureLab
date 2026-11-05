@@ -5,7 +5,7 @@ import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
+import { dashboardRunHref, isShoppingDemo, linkFor, needsAttentionRuns } from "@/lib/dashboard";
 import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink } from "@/lib/api";
 import { RUN_PHASE_LABELS } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
@@ -241,6 +241,7 @@ function DashboardBody({
 
   const recentRuns = [...runs].sort((a, b) => b.run_id.localeCompare(a.run_id)).slice(0, 10);
   const rows = recentRuns.map((run, index) => ({ run, link: linkFor(snapshot.trace_links, run, index) }));
+  const attention = needsAttentionRuns(runs, snapshot.trace_links);
 
   const hasAnyFailures = agents.some(a => agentHealthScore(a.agent_id, runs) > 0);
   const rankedAgents = hasAnyFailures
@@ -258,6 +259,37 @@ function DashboardBody({
       <p className="px-1 text-xs text-muted-foreground">
         Session · queued {counts.queued} · running {counts.running} · error {counts.error}
       </p>
+
+      {attention.length > 0 && (
+        <div className="rounded-2xl border border-border/50 bg-card/40 overflow-hidden">
+          <div className="px-5 py-3 border-b border-border/40">
+            <h2 className="text-sm font-medium text-muted-foreground">Needs attention</h2>
+          </div>
+          {attention.map(({ run, link }) => {
+            const href = dashboardRunHref(run, link);
+            const openLabel = link?.first_trace_id
+              ? `Open trace ${link.first_trace_id}`
+              : `Open run ${run.run_id}`;
+            return (
+              <Link
+                key={run.run_id}
+                to={href}
+                title={openLabel}
+                className="flex items-center gap-3 px-5 py-2.5 border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{taskTitle(agents, run)}</div>
+                  <div className="text-xs text-muted-foreground truncate" title={run.agent_id}>
+                    {agentName(agents, run.agent_id)}
+                  </div>
+                </div>
+                <StatusBadge status={run.status} />
+                <span className="text-xs text-muted-foreground shrink-0">No fix replay yet</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       <div className="rounded-2xl bg-card shadow-island overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
