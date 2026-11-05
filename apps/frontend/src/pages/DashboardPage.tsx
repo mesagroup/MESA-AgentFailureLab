@@ -9,6 +9,7 @@ import { dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
 import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink } from "@/lib/api";
 import { RUN_PHASE_LABELS } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
+import { EvalSection } from "@/pages/EvalScoreboardPage";
 
 type LoadState =
   | { phase: "loading" }
@@ -345,6 +346,8 @@ function DashboardBody({
           A row opens the first trace. A run with no trace opens the run. The verifier column is outcome.verifier on that trace.
         </p>
       </div>
+
+      <EvalSection />
     </>
   );
 }
