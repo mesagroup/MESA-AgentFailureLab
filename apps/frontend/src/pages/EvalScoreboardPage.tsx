@@ -28,7 +28,8 @@ function StatsCell({ hits, total, rate }: { hits: number; total: number; rate: n
   );
 }
 
-function DeltaCell({ baseline, grok }: { baseline: number; grok: number }) {
+function DeltaCell({ baseline, grok }: { baseline: number; grok: number | null }) {
+  if (grok === null) return <span className="text-muted-foreground text-sm">—</span>;
   const diff = grok - baseline;
   const diffPct = Math.round(diff * 100);
   if (diffPct === 0) return <span className="text-muted-foreground text-sm">—</span>;
@@ -53,10 +54,10 @@ function MetricRow({ metric }: { metric: EvalMetric }) {
         <StatsCell {...metric.baseline} />
       </td>
       <td className="px-4 py-3">
-        <StatsCell {...metric.grok} />
+        {metric.grok ? <StatsCell {...metric.grok} /> : <span className="text-muted-foreground text-sm">—</span>}
       </td>
       <td className="px-4 py-3">
-        <DeltaCell baseline={metric.baseline.rate} grok={metric.grok.rate} />
+        <DeltaCell baseline={metric.baseline.rate} grok={metric.grok?.rate ?? null} />
       </td>
     </tr>
   );
