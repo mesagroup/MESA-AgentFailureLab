@@ -52,6 +52,29 @@ function agentName(agents: Agent[], agentId: string): string {
   return agents.find((agent) => agent.agent_id === agentId)?.name ?? agentId;
 }
 
+function agentHealthScore(agentId: string, runs: Run[]): number {
+  return runs.filter(r => r.agent_id === agentId && (r.status === "failed" || r.status === "error")).length;
+}
+
+function dotColor(status: RunStatus): string {
+  if (status === "passed") return "bg-green-500";
+  if (status === "failed") return "bg-red-500";
+  if (status === "error") return "bg-amber-500";
+  return "bg-zinc-500/40";
+}
+
+function AgentSparkline({ agentId, runs }: { agentId: string; runs: Run[] }) {
+  const agentRuns = runs.filter(r => r.agent_id === agentId).slice(-8);
+  if (agentRuns.length === 0) return null;
+  return (
+    <div className="flex items-center gap-0.5">
+      {agentRuns.map(r => (
+        <span key={r.run_id} className={cn("w-2 h-2 rounded-full shrink-0", dotColor(r.status))} title={r.status} />
+      ))}
+    </div>
+  );
+}
+
 function PhaseBadge({ phase }: { phase: RunPhase }) {
   const styles: Record<RunPhase, string> = {
     baseline: "bg-blue-500/15 text-blue-400 border-blue-500/20",
@@ -214,8 +237,16 @@ function DashboardBody({
   onOpenRun: (href: string) => void;
 }) {
   const { counts } = snapshot;
+  const runs = snapshot.runs;
   const shoppingDemo = agents.some(isShoppingDemo);
-  const rows = snapshot.runs.map((run, index) => ({ run, link: linkFor(snapshot.trace_links, run, index) }));
+
+  const recentRuns = [...runs].sort((a, b) => b.run_id.localeCompare(a.run_id)).slice(0, 10);
+  const rows = recentRuns.map((run, index) => ({ run, link: linkFor(snapshot.trace_links, run, index) }));
+
+  const hasAnyFailures = agents.some(a => agentHealthScore(a.agent_id, runs) > 0);
+  const rankedAgents = hasAnyFailures
+    ? [...agents].sort((a, b) => agentHealthScore(b.agent_id, runs) - agentHealthScore(a.agent_id, runs)).slice(0, 5)
+    : [...agents].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 5);
 
   return (
     <>
@@ -237,7 +268,7 @@ function DashboardBody({
         {agents.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted-foreground">No agents in this session.</p>
         ) : (
-          agents.map((agent) => (
+          rankedAgents.map((agent) => (
             <Link
               key={agent.agent_id}
               to="/agents"
@@ -254,11 +285,17 @@ function DashboardBody({
                   )}
                 </div>
               </div>
+              <AgentSparkline agentId={agent.agent_id} runs={runs} />
               <span className="text-xs text-muted-foreground shrink-0">
                 {agent.tasks.length} task{agent.tasks.length === 1 ? "" : "s"}
               </span>
             </Link>
           ))
+        )}
+        {agents.length > 5 && (
+          <div className="px-5 py-3 border-t border-border/40">
+            <SectionLink to="/agents">{`View all ${agents.length} agents →`}</SectionLink>
+          </div>
         )}
         {shoppingDemo && (
           <p className="px-5 py-3 text-xs text-muted-foreground border-t border-border/40">
