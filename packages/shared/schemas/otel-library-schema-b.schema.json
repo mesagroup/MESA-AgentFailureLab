@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mesagroup/MESA-AgentFailureLab/packages/shared/schemas/otel-library-schema-b.schema.json",
+  "title": "OtelLibrarySchemaB",
+  "description": "Library fixture export for demo mapping B. This is not otel-import.schema.json, not a Trace, and not shop schema A. remapLibrarySchemaB copies library_export.verdict onto outcome and sets fault to the production mark. It does not invent fault.labels or outcome.verifier. Keys version and items belong to the generic batch, not this document. schema_hint is mesa.otel.library.b; the mock HTTP body uses the same field and does not store schema_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_hint", "library_export", "spans"],
+  "properties": {
+    "schema_hint": {
+      "description": "Demo mapping id for external-library. Shop mapping A is mesa.otel.shop.a and is not this document. The mock does not own schema_id; the lab agent record does.",
+      "const": "mesa.otel.library.b"
+    },
+    "library_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "service", "task", "run", "verdict"],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["prod", "test"]
+        },
+        "service": {
+          "const": "external-library"
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verdict": {
+          "description": "Lab Trace.outcome already computed outside this remap. Copied. The remap does not fill verifier.passed from spans.",
+          "type": "object"
+        }
+      }
+    },
+    "spans": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/span"
+      }
+    }
+  },
+  "$defs": {
+    "span": {
+      "description": "Library mapping B span. Times are ISO-8601 date-times. lib_span_id is not spanId. lib_attrs uses lib.* keys, not mesa.* or shop.* keys.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lib_trace_id", "lib_span_id", "action", "started_at", "ended_at", "lib_attrs"],
+      "properties": {
+        "lib_trace_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lib_span_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lib_attrs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lib.step.kind": {
+              "type": "string",
+              "enum": ["message", "tool_call", "tool_result", "system"]
+            },
+            "lib.step.actor": {
+              "type": "string",
+              "enum": ["user", "assistant", "tool", "system"]
+            },
+            "lib.step.note": {
+              "type": "string"
+            },
+            "lib.tool.request": true,
+            "lib.tool.response": true,
+            "lib.usage.tokens_in": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lib.usage.tokens_out": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lib.usage.cost_usd": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

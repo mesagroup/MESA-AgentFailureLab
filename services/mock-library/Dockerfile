@@ -42,6 +42,9 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY --from=build --chown=node:node /out /app
+COPY --from=build --chown=node:node /app/packages/shared/examples/otel/library-schema-b /app/otel-seed
+
+ENV LIBRARY_OTEL_SEED_DIR=/app/otel-seed
 
 USER node
 

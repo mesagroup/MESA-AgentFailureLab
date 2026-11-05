@@ -93,6 +93,19 @@ export function bindSeedAgent(agent: Agent, urls: ResolvedSeedUrls): Agent {
     copy.instance = { ...copy.instance, base_url: urls.libraryAgent };
     copy.test_instance = { ...copy.test_instance, base_url: urls.libraryAgent };
     copy.world = { kind: "library", base_url: urls.mockLibrary };
+    if (copy.otel) {
+      copy.otel = {
+        ...copy.otel,
+        prod: {
+          ...copy.otel.prod,
+          endpoint: `${urls.mockLibrary}${MOCK_OTEL_TRACES_PATH}?source=prod`,
+        },
+        test: {
+          ...copy.otel.test,
+          endpoint: `${urls.mockLibrary}${MOCK_OTEL_TRACES_PATH}?source=test`,
+        },
+      };
+    }
     return copy;
   }
   throw new Error(`No seed endpoint mapping for ${copy.agent_id}.`);

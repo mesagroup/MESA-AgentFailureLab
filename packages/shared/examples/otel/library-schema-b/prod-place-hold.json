@@ -1,0 +1,96 @@
+{
+  "schema_hint": "mesa.otel.library.b",
+  "library_export": {
+    "channel": "prod",
+    "service": "external-library",
+    "task": "place-hold",
+    "run": "run-otel-lib-b-prod-hold",
+    "verdict": {
+      "success": true,
+      "agent_claimed_success": true,
+      "verifier": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "hold_placed",
+            "passed": true,
+            "detail": "patron-ada has a hold on BK-RARE. Supplied with the export. Not computed from spans."
+          }
+        ],
+        "mock_state_snapshot": {
+          "books": [
+            { "book_id": "BK-OWL", "title": "Field Guide to Owls", "copies": 1, "available": 1 },
+            { "book_id": "BK-RARE", "title": "Atlas of Lost Rivers", "copies": 1, "available": 0 },
+            { "book_id": "BK-POEM", "title": "Pocket Poems", "copies": 3, "available": 3 }
+          ],
+          "loans": [
+            {
+              "loan_id": "loan-2001",
+              "book_id": "BK-RARE",
+              "patron_id": "patron-bev",
+              "status": "on_loan",
+              "renewals": 0
+            }
+          ],
+          "holds": [
+            { "hold_id": "hold-1", "book_id": "BK-RARE", "patron_id": "patron-ada" }
+          ]
+        }
+      }
+    }
+  },
+  "spans": [
+    {
+      "lib_trace_id": "lib-b-prod-hold",
+      "lib_span_id": "lib-span-user",
+      "action": "user",
+      "started_at": "2026-11-05T12:00:00.000Z",
+      "ended_at": "2026-11-05T12:00:00.020Z",
+      "lib_attrs": {
+        "lib.step.kind": "message",
+        "lib.step.actor": "user",
+        "lib.step.note": "BK-RARE has no copy on the shelf. Place a hold for patron-ada."
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-prod-hold",
+      "lib_span_id": "lib-span-hold-call",
+      "action": "place_hold",
+      "started_at": "2026-11-05T12:00:00.050Z",
+      "ended_at": "2026-11-05T12:00:00.220Z",
+      "lib_attrs": {
+        "lib.step.kind": "tool_call",
+        "lib.step.actor": "assistant",
+        "lib.tool.request": { "book_id": "BK-RARE", "patron_id": "patron-ada" }
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-prod-hold",
+      "lib_span_id": "lib-span-hold-result",
+      "action": "place_hold",
+      "started_at": "2026-11-05T12:00:00.220Z",
+      "ended_at": "2026-11-05T12:00:00.250Z",
+      "lib_attrs": {
+        "lib.step.kind": "tool_result",
+        "lib.step.actor": "tool",
+        "lib.tool.response": {
+          "hold_id": "hold-1",
+          "book_id": "BK-RARE",
+          "patron_id": "patron-ada"
+        }
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-prod-hold",
+      "lib_span_id": "lib-span-assistant",
+      "action": "assistant",
+      "started_at": "2026-11-05T12:00:00.400Z",
+      "ended_at": "2026-11-05T12:00:00.700Z",
+      "lib_attrs": {
+        "lib.step.kind": "message",
+        "lib.step.actor": "assistant",
+        "lib.step.note": "Hold placed for patron-ada on BK-RARE. Did not return loan-2001."
+      }
+    }
+  ]
+}

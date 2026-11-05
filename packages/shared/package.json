@@ -25,6 +25,7 @@
     "./schemas/run.schema.json": "./schemas/run.schema.json",
     "./schemas/otel-import.schema.json": "./schemas/otel-import.schema.json",
     "./schemas/otel-shop-schema-a.schema.json": "./schemas/otel-shop-schema-a.schema.json",
+    "./schemas/otel-library-schema-b.schema.json": "./schemas/otel-library-schema-b.schema.json",
     "./examples/agent-reference-shop.json": "./examples/agent-reference-shop.json",
     "./examples/agent-library-desk.json": "./examples/agent-library-desk.json"
   },

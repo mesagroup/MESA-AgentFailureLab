@@ -54,6 +54,9 @@ describe("seeded agent endpoints", () => {
     assert.equal(shop?.updated_at, loadReferenceAgent().updated_at);
     assert.equal(shop?.tasks.length, 5);
     assert.equal(library?.tasks.length, 3);
+    assert.equal(library?.otel?.schema_id, "mesa.otel.library.b");
+    assert.equal(library?.otel?.prod.endpoint, `${DEV_SEED_URLS.MOCK_LIBRARY_URL}/internal/otel/traces?source=prod`);
+    assert.equal(library?.otel?.test.endpoint, `${DEV_SEED_URLS.MOCK_LIBRARY_URL}/internal/otel/traces?source=test`);
   });
 
   it("uses Compose DNS when those variables are set", () => {
@@ -64,6 +67,7 @@ describe("seeded agent endpoints", () => {
     assert.equal(tasksRunUrl(shop!.instance.base_url), "http://mesa-agentservice:3002/v1/tasks/run");
     assert.equal(library?.instance.base_url, "http://mesa-library-agent:3003");
     assert.equal(library?.world?.base_url, "http://mesa-mock-library:8788");
+    assert.equal(library?.otel?.prod.endpoint, `${COMPOSE_SEED_URLS.MOCK_LIBRARY_URL}/internal/otel/traces?source=prod`);
     assert.equal(tasksRunUrl(library!.instance.base_url), "http://mesa-library-agent:3003/v1/tasks/run");
     assert.equal(mockBaseUrlForAgent(library!, COMPOSE_SEED_URLS.MOCK_SHOP_URL), COMPOSE_SEED_URLS.MOCK_LIBRARY_URL);
     assert.equal(composeValue("AGENTSERVICE_URL"), COMPOSE_SEED_URLS.AGENTSERVICE_URL);
@@ -80,6 +84,8 @@ describe("seeded agent endpoints", () => {
     assert.equal(library?.instance.base_url, PRODUCTION_SEED_URLS.LIBRARY_AGENT_URL);
     assert.equal(library?.test_instance.base_url, PRODUCTION_SEED_URLS.LIBRARY_AGENT_URL);
     assert.equal(library?.world?.base_url, PRODUCTION_SEED_URLS.MOCK_LIBRARY_URL);
+    assert.equal(library?.otel?.prod.endpoint, `${PRODUCTION_SEED_URLS.MOCK_LIBRARY_URL}/internal/otel/traces?source=prod`);
+    assert.equal(library?.otel?.test.endpoint, `${PRODUCTION_SEED_URLS.MOCK_LIBRARY_URL}/internal/otel/traces?source=test`);
     assert.equal(tasksRunUrl(shop!.instance.base_url), `${PRODUCTION_SEED_URLS.AGENTSERVICE_URL}/v1/tasks/run`);
     assert.equal(tasksRunUrl(library!.instance.base_url), `${PRODUCTION_SEED_URLS.LIBRARY_AGENT_URL}/v1/tasks/run`);
     for (const url of [

@@ -6,7 +6,8 @@ External agent for issue #109. It is not the shop. It renews a loan, accepts a r
 | --- | --- |
 | Agent record | `packages/shared/examples/agent-library-desk.json` |
 | Runtime | `apps/library-agent` — `GET /health`, `POST /v1/tasks/run` |
-| World | `services/mock-library` — `GET /internal/state` |
+| World | `services/mock-library` — `GET /internal/state`, `GET /internal/otel/traces` |
+| OTel mapping B | `packages/shared/schemas/otel-library-schema-b.schema.json` (`mesa.otel.library.b`) |
 | Checks | `loan_renewed`, `loan_returned`, `hold_placed` |
 
 `instance.kind` is `external`. `instance.base_url` is the runtime, not the mock. `world.base_url` is the mock.
@@ -29,7 +30,7 @@ pnpm --filter @mesa/mock-library dev
 pnpm --filter @mesa/library-agent dev
 ```
 
-The mock listens on `127.0.0.1:8788`. The runtime listens on `127.0.0.1:3003`. A laptop boot of the backend, with the variables unset, seeds those same origins. A deployed boot seeds the public hosts from `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL`.
+The mock listens on `127.0.0.1:8788`. The runtime listens on `127.0.0.1:3003`. Fake APM: `GET http://127.0.0.1:8788/internal/otel/traces?source=prod` (or `source=test`). Query `since` is optional ISO-8601. Optional header `X-Mock-Otel-Schema: mesa.otel.library.b`. A laptop boot of the backend, with the variables unset, seeds those same origins. A deployed boot seeds the public hosts from `LIBRARY_AGENT_URL` and `MOCK_LIBRARY_URL`.
 
 Compose service names, when you want the stack instead of the laptop ports:
 

@@ -264,27 +264,30 @@ export interface OtelSourceConfig {
 
 export const SHOP_OTEL_SCHEMA_A_ID = "mesa.otel.shop.a" as const;
 
+export const LIBRARY_OTEL_SCHEMA_B_ID = "mesa.otel.library.b" as const;
+
 export const MOCK_OTEL_TRACES_PATH = "/internal/otel/traces" as const;
 
 export type ShopOtelSchemaAId = typeof SHOP_OTEL_SCHEMA_A_ID;
+
+export type LibraryOtelSchemaBId = typeof LIBRARY_OTEL_SCHEMA_B_ID;
 
 export type OtelMockChannel = "prod" | "test";
 
 /**
  * One fixture-backed OTel source on `Agent.otel_mock`.
- * `readShopOtelMock` reads `fixture_path` and does not call HTTP.
+ * `readShopOtelMock` / `readLibraryOtelMock` read `fixture_path` and do not call HTTP.
  */
 export interface OtelMockSource {
   fixture_path: string;
 }
 
 /**
- * Dual fixture sources and schema remap A for `reference-shop`.
- * Absent on agents that do not use shop mapping A.
+ * Dual fixture sources and a schema remap. Shop mapping A or library mapping B.
  */
 export interface OtelMockConfig {
   mode: "fixture";
-  schema_id: ShopOtelSchemaAId;
+  schema_id: ShopOtelSchemaAId | LibraryOtelSchemaBId;
   schema_path: string;
   sources: {
     prod: OtelMockSource;
@@ -373,11 +376,11 @@ export interface Agent {
   };
   /**
    * Dual OpenTelemetry sources for this agent. Absent when the author registered none.
-   * Not a Trace, and not a verifier. `schema_id` is the lab remap.
+   * Not a Trace, and not a verifier. `schema_id` is the lab remap (`mesa.otel.shop.a` or `mesa.otel.library.b`).
    */
   otel?: OtelSourceConfig;
   /**
-   * Fixture fallback for schema remap A. Demo pull uses `otel.prod` and `otel.test` over HTTP.
+   * Fixture fallback for schema remap A or B. Demo pull uses `otel.prod` and `otel.test` over HTTP.
    */
   otel_mock?: OtelMockConfig;
   tasks: AgentTask[];

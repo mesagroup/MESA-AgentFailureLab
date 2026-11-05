@@ -1,0 +1,96 @@
+{
+  "schema_hint": "mesa.otel.library.b",
+  "library_export": {
+    "channel": "test",
+    "service": "external-library",
+    "task": "return-loan",
+    "run": "run-otel-lib-b-test-return",
+    "verdict": {
+      "success": true,
+      "agent_claimed_success": true,
+      "verifier": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "loan_returned",
+            "passed": true,
+            "detail": "loan-1042 is returned. Supplied with the export. Not computed from spans."
+          }
+        ],
+        "mock_state_snapshot": {
+          "books": [
+            { "book_id": "BK-OWL", "title": "Field Guide to Owls", "copies": 1, "available": 1 },
+            { "book_id": "BK-RARE", "title": "Atlas of Lost Rivers", "copies": 1, "available": 1 },
+            { "book_id": "BK-POEM", "title": "Pocket Poems", "copies": 3, "available": 3 }
+          ],
+          "loans": [
+            {
+              "loan_id": "loan-1042",
+              "book_id": "BK-OWL",
+              "patron_id": "patron-ada",
+              "status": "returned",
+              "renewals": 0
+            }
+          ],
+          "holds": []
+        }
+      }
+    }
+  },
+  "spans": [
+    {
+      "lib_trace_id": "lib-b-test-return",
+      "lib_span_id": "lib-span-user",
+      "action": "user",
+      "started_at": "2026-11-05T11:00:00.000Z",
+      "ended_at": "2026-11-05T11:00:00.030Z",
+      "lib_attrs": {
+        "lib.step.kind": "message",
+        "lib.step.actor": "user",
+        "lib.step.note": "Accept the return of loan loan-1042. patron-ada is bringing back BK-OWL."
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-test-return",
+      "lib_span_id": "lib-span-return-call",
+      "action": "return_loan",
+      "started_at": "2026-11-05T11:00:00.080Z",
+      "ended_at": "2026-11-05T11:00:00.300Z",
+      "lib_attrs": {
+        "lib.step.kind": "tool_call",
+        "lib.step.actor": "assistant",
+        "lib.tool.request": { "loan_id": "loan-1042" }
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-test-return",
+      "lib_span_id": "lib-span-return-result",
+      "action": "return_loan",
+      "started_at": "2026-11-05T11:00:00.300Z",
+      "ended_at": "2026-11-05T11:00:00.340Z",
+      "lib_attrs": {
+        "lib.step.kind": "tool_result",
+        "lib.step.actor": "tool",
+        "lib.tool.response": {
+          "loan_id": "loan-1042",
+          "book_id": "BK-OWL",
+          "patron_id": "patron-ada",
+          "status": "returned",
+          "renewals": 0
+        }
+      }
+    },
+    {
+      "lib_trace_id": "lib-b-test-return",
+      "lib_span_id": "lib-span-assistant",
+      "action": "assistant",
+      "started_at": "2026-11-05T11:00:00.500Z",
+      "ended_at": "2026-11-05T11:00:00.900Z",
+      "lib_attrs": {
+        "lib.step.kind": "message",
+        "lib.step.actor": "assistant",
+        "lib.step.note": "loan-1042 is returned. BK-OWL is back on the shelf."
+      }
+    }
+  ]
+}
