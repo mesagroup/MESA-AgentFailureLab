@@ -97,6 +97,13 @@ export const PROMPT_LAUNCH_COPY = {
   taskLine: "Original task prompt",
 } as const;
 
+/** Launch-sheet copy for the injected-phase info tooltip (#179). */
+export const INJECTED_LAUNCH_COPY = {
+  buttonLabel: "About inject fault",
+  tooltip:
+    "These tests re-run your previous completed baseline runs. The platform automatically injects a malicious prompt. Injection is an automatic platform service, transparent to the agent's end user — not a manual ad-hoc attack.",
+} as const;
+
 /** Stored Run.phase produced by this launch sheet phase. */
 export function storedPhaseForLaunch(
   phase: LaunchPhase,

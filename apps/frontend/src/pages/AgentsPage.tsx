@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch, isLoopback } from "@/lib/agents-page";
 import { createRun, deleteAgent, getHarnessSnapshot, getJuryCase, listAgents, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
+import { InjectedPhaseInfo } from "@/lib/injected-phase-info";
 import { PromptLaunchEditor, launchPromptOverride } from "@/lib/prompt-launch-editor";
 import {
   emptyOtelDraft,
@@ -1065,9 +1066,12 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
               <>
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-3">
-                    <p className="text-sm font-medium">
-                      {phase === "injected" ? "Baseline run to inject" : "Baseline run to replay"}
-                    </p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium">
+                        {phase === "injected" ? "Baseline run to inject" : "Baseline run to replay"}
+                      </p>
+                      {phase === "injected" ? <InjectedPhaseInfo /> : null}
+                    </div>
                     <span className="text-xs text-muted-foreground">
                       {filteredBaselines.length}/{baselines.length}
                     </span>

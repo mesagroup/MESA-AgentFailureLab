@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Agent, Run } from "@mesa/shared";
 import {
+  INJECTED_LAUNCH_COPY,
   LAUNCH_PHASE_COPY,
   LAUNCH_PHASES,
   RUN_PHASE_LABELS,
@@ -177,6 +178,9 @@ test("launch and run phase copy use plain-English labels without renaming IDs", 
   assert.equal(runPhaseLabel("baseline"), "Clean run");
   assert.equal(runPhaseLabel("unknown"), "unknown");
   assert.ok(!("jury" in RUN_PHASE_LABELS));
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /previous completed baseline/i);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /malicious prompt/i);
+  assert.match(INJECTED_LAUNCH_COPY.tooltip, /not a manual ad-hoc attack/i);
 });
 
 test("buildJuryLaunchParams validates note, reference run, and replay fix kinds", () => {
