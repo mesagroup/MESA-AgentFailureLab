@@ -162,7 +162,7 @@ export function RunDetailPage() {
               {view.task.prompt}
             </pre>
           ) : (
-            <p className="text-sm text-muted-foreground">No prompt is stored on the agent task for this run.</p>
+            <p className="text-sm text-muted-foreground">No prompt is stored on this run or its agent task.</p>
           )}
         </div>
 

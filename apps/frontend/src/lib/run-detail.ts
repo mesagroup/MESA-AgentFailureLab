@@ -95,12 +95,21 @@ export function summarizeSetup(task: AgentTask | undefined): string {
   return parts.join(" · ");
 }
 
-export function taskViewFor(run: Pick<Run, "task_id">, agent: Agent | undefined): RunTaskView {
+/** Prompt shown for a run: stored launch text when present, else the agent task catalog. */
+export function effectiveRunPrompt(
+  run: Pick<Run, "task_id" | "prompt">,
+  agent: Agent | undefined,
+): string {
+  if (typeof run.prompt === "string" && run.prompt.length > 0) return run.prompt;
+  return agent?.tasks.find((item) => item.task_id === run.task_id)?.prompt ?? "";
+}
+
+export function taskViewFor(run: Pick<Run, "task_id" | "prompt">, agent: Agent | undefined): RunTaskView {
   const task = agent?.tasks.find((item) => item.task_id === run.task_id);
   return {
     task_id: run.task_id,
     title: task?.title ?? run.task_id,
-    prompt: task?.prompt ?? "",
+    prompt: effectiveRunPrompt(run, agent),
     setup_summary: summarizeSetup(task),
   };
 }

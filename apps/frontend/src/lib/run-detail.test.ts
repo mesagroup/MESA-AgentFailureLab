@@ -122,6 +122,19 @@ test("verified run renders prompt, task, and each verifier check", () => {
   assert.equal(view.notes, null);
 });
 
+test("run detail prefers stored run.prompt over the agent task catalog", () => {
+  const view = buildRunDetailView({
+    run: run({
+      run_id: "run-override",
+      status: "passed",
+      prompt: "Cancel order {{order_id}} — edited at launch.",
+    }),
+    agent: agent(),
+  });
+  assert.equal(view.task.prompt, "Cancel order {{order_id}} — edited at launch.");
+  assert.notEqual(view.task.prompt, "Cancel the customer's last order.");
+});
+
 test("failed run keeps verifier checks prominent and shows a failed banner", () => {
   const failed = trace({
     trace_id: "trace-fail",
