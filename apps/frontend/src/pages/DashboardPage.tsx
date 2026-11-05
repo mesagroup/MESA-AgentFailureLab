@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
-import { Activity, Bot, Play, RefreshCw, Shield, type LucideIcon } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Agent, Run, RunPhase, RunStatus } from "@mesa/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DASHBOARD_DESTINATIONS, dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
+import { dashboardRunHref, isShoppingDemo, linkFor } from "@/lib/dashboard";
 import { getHarnessSnapshot, listAgents, type HarnessSnapshot, type RunTraceLink } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-const DESTINATION_ICONS: Record<(typeof DASHBOARD_DESTINATIONS)[number]["to"], LucideIcon> = {
-  [DASHBOARD_DESTINATIONS[0].to]: Shield,
-  "/agents": Bot,
-  "/runs": Play,
-  "/traces": Activity,
-};
 
 type LoadState =
   | { phase: "loading" }
@@ -165,7 +158,7 @@ export function DashboardPage() {
       <div className="flex items-center justify-between pt-2 pb-2 gap-3">
         <div>
           <h1 className="text-xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">CHAOS.AI lab · harness session</p>
+          <p className="text-sm text-muted-foreground mt-0.5">MESA lab · harness session</p>
         </div>
         <Button
           onClick={() => setLoadId((value) => value + 1)}
@@ -177,25 +170,6 @@ export function DashboardPage() {
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {DASHBOARD_DESTINATIONS.map(({ to, title, detail }) => {
-          const Icon = DESTINATION_ICONS[to];
-          return (
-            <Link
-              key={to}
-              to={to}
-              className="rounded-2xl bg-card shadow-island p-5 flex items-start gap-3 hover:bg-muted/40 transition-colors"
-            >
-              <Icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
-              <span>
-                <span className="block text-sm font-semibold">{title}</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">{detail}</span>
-              </span>
-            </Link>
-          );
-        })}
       </div>
 
       {state.phase === "loading" && <DashboardSkeleton />}
@@ -255,7 +229,7 @@ function DashboardBody({
         <StatCard label="Failed" value={String(counts.failed + counts.error)} />
       </div>
       <p className="px-1 text-xs text-muted-foreground">
-        {counts.scope} · queued {counts.queued} · running {counts.running} · error {counts.error}
+        Session · queued {counts.queued} · running {counts.running} · error {counts.error}
       </p>
 
       <div className="rounded-2xl bg-card shadow-island overflow-hidden">
@@ -270,6 +244,7 @@ function DashboardBody({
             <Link
               key={agent.agent_id}
               to="/agents"
+              title={agent.agent_id}
               className="flex items-center gap-4 px-5 py-3.5 border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
             >
               <div className="flex-1 min-w-0">
@@ -281,7 +256,6 @@ function DashboardBody({
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-mono text-muted-foreground/70 truncate mt-0.5">{agent.agent_id}</p>
               </div>
               <span className="text-xs text-muted-foreground shrink-0">
                 {agent.tasks.length} task{agent.tasks.length === 1 ? "" : "s"}
@@ -291,7 +265,7 @@ function DashboardBody({
         )}
         {shoppingDemo && (
           <p className="px-5 py-3 text-xs text-muted-foreground border-t border-border/40">
-            Shopping tasks are the demo example. The lab is CHAOS.AI.
+            Shopping tasks are the demo example. The product is MESA.
           </p>
         )}
       </div>
@@ -310,12 +284,11 @@ function DashboardBody({
           <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[16%] text-xs">Run</TableHead>
-                  <TableHead className="w-[16%] text-xs">Agent</TableHead>
-                  <TableHead className="w-[18%] text-xs">Task</TableHead>
-                  <TableHead className="w-[11%] text-xs">Phase</TableHead>
-                  <TableHead className="w-[11%] text-xs">Status</TableHead>
-                  <TableHead className="w-[12%] text-xs">Verifier</TableHead>
+                  <TableHead className="w-[26%] text-xs">Task</TableHead>
+                  <TableHead className="w-[20%] text-xs">Agent</TableHead>
+                  <TableHead className="w-[12%] text-xs">Phase</TableHead>
+                  <TableHead className="w-[12%] text-xs">Status</TableHead>
+                  <TableHead className="w-[14%] text-xs">Verifier</TableHead>
                   <TableHead className="w-[8%] text-xs text-right">Latency</TableHead>
                   <TableHead className="w-[8%] text-xs text-right">When</TableHead>
                 </TableRow>
@@ -325,11 +298,15 @@ function DashboardBody({
                   const href = dashboardRunHref(run, link);
                   const when = link?.traces[0]?.started_at;
                   const latency = rowLatency(run, link);
+                  const openLabel = link?.first_trace_id
+                    ? `Open trace ${link.first_trace_id}`
+                    : `Open run ${run.run_id}`;
                   return (
                     <TableRow
                       key={run.run_id}
                       className="cursor-pointer"
                       tabIndex={0}
+                      title={openLabel}
                       onClick={() => onOpenRun(href)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
@@ -338,23 +315,20 @@ function DashboardBody({
                         }
                       }}
                     >
-                      <TableCell className="overflow-hidden font-mono text-xs text-muted-foreground">
+                      <TableCell className="overflow-hidden text-sm">
                         <Link
                           to={href}
                           className="block truncate hover:text-foreground"
-                          title={link?.first_trace_id ? `Open trace ${link.first_trace_id}` : `Open run ${run.run_id}`}
+                          title={openLabel}
                           onClick={(event) => event.stopPropagation()}
                         >
-                          {run.run_id}
+                          {taskTitle(agents, run)}
                         </Link>
                       </TableCell>
                       <TableCell className="overflow-hidden text-sm">
-                        <div className="truncate">{agentName(agents, run.agent_id)}</div>
-                        <div className="truncate font-mono text-xs text-muted-foreground">{run.agent_id}</div>
-                      </TableCell>
-                      <TableCell className="overflow-hidden text-sm text-muted-foreground">
-                        <div className="truncate">{taskTitle(agents, run)}</div>
-                        <div className="truncate font-mono text-xs">{run.task_id}</div>
+                        <div className="truncate" title={run.agent_id}>
+                          {agentName(agents, run.agent_id)}
+                        </div>
                       </TableCell>
                       <TableCell><PhaseBadge phase={run.phase} /></TableCell>
                       <TableCell><StatusBadge status={run.status} /></TableCell>

@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import type { Run } from "@mesa/shared";
-import { DASHBOARD_DESTINATIONS } from "./dashboard.ts";
 import { PRIMARY_NAV } from "./nav.ts";
 import { formHints, sameVerdictLabel, validateJuryForm } from "./jury.ts";
 import {
@@ -96,7 +95,6 @@ test("Runs type=security filters to the Security badge set", () => {
 test("jury/security user-facing copy is English", () => {
   const blobs = [
     ...PRIMARY_NAV.map((item) => item.label),
-    ...DASHBOARD_DESTINATIONS.flatMap((item) => [item.title, item.detail, item.to]),
     SECURITY_BADGE_LABEL,
     SECURITY_FILTER_COPY.title,
     SECURITY_FILTER_COPY.detail,
@@ -112,6 +110,13 @@ test("jury/security user-facing copy is English", () => {
   assert.match(SECURITY_FILTER_COPY.detail, /attacker/i);
   assert.match(SECURITY_FILTER_COPY.detail, /malicious juror note/i);
   assert.match(SECURITY_FILTER_COPY.detail, /permission guard/i);
-  assert.equal(DASHBOARD_DESTINATIONS[0]?.to, SECURITY_RUNS_HREF);
-  assert.equal(DASHBOARD_DESTINATIONS.some((item) => item.to === "/jury"), false);
+});
+
+test("dashboard has no Security/Jury destination strip; security stays under Runs", () => {
+  const dashboardPage = readFileSync(join(frontendSrc, "pages/DashboardPage.tsx"), "utf8");
+  const dashboardLib = readFileSync(join(frontendSrc, "lib/dashboard.ts"), "utf8");
+  assert.doesNotMatch(dashboardLib, /DASHBOARD_DESTINATIONS/);
+  assert.doesNotMatch(dashboardPage, /DASHBOARD_DESTINATIONS|\/jury|Giuria/);
+  assert.doesNotMatch(dashboardPage, /title:\s*"Security"/);
+  assert.match(SECURITY_RUNS_HREF, /type=security/);
 });
