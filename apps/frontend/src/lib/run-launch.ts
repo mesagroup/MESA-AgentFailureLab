@@ -85,6 +85,9 @@ export const JURY_LAUNCH_COPY = {
   promptLabel: "Prompt for this launch",
   promptHelper: "Starts from the reference task. Edit before launch.",
   promptReset: "Reset to task prompt",
+  pickerPlaceholder: "Select a run",
+  pickerFilterLabel: "Filter reference runs",
+  pickerFilterPlaceholder: "Filter by title, task, status, prompt…",
 } as const;
 
 export const PROMPT_LAUNCH_COPY = {
