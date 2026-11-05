@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { canDeleteAgent, deleteAgentErrorMessage, hrefAfterCreateRun, hrefAfterJuryLaunch, isLoopback } from "@/lib/agents-page";
-import { createRun, deleteAgent, getJuryCase, listAgents, listRuns, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
+import { createRun, deleteAgent, getHarnessSnapshot, getJuryCase, listAgents, postJuryCase, saveAgent, updateAgent, type AgentDraft } from "@/lib/api";
+import { PromptLaunchEditor, launchPromptOverride } from "@/lib/prompt-launch-editor";
 import {
   emptyOtelDraft,
   otelDraftFromAgent,
@@ -33,11 +34,15 @@ import {
   buildLaunchRequest,
   filterRunsByQuery,
   formatRunDuration,
+  PROMPT_LAUNCH_COPY,
   juryLaunchMode,
   juryReferenceRunsForAgent,
   jurySheetReady,
   phaseNeedsReferenceRun,
+  promptHistoryEntries,
   runPhaseLabel,
+  storedPhaseForLaunch,
+  type PromptHistoryEntry,
   taskForRun,
   taskTitleForRun,
   toggleLaunchFixKind,
@@ -667,6 +672,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
   const [juryPermissions, setJuryPermissions] = useState<string[]>([]);
   const [juryIncludeBaseline, setJuryIncludeBaseline] = useState(true);
   const [agentRuns, setAgentRuns] = useState<Run[]>([]);
+  const [startedAtByRunId, setStartedAtByRunId] = useState<Record<string, string>>({});
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
@@ -693,16 +699,23 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     setLaunching(false);
     let cancelled = false;
     setLoadingRuns(true);
-    listRuns()
-      .then((runs) => {
+    getHarnessSnapshot()
+      .then((snapshot) => {
         if (!cancelled) {
-          setAgentRuns(runs);
+          setAgentRuns(snapshot.runs);
+          const times: Record<string, string> = {};
+          for (const link of snapshot.trace_links) {
+            const started = link.traces[0]?.started_at;
+            if (started) times[link.run_id] = started;
+          }
+          setStartedAtByRunId(times);
           setRunsError(null);
         }
       })
       .catch((err) => {
         if (!cancelled) {
           setAgentRuns([]);
+          setStartedAtByRunId({});
           setRunsError(err instanceof Error ? err.message : "Could not load runs.");
         }
       })
@@ -771,14 +784,17 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     [selectedBaseline, agent],
   );
   const selectedLaunchTask = phase === "jury" ? selectedJuryTask : selectedTask;
-
-  useEffect(() => {
-    if (!selectedLaunchTask) {
-      if (!promptTouched) setPromptDraft("");
-      return;
-    }
-    if (!promptTouched) setPromptDraft(selectedLaunchTask.prompt);
-  }, [selectedLaunchTask, promptTouched]);
+  const historyPhase = storedPhaseForLaunch(phase, juryMode);
+  const promptHistory =
+    agent && selectedLaunchTask && historyPhase
+      ? promptHistoryEntries(
+          agentRuns,
+          agent.agent_id,
+          selectedLaunchTask.task_id,
+          historyPhase,
+          startedAtByRunId,
+        )
+      : [];
 
   function toggleTask(id: string) {
     if (launching) return;
@@ -844,12 +860,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
       parentRunId,
       fixKinds: phase === "jury" ? juryFixKinds : fixKinds,
       promptOverride:
-        runPhase &&
-        promptTouched &&
-        promptDraft.trim().length > 0 &&
-        (!selectedLaunchTask || promptDraft.trim() !== selectedLaunchTask.prompt)
-          ? promptDraft
-          : null,
+        runPhase ? launchPromptOverride(promptDraft, selectedLaunchTask?.prompt, promptTouched) : null,
       jury: {
         note: juryNote,
         permissions: juryPermissions,
@@ -1022,17 +1033,11 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                     setError(null);
                   }
                 }}
-                promptDraft={promptDraft}
-                promptTouched={promptTouched}
                 promptTask={selectedJuryTask}
-                onPromptChange={(value) => {
-                  setPromptTouched(true);
-                  setPromptDraft(value);
-                }}
-                onPromptReset={() => {
-                  if (!selectedJuryTask) return;
-                  setPromptDraft(selectedJuryTask.prompt);
-                  setPromptTouched(false);
+                promptHistory={promptHistory}
+                onDraftChange={(draft, touched) => {
+                  setPromptDraft(draft);
+                  setPromptTouched(touched);
                 }}
                 note={juryNote}
                 onNote={setJuryNote}
@@ -1166,35 +1171,18 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                   )}
                 </div>
 
-                {selectedBaseline && (
-                  <div>
-                    <p className="text-sm font-medium mb-2">Prompt for this launch</p>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Starts from the baseline task. Edit or add instructions before launch.
-                    </p>
-                    <textarea
-                      value={promptDraft}
-                      onChange={(event) => {
-                        setPromptTouched(true);
-                        setPromptDraft(event.target.value);
-                      }}
-                      rows={6}
-                      className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem]"
-                      aria-label="Prompt for this launch"
-                    />
-                    {selectedTask && promptTouched && promptDraft !== selectedTask.prompt && (
-                      <button
-                        type="button"
-                        className="mt-2 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                        onClick={() => {
-                          setPromptDraft(selectedTask.prompt);
-                          setPromptTouched(false);
-                        }}
-                      >
-                        Reset to task prompt
-                      </button>
-                    )}
-                  </div>
+                {selectedBaseline && selectedLaunchTask && (
+                  <PromptLaunchEditor
+                    prefillKey={`${phase}:${parentRunId}`}
+                    taskPrompt={selectedLaunchTask.prompt}
+                    helperText={PROMPT_LAUNCH_COPY.helperInjected}
+                    history={promptHistory}
+                    disabled={launching}
+                    onDraftChange={(draft, touched) => {
+                      setPromptDraft(draft);
+                      setPromptTouched(touched);
+                    }}
+                  />
                 )}
               </>
             )}
@@ -1274,11 +1262,9 @@ function JuryLaunchFields({
   mode,
   fixKinds,
   onToggleFixKind,
-  promptDraft,
-  promptTouched,
   promptTask,
-  onPromptChange,
-  onPromptReset,
+  promptHistory,
+  onDraftChange,
 }: {
   agent: Agent | null;
   launching: boolean;
@@ -1306,11 +1292,9 @@ function JuryLaunchFields({
   mode: "attack" | "replay" | null;
   fixKinds: FixKind[];
   onToggleFixKind: (kind: FixKind) => void;
-  promptDraft: string;
-  promptTouched: boolean;
   promptTask: AgentTask | undefined;
-  onPromptChange: (value: string) => void;
-  onPromptReset: () => void;
+  promptHistory: PromptHistoryEntry[];
+  onDraftChange: (draft: string, touched: boolean) => void;
 }) {
   const noteLen = note.trim().length;
   return (
@@ -1421,28 +1405,14 @@ function JuryLaunchFields({
       </div>
 
       {selectedRun && (
-        <div>
-          <p className="text-sm font-medium mb-2">{JURY_LAUNCH_COPY.promptLabel}</p>
-          <p className="text-xs text-muted-foreground mb-2">{JURY_LAUNCH_COPY.promptHelper}</p>
-          <textarea
-            value={promptDraft}
-            disabled={launching}
-            onChange={(event) => onPromptChange(event.target.value)}
-            rows={6}
-            className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem] disabled:opacity-50"
-            aria-label={JURY_LAUNCH_COPY.promptLabel}
-          />
-          {promptTask && promptTouched && promptDraft !== promptTask.prompt && (
-            <button
-              type="button"
-              disabled={launching}
-              className="mt-2 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-50"
-              onClick={onPromptReset}
-            >
-              {JURY_LAUNCH_COPY.promptReset}
-            </button>
-          )}
-        </div>
+        <PromptLaunchEditor
+          prefillKey={`jury:${selectedRun.run_id}`}
+          taskPrompt={promptTask?.prompt ?? ""}
+          helperText={PROMPT_LAUNCH_COPY.helperJury}
+          history={promptHistory}
+          disabled={launching}
+          onDraftChange={onDraftChange}
+        />
       )}
 
       <div className="space-y-1.5">
@@ -1456,6 +1426,8 @@ function JuryLaunchFields({
           id="jury-note"
           value={note}
           disabled={launching}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
           onChange={(event) => onNote(event.target.value)}
           rows={7}
           className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem] disabled:opacity-50"

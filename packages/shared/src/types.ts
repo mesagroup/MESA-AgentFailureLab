@@ -440,6 +440,11 @@ export interface Run {
   fix_kinds: FixKind[];
   error_message?: string;
   duration_ms?: number;
+  /**
+   * Effective task prompt for this run (override or `task.prompt`) before any
+   * attached juror/order note. Absent on runs saved before contract 0.6.0.
+   */
+  prompt?: string;
 }
 
 /**

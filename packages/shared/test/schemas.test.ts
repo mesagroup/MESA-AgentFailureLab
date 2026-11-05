@@ -405,6 +405,11 @@ describe("Run is not a Trace", () => {
 
     const withFix = { ...baseline, fix_kinds: ["permission_guard"] };
     assert.equal(validateRun(withFix).ok, false);
+
+    const withPrompt = { ...baseline, prompt: "Hold BK-RARE for patron-ada." };
+    assertOk(validateRun(withPrompt), "optional prompt");
+    assert.equal(validateRun({ ...baseline, prompt: "" }).ok, false);
+    assert.equal(validateRun({ ...baseline, prompt_override: "x" }).ok, false);
   });
 
   it("requires a fix kind on after_fix and a plan on injected", () => {

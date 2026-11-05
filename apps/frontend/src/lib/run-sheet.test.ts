@@ -52,12 +52,12 @@ test("RunSheet jury UI collects note, permissions, reference run, and in-flight 
 
 test("RunSheet jury phase reuses Prompt for this launch from the reference task", () => {
   assert.match(sheet, /selectedJuryTask/);
-  assert.match(sheet, /JURY_LAUNCH_COPY\.promptLabel/);
-  assert.match(sheet, /JURY_LAUNCH_COPY\.promptHelper/);
-  assert.match(sheet, /JURY_LAUNCH_COPY\.promptReset/);
+  assert.match(sheet, /PromptLaunchEditor/);
+  assert.match(sheet, /PROMPT_LAUNCH_COPY\.helperJury/);
+  assert.match(sheet, /prefillKey=\{`jury:\$\{selectedRun\.run_id\}`\}/);
   assert.match(JURY_LAUNCH_COPY.promptLabel, /Prompt for this launch/);
   assert.match(JURY_LAUNCH_COPY.promptHelper, /Starts from the reference task\. Edit before launch\./);
   assert.match(sheet, /phase === "injected" \|\| phase === "after_fix" \|\| phase === "jury"/);
-  assert.match(sheet, /promptDraft !== promptTask\.prompt/);
+  assert.match(sheet, /launchPromptOverride/);
   assert.match(sheet, /Task prompt/);
 });

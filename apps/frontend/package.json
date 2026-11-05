@@ -8,7 +8,7 @@
     "dev": "vite --port 3000 --strictPort",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/dashboard.test.ts src/lib/agents-page.test.ts src/lib/jury.test.ts src/lib/tasks.test.ts src/lib/otel.test.ts src/lib/task-domain.test.ts src/lib/evalset.test.ts src/lib/after-fix.test.ts src/lib/run-launch.test.ts src/lib/run-detail.test.ts src/lib/traces.test.ts src/lib/trace-analysis.test.ts src/lib/security-runs.test.ts src/lib/run-sheet.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/dashboard.test.ts src/lib/agents-page.test.ts src/lib/jury.test.ts src/lib/tasks.test.ts src/lib/otel.test.ts src/lib/task-domain.test.ts src/lib/evalset.test.ts src/lib/after-fix.test.ts src/lib/run-launch.test.ts src/lib/run-detail.test.ts src/lib/traces.test.ts src/lib/trace-analysis.test.ts src/lib/security-runs.test.ts src/lib/run-sheet.test.ts && node --import tsx --test src/lib/prompt-launch-editor.test.ts",
     "preview": "vite preview --port 3000 --strictPort"
   },
   "dependencies": {
@@ -28,11 +28,15 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.4",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "5.2.0",
+    "happy-dom": "^21.0.4",
     "tailwindcss": "^4.3.4",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vite": "7.3.7"
   }

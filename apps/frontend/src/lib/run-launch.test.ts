@@ -10,6 +10,8 @@ import {
   buildLaunchParams,
   buildLaunchRequest,
   filterRunsByQuery,
+  promptHistoryEntries,
+  storedPhaseForLaunch,
   juryLaunchMode,
   juryReferenceRunsForAgent,
   jurySheetReady,
@@ -340,4 +342,52 @@ test("taskTitleForRun and filterRunsByQuery use agent task metadata", () => {
     filterRunsByQuery(rows, agent, "renew").map((item) => item.run_id),
     ["run-other"],
   );
+});
+
+test("prompt history is agent+task+phase, oldest first, and skips runs without prompt", () => {
+  assert.equal(storedPhaseForLaunch("jury", "attack"), "injected");
+  assert.equal(storedPhaseForLaunch("jury", "replay"), "after_fix");
+  assert.equal(storedPhaseForLaunch("injected", null), "injected");
+  const newestFirst = [
+    run({
+      run_id: "run-new",
+      agent_id: "a1",
+      task_id: "T5",
+      phase: "injected",
+      status: "failed",
+      prompt: "newest prompt",
+    }),
+    run({
+      run_id: "run-old",
+      agent_id: "a1",
+      task_id: "T5",
+      phase: "injected",
+      status: "failed",
+      prompt: "oldest prompt",
+    }),
+    run({
+      run_id: "run-other-task",
+      agent_id: "a1",
+      task_id: "T1",
+      phase: "injected",
+      status: "failed",
+      prompt: "wrong task",
+    }),
+    run({
+      run_id: "run-legacy",
+      agent_id: "a1",
+      task_id: "T5",
+      phase: "injected",
+      status: "failed",
+    }),
+  ];
+  const rows = promptHistoryEntries(newestFirst, "a1", "T5", "injected", {
+    "run-old": "2026-11-01T00:00:00.000Z",
+  });
+  assert.deepEqual(
+    rows.map((row) => row.run_id),
+    ["run-old", "run-new"],
+  );
+  assert.equal(rows[0]?.started_at, "2026-11-01T00:00:00.000Z");
+  assert.equal(rows[1]?.prompt, "newest prompt");
 });

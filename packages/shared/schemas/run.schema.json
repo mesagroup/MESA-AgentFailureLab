@@ -84,6 +84,11 @@
       "description": "Wall-clock duration of the run once it leaves the queue. Optional while queued.",
       "type": "integer",
       "minimum": 0
+    },
+    "prompt": {
+      "description": "Effective task prompt for this run (prompt_override or task.prompt) before any attached juror/order note. Optional. Absent on runs saved before contract 0.6.0. Not a Trace field.",
+      "type": "string",
+      "minLength": 1
     }
   },
   "allOf": [

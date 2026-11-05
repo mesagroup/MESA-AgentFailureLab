@@ -87,6 +87,60 @@ export const JURY_LAUNCH_COPY = {
   promptReset: "Reset to task prompt",
 } as const;
 
+export const PROMPT_LAUNCH_COPY = {
+  label: "Prompt for this launch",
+  helperInjected: "Starts from the baseline task. Edit or add instructions before launch.",
+  helperJury: "Starts from the reference task. Edit before launch.",
+  reset: "Reset to task prompt",
+  historyLabel: "Prompt history",
+  historyHint: "Previous launches for this task. Click a row to load it into the editor. Launching adds a new row.",
+  taskLine: "Original task prompt",
+} as const;
+
+/** Stored Run.phase produced by this launch sheet phase. */
+export function storedPhaseForLaunch(
+  phase: LaunchPhase,
+  juryMode: "attack" | "replay" | null,
+): RunPhase | null {
+  if (phase === "injected" || phase === "after_fix") return phase;
+  if (phase === "jury") return juryMode === "replay" ? "after_fix" : "injected";
+  return null;
+}
+
+export interface PromptHistoryEntry {
+  run_id: string;
+  phase: RunPhase;
+  prompt: string;
+  started_at?: string;
+}
+
+/**
+ * Previous effective prompts for agent+task+stored phase.
+ * `runs` is newest-first (`GET /runs`); returned rows are oldest first (newest last).
+ */
+export function promptHistoryEntries(
+  runs: readonly Run[],
+  agentId: string,
+  taskId: string,
+  storedPhase: RunPhase,
+  startedAtByRunId?: Readonly<Record<string, string>>,
+): PromptHistoryEntry[] {
+  const matched = runs.filter(
+    (run) =>
+      run.agent_id === agentId &&
+      run.task_id === taskId &&
+      run.phase === storedPhase &&
+      typeof run.prompt === "string" &&
+      run.prompt.length > 0,
+  );
+  return [...matched].reverse().map((run) => ({
+    run_id: run.run_id,
+    phase: run.phase,
+    prompt: run.prompt as string,
+    ...(startedAtByRunId?.[run.run_id] ? { started_at: startedAtByRunId[run.run_id] } : {}),
+  }));
+}
+
 /** Terminal runs of this agent (picker for the jury/security phase). */
 export function juryReferenceRunsForAgent(runs: readonly Run[], agentId: string): Run[] {
   return runs.filter((run) => run.agent_id === agentId && TERMINAL.has(run.status));
@@ -125,6 +179,7 @@ export function filterRunsByQuery(
       run.phase,
       task?.title ?? "",
       task?.prompt ?? "",
+      run.prompt ?? "",
       run.error_message ?? "",
     ]
       .join(" ")
