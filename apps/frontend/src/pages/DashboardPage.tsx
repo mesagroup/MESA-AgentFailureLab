@@ -272,7 +272,6 @@ function DashboardBody({
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
                   <span className="text-sm font-medium truncate">{agent.name}</span>
-                  <span className="text-xs font-mono text-muted-foreground">{agent.instance.kind}</span>
                   {isShoppingDemo(agent) && (
                     <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide text-muted-foreground">
                       demo

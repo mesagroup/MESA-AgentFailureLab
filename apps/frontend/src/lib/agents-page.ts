@@ -2,7 +2,7 @@ import { isSeededAgentId } from "@mesa/shared";
 
 /**
  * Demo seeds use the same edit form as an agent someone registered.
- * Kind does not hide the pencil. Name, description, and tasks go through PUT.
+ * Name, description, and tasks go through PUT.
  */
 export function canEditAgent(agentId: string): boolean {
   return agentId.trim().length > 0;
