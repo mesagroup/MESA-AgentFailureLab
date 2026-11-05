@@ -63,7 +63,7 @@ function dotColor(status: RunStatus): string {
 }
 
 function AgentSparkline({ agentId, runs }: { agentId: string; runs: Run[] }) {
-  const agentRuns = runs.filter(r => r.agent_id === agentId).slice(-8);
+  const agentRuns = runs.filter(r => r.agent_id === agentId).slice(-10);
   if (agentRuns.length === 0) return null;
   return (
     <div className="flex items-center gap-0.5">
