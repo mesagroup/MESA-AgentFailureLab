@@ -11,6 +11,7 @@ import {
   RUN_STATUSES,
   TASK_EVALSET_VERSION,
   TASK_PERMISSIONS,
+  TRACE_SOURCES,
   TRACE_STATUSES,
   type Agent,
   type TaskEvalset,
@@ -50,6 +51,7 @@ describe("schema enums match the TypeScript constants", () => {
     assert.deepEqual(traceDefs.fixKind?.enum, [...FIX_KINDS]);
     assert.deepEqual(runDefs.fixKind?.enum, [...FIX_KINDS]);
     assert.deepEqual(traceDefs.traceStatus?.enum, [...TRACE_STATUSES]);
+    assert.deepEqual(traceSchema.properties?.source?.enum, [...TRACE_SOURCES]);
     assert.deepEqual(runSchema.properties?.phase?.enum, [...RUN_PHASES]);
     assert.deepEqual(runSchema.properties?.status?.enum, [...RUN_STATUSES]);
   });
@@ -102,6 +104,19 @@ describe("examples", () => {
 
     assert.ok(value.started_at <= value.steps[0]!.timestamp);
     assert.ok(value.steps.at(-1)!.timestamp <= value.ended_at);
+  });
+
+  it("accepts an optional trace source and rejects a value outside the enum", () => {
+    const omitted = validateTrace(trace);
+    assertOk(omitted, "trace without source");
+    if (!omitted.ok) return;
+    assert.equal(omitted.value.source, undefined);
+    const tagged = validateTrace({ ...omitted.value, source: "otel_prod" });
+    assertOk(tagged, "otel_prod");
+    if (!tagged.ok) return;
+    assert.equal(tagged.value.source, "otel_prod");
+    const rejected = validateTrace({ ...omitted.value, source: "prod" });
+    assert.equal(rejected.ok, false);
   });
 
   it("accepts the shared diagnosis fixtures with diagnosis still null", () => {

@@ -1,8 +1,9 @@
 import { isDeepStrictEqual } from "node:util";
-import type { Diagnosis, Run, Trace } from "@mesa/shared";
+import type { Diagnosis, OtelMockChannel, Run, Trace } from "@mesa/shared";
 import {
   assertRun,
   assertTrace,
+  assertUtcTimestamp,
   orderPreservingTimestamp,
   prepareImportedRun,
   prepareImportedTrace,
@@ -29,6 +30,8 @@ export class MemoryStore implements RunStore {
   /** First-insert time for rows that arrived through backup import. Harness saves have none. */
   private readonly runCreatedAt = new Map<string, string>();
   private readonly traceCreatedAt = new Map<string, string>();
+  /** Last successful OTel pull, keyed by agent id and source. */
+  private readonly otelPullCursors = new Map<string, string>();
 
   async saveRun(run: Run): Promise<Run> {
     const valid = assertRun(clone(run));
@@ -113,8 +116,21 @@ export class MemoryStore implements RunStore {
     this.traces.clear();
     this.runCreatedAt.clear();
     this.traceCreatedAt.clear();
+    this.otelPullCursors.clear();
     return { runs, traces };
   }
 
+  async getOtelPullCursor(agentId: string, source: OtelMockChannel): Promise<string | undefined> {
+    return this.otelPullCursors.get(cursorKey(agentId, source));
+  }
+
+  async setOtelPullCursor(agentId: string, source: OtelMockChannel, lastPullAt: string): Promise<void> {
+    this.otelPullCursors.set(cursorKey(agentId, source), assertUtcTimestamp(lastPullAt, "last_pull_at"));
+  }
+
   async close(): Promise<void> {}
+}
+
+function cursorKey(agentId: string, source: OtelMockChannel): string {
+  return `${agentId}\0${source}`;
 }

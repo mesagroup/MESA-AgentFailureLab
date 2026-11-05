@@ -13,7 +13,8 @@ The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not
 | `Run.phase`, `injection_plan`, `fix_kinds`, `trace_ids` | Runner. The jury attacker writes the same fields for its baseline and attacked runs |
 | `diagnosis` | Produced by Grok in agentservice; the explicit stored-trace endpoint validates and persists only this field |
 | `tasks[].evalset` | User data on the Agent document. `POST /agents` and `PUT /agents/:agent_id` store it with the task. Optional. The verifier does not read it. `POST /evalset/generate` proposes a document and does not persist it. |
-| `Agent.otel` | Optional source config on the same Agent document. `POST /agents/:agentId/otel/import` maps a span batch onto a Trace and a baseline Run. It copies a supplied `outcome.verifier` and writes an empty `fault.labels`. It does not dial `endpoint`. See [otel.md](../../docs/otel.md). |
+| `Agent.otel` | Optional source config on the same Agent document. `POST /agents/:agentId/otel/import` maps a pasted span batch onto a Trace and a baseline Run. It copies a supplied `outcome.verifier` and writes an empty `fault.labels`. It does not dial `endpoint`. `POST /agents/:agentId/traces/pull` GETs `otel.prod` and `otel.test`, remaps shop schema A or library schema B, and upserts. It copies the export verdict and does not invent `fault.labels`. See [otel.md](../../docs/otel.md). |
+| `Trace.source` | `harness` on a harness or attacker run, `demo_seed` on the startup pairs, `otel_prod` or `otel_test` on a pull. Optional. A missing value still validates. |
 
 `outcome.success` is `outcome.verifier.passed`. The agent's claim is stored separately and is not the verdict. An `after_fix` run stores `fix_kinds` and copies that list onto the shared `AgentRunRequest` for `POST /v1/tasks/run`. Baseline and injected runs omit the field. The scripted action planner does not read it. `controlled_retry` is applied in `executeAttempt` on the same injector path. `pre_response_check` and `permission_guard` are for the agent service that receives the request.
 
@@ -355,7 +356,7 @@ The demo seeds are `reference-shop` (`instance.kind` `reference`, five tasks) an
 - `src/harness/` — batch runner for `baseline`, `injected`, and `after_fix`. `session.ts` builds the dashboard snapshot from runs, traces, and the agent count
 - `src/agent/` — scripted driver and the HTTP client for the agent under test
 - `src/agents/` — Agent store (memory or Postgres) and the CRUD routes. Writes go through `validateAgent`
-- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, and `003_traces.sql`. Shipped files stay unchanged. Backup does not add a migration
+- `migrations/` — numbered SQL files. `001_agents.sql`, `002_runs.sql`, `003_traces.sql`, and `004_otel_pull_cursors.sql`. Shipped files stay unchanged. Backup does not add a migration
 - `src/persistence/` — Run and Trace store (memory or Postgres). Saves go through `validateRun` and `validateTrace`. `cli.ts` is `db:export`, `db:import`, and `db:reset`
 - `src/mock/` — HTTP client for the shop, including `GET /internal/state`
 
