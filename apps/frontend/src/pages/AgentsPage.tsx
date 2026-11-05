@@ -742,6 +742,10 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     () => juryReferences.find((run) => run.run_id === parentRunId) ?? null,
     [juryReferences, parentRunId],
   );
+  const selectedJuryTask = useMemo(
+    () => (selectedJuryRun && agent ? taskForRun(agent, selectedJuryRun) : undefined),
+    [selectedJuryRun, agent],
+  );
   const juryMode = juryLaunchMode(selectedJuryRun);
   const juryChoices = juryDescription ? permissionChoices(juryDescription) : [];
   const juryMaxChars = noteMaxChars(juryDescription);
@@ -755,14 +759,15 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
     () => (selectedBaseline && agent ? taskForRun(agent, selectedBaseline) : undefined),
     [selectedBaseline, agent],
   );
+  const selectedLaunchTask = phase === "jury" ? selectedJuryTask : selectedTask;
 
   useEffect(() => {
-    if (!selectedTask) {
+    if (!selectedLaunchTask) {
       if (!promptTouched) setPromptDraft("");
       return;
     }
-    if (!promptTouched) setPromptDraft(selectedTask.prompt);
-  }, [selectedTask, promptTouched]);
+    if (!promptTouched) setPromptDraft(selectedLaunchTask.prompt);
+  }, [selectedLaunchTask, promptTouched]);
 
   function toggleTask(id: string) {
     if (launching) return;
@@ -820,7 +825,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
 
   async function handleLaunch() {
     if (!agent || launching) return;
-    const runPhase = phase === "injected" || phase === "after_fix";
+    const runPhase = phase === "injected" || phase === "after_fix" || phase === "jury";
     const built = buildLaunchRequest({
       agentId: agent.agent_id,
       phase,
@@ -831,7 +836,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
         runPhase &&
         promptTouched &&
         promptDraft.trim().length > 0 &&
-        (!selectedTask || promptDraft.trim() !== selectedTask.prompt)
+        (!selectedLaunchTask || promptDraft.trim() !== selectedLaunchTask.prompt)
           ? promptDraft
           : null,
       jury: {
@@ -876,8 +881,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
 
   const promptOk =
     phase === "baseline" ||
-    phase === "jury" ||
-    (!promptTouched && Boolean(selectedTask?.prompt)) ||
+    (!promptTouched && Boolean(selectedLaunchTask?.prompt)) ||
     promptDraft.trim().length > 0;
   const launchReady =
     phase === "baseline"
@@ -892,7 +896,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
               includeBaseline: juryIncludeBaseline,
               fixKinds: juryFixKinds,
               maxChars: juryMaxChars,
-            }) && !juryLoading
+            }) && !juryLoading && promptOk
         : Boolean(parentRunId) && fixKinds.length > 0 && promptOk;
 
   return (
@@ -986,6 +990,7 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                   if (launching) return;
                   setParentRunId(runId);
                   setDetailRunId(runId);
+                  setPromptTouched(false);
                   setError(null);
                 }}
                 onToggleDetail={(runId) => {
@@ -993,8 +998,21 @@ function RunSheet({ agent, onClose }: { agent: Agent | null; onClose: () => void
                   setDetailRunId((prev) => (prev === runId ? null : runId));
                   if (parentRunId !== runId) {
                     setParentRunId(runId);
+                    setPromptTouched(false);
                     setError(null);
                   }
+                }}
+                promptDraft={promptDraft}
+                promptTouched={promptTouched}
+                promptTask={selectedJuryTask}
+                onPromptChange={(value) => {
+                  setPromptTouched(true);
+                  setPromptDraft(value);
+                }}
+                onPromptReset={() => {
+                  if (!selectedJuryTask) return;
+                  setPromptDraft(selectedJuryTask.prompt);
+                  setPromptTouched(false);
                 }}
                 note={juryNote}
                 onNote={setJuryNote}
@@ -1236,6 +1254,11 @@ function JuryLaunchFields({
   mode,
   fixKinds,
   onToggleFixKind,
+  promptDraft,
+  promptTouched,
+  promptTask,
+  onPromptChange,
+  onPromptReset,
 }: {
   agent: Agent | null;
   launching: boolean;
@@ -1263,6 +1286,11 @@ function JuryLaunchFields({
   mode: "attack" | "replay" | null;
   fixKinds: FixKind[];
   onToggleFixKind: (kind: FixKind) => void;
+  promptDraft: string;
+  promptTouched: boolean;
+  promptTask: AgentTask | undefined;
+  onPromptChange: (value: string) => void;
+  onPromptReset: () => void;
 }) {
   const noteLen = note.trim().length;
   return (
@@ -1352,6 +1380,17 @@ function JuryLaunchFields({
                           {open ? "Hide" : "Detail"}
                         </button>
                       </label>
+                      {open && (
+                        <div className="px-4 pb-3 pt-0 border-t border-border/20 space-y-2">
+                          <p className="text-xs font-medium pt-2">Task prompt</p>
+                          <pre className="text-xs whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-muted-foreground">
+                            {task?.prompt ?? "—"}
+                          </pre>
+                          {run.error_message && (
+                            <p className="text-xs text-destructive">{run.error_message}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1360,6 +1399,31 @@ function JuryLaunchFields({
           </div>
         )}
       </div>
+
+      {selectedRun && (
+        <div>
+          <p className="text-sm font-medium mb-2">{JURY_LAUNCH_COPY.promptLabel}</p>
+          <p className="text-xs text-muted-foreground mb-2">{JURY_LAUNCH_COPY.promptHelper}</p>
+          <textarea
+            value={promptDraft}
+            disabled={launching}
+            onChange={(event) => onPromptChange(event.target.value)}
+            rows={6}
+            className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm leading-relaxed resize-y min-h-[8rem] disabled:opacity-50"
+            aria-label={JURY_LAUNCH_COPY.promptLabel}
+          />
+          {promptTask && promptTouched && promptDraft !== promptTask.prompt && (
+            <button
+              type="button"
+              disabled={launching}
+              className="mt-2 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+              onClick={onPromptReset}
+            >
+              {JURY_LAUNCH_COPY.promptReset}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between gap-3">

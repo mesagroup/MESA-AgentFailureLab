@@ -64,6 +64,7 @@ export interface JuryCaseDescription {
       include_baseline?: string;
       fix_kinds?: string;
       parent_run_id?: string;
+      prompt_override?: string;
     };
   };
 }
@@ -129,6 +130,8 @@ export interface JuryRequestBody {
   include_baseline: boolean;
   fix_kinds?: string[];
   parent_run_id?: string;
+  /** Same as POST /runs. Omitted when the launch uses the reference task prompt. */
+  prompt_override?: string;
 }
 
 export interface JuryTaskChoice {

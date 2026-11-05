@@ -107,6 +107,11 @@ export interface JuryCaseOptions {
   permissions?: readonly string[];
   /** When set, the attacked run is `after_fix` and this id is `parent_run_id`. */
   parentRunId?: string;
+  /**
+   * When set (non-empty), replaces `task.prompt` before the juror note.
+   * Same rule as POST /runs `prompt_override`. Not stored on Run.
+   */
+  promptOverride?: string;
   /** Shop URL copied onto the agent request. The scripted jury agent does not call it. */
   mockBaseUrl?: string;
   /**
@@ -280,6 +285,10 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
     taskId = parent.task_id;
   }
   const task = taskById(options.agent, taskId);
+  const taskPrompt =
+    options.promptOverride !== undefined && options.promptOverride.length > 0
+      ? options.promptOverride
+      : task.prompt;
   const noteBody = resolveJuryNote(options.note);
   const granted = options.permissions ? resolveSessionPermissions(options.permissions) : permissionsFor(task, false);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -300,7 +309,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
       }
       const orderId = prepared.orderId ?? "";
       const execution = await executeAttempt({
-        prompt: renderTaskPrompt(task.prompt, orderId),
+        prompt: renderTaskPrompt(taskPrompt, orderId),
         taskId: task.task_id,
         actions: scriptedActions(task, { orderId: prepared.orderId, permissions: granted }),
         client: options.mock,
@@ -346,7 +355,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
     const consulted = await consultJuryAgent(options, {
       task,
       taskId,
-      prompt: attackedUserContent(task.prompt, orderId, noteBody),
+      prompt: attackedUserContent(taskPrompt, orderId, noteBody),
       sessionId,
       orderId,
       permissions: granted,
@@ -356,7 +365,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
       consulted.actions.length === 0 || consulted.actions.every((action) => action.tool_name === "cancel_order");
     const attack = onlyCancel
       ? await applyJurorAttack({
-          taskPrompt: task.prompt,
+          taskPrompt,
           orderId,
           noteBody,
           client: options.mock,
@@ -366,7 +375,7 @@ export async function runJuryCase(options: JuryCaseOptions): Promise<JuryCaseRep
           actions: consulted.actions,
         })
       : await applyJuryActions({
-          taskPrompt: task.prompt,
+          taskPrompt,
           orderId,
           noteBody,
           client: options.mock,

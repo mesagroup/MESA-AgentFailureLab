@@ -187,6 +187,8 @@ export function describeJuryCase() {
           "Optional FixKind list. Sent on the agent request. Stored on the Run only when parent_run_id makes the launch a replay.",
         parent_run_id:
           "Optional run id. Replay: the attacked run is phase after_fix, fix_kinds is required (permission_guard), and parent_run_id is stored. The parent must be injected or after_fix.",
+        prompt_override:
+          "Optional non-empty string. Same rule as POST /runs. Replaces task.prompt for the baseline and the attack before the juror note is appended. Not stored on Run; it appears on the user step like /runs.",
       },
       response: {
         outcome: "outcome.verifier is the pass/fail authority. outcome.success matches it. diagnosis is null.",

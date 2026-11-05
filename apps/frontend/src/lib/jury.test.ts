@@ -111,6 +111,7 @@ test("launch sends the form and replay adds permission_guard plus the injected p
     permissions: ["read", "write:order:cancel"],
     include_baseline: true,
   });
+  assert.equal("prompt_override" in juryLaunchBody(form, ["read", "write:cart", "write:order", "write:order:cancel"]), false);
   const replay = juryReplayBody(form, "run-attack", ["read", "write:order:cancel"]);
   assert.equal(replay.include_baseline, false);
   assert.deepEqual(replay.fix_kinds, ["permission_guard"]);

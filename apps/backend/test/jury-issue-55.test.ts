@@ -43,6 +43,7 @@ describe("issue 55 jury contract", () => {
     assert.equal(described.task_id, "T5");
     assert.equal(described.elevates_permissions_from_text, false);
     assert.deepEqual(described.frontend, frontendContract);
+    assert.match(described.structured.fields.prompt_override, /POST \/runs/);
     assert.equal(described.frontend.http_409.jury_and_runs, "world_busy");
     assert.deepEqual(described.frontend.http_409.diagnose, ["diagnosis_busy", "trace_changed"]);
   });
