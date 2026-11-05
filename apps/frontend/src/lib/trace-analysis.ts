@@ -40,15 +40,26 @@ export function diagnosePath(traceId: string): string {
 export function analysisView(diagnosis: Diagnosis | null | undefined): {
   present: boolean;
   summary: string | null;
+  step_id: string | null;
+  confidence: number | null;
   proposed_fixes: Diagnosis["proposed_fixes"];
   runDiagnosisCta: boolean;
 } {
   if (!diagnosis) {
-    return { present: false, summary: null, proposed_fixes: [], runDiagnosisCta: true };
+    return {
+      present: false,
+      summary: null,
+      step_id: null,
+      confidence: null,
+      proposed_fixes: [],
+      runDiagnosisCta: true,
+    };
   }
   return {
     present: true,
     summary: diagnosis.cause,
+    step_id: diagnosis.step_id,
+    confidence: diagnosis.confidence,
     proposed_fixes: [...diagnosis.proposed_fixes],
     runDiagnosisCta: false,
   };

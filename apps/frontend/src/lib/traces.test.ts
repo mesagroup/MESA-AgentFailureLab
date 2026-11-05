@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Trace } from "@mesa/shared";
 import {
   DEMO_SEED_TRACE_IDS,
+  DEMO_STORYBOARD_TRACE_ID,
   describePullFailure,
   describeTraceListFailure,
   formatCursor,
@@ -53,6 +54,8 @@ const sourceResult = {
 };
 
 test("list tags use Trace.source, then the demo seed ids", () => {
+  assert.equal(DEMO_SEED_TRACE_IDS.includes(DEMO_STORYBOARD_TRACE_ID), true);
+  assert.equal(traceListSource({ trace_id: DEMO_STORYBOARD_TRACE_ID }), "demo_seed");
   const seeded = sampleTrace({ trace_id: DEMO_SEED_TRACE_IDS[0], agent_id: "reference-shop", started_at: "2026-11-03T14:12:08.014Z" });
   const harness = sampleTrace({ trace_id: "trace-harness-1", agent_id: "reference-shop", started_at: "2026-11-05T08:00:00.000Z", source: "harness" });
   const pulled = sampleTrace({ trace_id: "shop-a-prod-t1", agent_id: "reference-shop", started_at: "2026-11-03T14:12:08.014Z", source: "otel_prod" });

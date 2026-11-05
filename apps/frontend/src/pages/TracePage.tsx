@@ -491,6 +491,9 @@ export function TracePage() {
               <>
                 <div className="flex items-center gap-2 flex-wrap">
                   <FaultCategoryBadge category={trace.diagnosis.category} />
+                  <span className="text-xs font-mono text-muted-foreground">
+                    Failing step {trace.diagnosis.step_id}
+                  </span>
                 </div>
                 <p className="text-xs text-foreground/80 leading-relaxed">{trace.diagnosis.cause}</p>
                 {trace.diagnosis.evidence.length > 0 && (

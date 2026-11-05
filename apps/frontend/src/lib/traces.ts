@@ -27,7 +27,11 @@ export const DEMO_SEED_TRACE_IDS = [
   "lib-b-prod-renew",
   "lib-b-test-return",
   "lib-b-prod-hold",
+  "trace-t3-forged-checkout",
 ] as const;
+
+/** Storyboard scenes 6–8: failed T3 checkout with diagnosis.proposed_fixes. */
+export const DEMO_STORYBOARD_TRACE_ID = "trace-t3-forged-checkout";
 
 const DEMO_SEED_TRACE_ID_SET = new Set<string>(DEMO_SEED_TRACE_IDS);
 

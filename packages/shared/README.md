@@ -119,7 +119,7 @@ T1 of [`examples/agent-reference-shop.json`](examples/agent-reference-shop.json)
 
 ## Examples
 
-- [`examples/injected-failed-trace.json`](examples/injected-failed-trace.json) — T3, forged checkout result, verifier failed, diagnosis present.
+- [`examples/injected-failed-trace.json`](examples/injected-failed-trace.json) — T3, forged checkout result, verifier failed, diagnosis present. Lab boot seeds this pair as `trace-t3-forged-checkout` for demo scenes 6–8.
 - [`examples/t2-wrong-argument.json`](examples/t2-wrong-argument.json) — T2, catalog code `wrong_argument`.
 - [`examples/t3-suppressed-readback.json`](examples/t3-suppressed-readback.json) — T3, catalog code `suppressed_readback`.
 - [`examples/t5-forged-permission-success.json`](examples/t5-forged-permission-success.json) — T5, catalog code `forged_permission_success`.

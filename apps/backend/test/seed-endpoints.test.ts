@@ -64,7 +64,7 @@ describe("seeded agent endpoints", () => {
       assert.ok(body.length >= 6);
       assert.equal(
         body.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length,
-        3,
+        4,
       );
       assert.equal(
         body.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length,
