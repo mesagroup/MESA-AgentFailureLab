@@ -18,6 +18,8 @@ Package exports:
 - `@mesa/shared/examples/agent-library-desk.json` — the library desk fixture (`external-library`, three loan tasks). Dual `otel` HTTP sources and `otel_mock` fixture fallback for schema B. Seeded the same way as the reference shop. `instance.kind` is `external`.
 - `@mesa/shared/schemas/otel-library-schema-b.schema.json` — library mapping B export (`schema_hint` `mesa.otel.library.b`). Not the generic import batch.
 
+The backend demo seed remaps the shop schema A and library schema B mock-OTel fixtures in `examples/otel/` onto lab Traces for `GET /traces`. It does not add a second copy of those documents.
+
 When a contract field changes: edit the JSON Schema, update `src/types.ts` in the same change, bump `CONTRACT_VERSION`, and run `pnpm --filter @mesa/shared test`.
 
 ## Agent run request

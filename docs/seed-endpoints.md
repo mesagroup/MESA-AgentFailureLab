@@ -1,6 +1,10 @@
 # Seed endpoints
 
+The demo store is **exactly these two agents**. Boot does not insert a third id (no identity stub, no dummy shop). `GET /agents` after a fresh boot is `reference-shop` and `external-library` only.
+
 `reference-shop` and `external-library` are real agents. On boot the backend copies each fixture and writes the runtime and mock origins for this process onto the row. The harness calls `POST {runtime}/v1/tasks/run`. It does not store that path on the agent. The origin is `instance.base_url` for `baseline` and `test_instance.base_url` for `injected` and `after_fix`. Both seeds set those two fields to the same origin.
+
+Boot also inserts demo Run and Trace pairs when those ids are missing: three shop traces remapped from schema A (`prod` T1/T3 and `test` T2) and three library traces remapped from schema B (renew, return, hold). `GET /traces` lists them. A present id is kept, including an operator edit. Other runs and traces are not deleted. See [Demo traces](#demo-traces).
 
 The fixture files keep the laptop defaults so the JSON is a valid agent without a process environment:
 
@@ -49,7 +53,22 @@ The fixtures' `updated_at` values are unchanged by a URL overlay. Boot still fol
 
 An edit in the Agents page is a PUT. That sets `updated_at` to the time of the save, which is newer than the fixture, so the next boot keeps it. Change the URL in that form when a host changes and the row was already edited. An unedited seed picks up a new environment on the next boot because its timestamp still matches the fixture and the origins differ.
 
-`DELETE` of either id stays 409. `db:reset` still keeps both rows and uses the same rewrite rules.
+`DELETE` of either id stays 409. `db:reset` still keeps both rows and uses the same rewrite rules. Reset wipes every run and trace, then inserts the demo pairs again if those ids are missing.
+
+## Demo traces
+
+The seed does not duplicate lab JSON. It remaps the mock OTel exports from #161 and #163 with `remapShopSchemaA` / `remapLibrarySchemaB`, then inserts the resulting Trace and baseline Run when that id is missing.
+
+| Agent | Tasks | Source exports |
+| --- | --- | --- |
+| `reference-shop` | T1, T3, T2 | [`examples/otel/shop-schema-a`](../packages/shared/examples/otel/shop-schema-a) (`mesa.otel.shop.a`) |
+| `external-library` | `renew-loan`, `return-loan`, `place-hold` | [`examples/otel/library-schema-b`](../packages/shared/examples/otel/library-schema-b) (`mesa.otel.library.b`) |
+
+Each Trace names its `agent_id` and `run_id`. Each Run is `phase: baseline` with `trace_ids` of that one Trace. `fault.labels` is empty (production mark from the remap). `outcome.verifier` is copied from the export `verdict` ([ADR-001](../adr/001-mock-verifier-grok.md)). The injector is the only writer of `fault.*`.
+
+Both demo agents already carry dual `otel.prod` / `otel.test` sources (`auth.type: none`) and `otel_mock` fixture fallbacks from those PRs. Seed URL overlay still rewrites the HTTP endpoints from `MOCK_SHOP_URL` / `MOCK_LIBRARY_URL`.
+
+Library `setup.cart` and `setup.orders` stay `[]` because the Agent schema requires those keys. Library tasks seed `setup.library.loans` only.
 
 ## Render
 

@@ -14,6 +14,7 @@ import {
   resetKeepingSeed,
   type PersistenceExport,
 } from "../src/persistence/transfer.js";
+import { DEMO_SEED_RUN_IDS, DEMO_SEED_TRACE_IDS } from "../src/persistence/demo-seed.js";
 import { loadReferenceAgent } from "../src/reference-agent.js";
 
 /**
@@ -236,8 +237,14 @@ describe(
       const kept = await store.agents.get(REFERENCE_AGENT_ID);
       assert.equal(kept?.name, "Edited seed");
       assert.equal(kept?.created_at, seed.created_at);
-      assert.deepEqual(await store.runs.listRuns(), []);
-      assert.deepEqual(await store.runs.listTraces(), []);
+      assert.deepEqual(
+        (await store.runs.listRuns()).map((run) => run.run_id),
+        [...DEMO_SEED_RUN_IDS],
+      );
+      assert.deepEqual(
+        (await store.runs.listTraces()).map((trace) => trace.trace_id),
+        [...DEMO_SEED_TRACE_IDS],
+      );
 
       await store.agents.deleteAllRowsForTests();
       const inserted = await resetKeepingSeed(store.agents, store.runs);

@@ -12,6 +12,9 @@ import {
   resolveSeedUrls,
 } from "../src/agents/endpoints.js";
 import { LIBRARY_AGENT_ID, MemoryAgentStore, REFERENCE_AGENT_ID, seedFixtures } from "../src/agents/store.js";
+import { buildApp } from "../src/app.js";
+import { DEMO_SEED_TRACE_IDS, seedDemoRunsAndTraces } from "../src/persistence/demo-seed.js";
+import { MemoryStore } from "../src/persistence/memory.js";
 import { loadLibraryAgent, loadReferenceAgent } from "../src/reference-agent.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -31,6 +34,48 @@ function composeValue(key: string): string {
 }
 
 describe("seeded agent endpoints", () => {
+  it("seeds only reference-shop and external-library", () => {
+    const fixtures = seedFixtures({});
+    assert.equal(fixtures.length, 2);
+    assert.deepEqual(
+      fixtures.map((agent) => agent.agent_id),
+      [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
+    );
+    assert.equal(fixtures.some((agent) => agent.agent_id === "identity"), false);
+  });
+
+  it("lists those two agents and the demo traces on GET /traces", async () => {
+    const store = new MemoryStore();
+    await seedDemoRunsAndTraces(store);
+    const app = buildApp({ logger: false, store });
+    try {
+      const list = await app.inject({ method: "GET", url: "/agents" });
+      assert.equal(list.statusCode, 200);
+      const agents = list.json().agents as Array<{ agent_id: string }>;
+      assert.equal(agents.length, 2);
+      assert.deepEqual(
+        agents.map((agent) => agent.agent_id),
+        [REFERENCE_AGENT_ID, LIBRARY_AGENT_ID],
+      );
+      const traces = await app.inject({ method: "GET", url: "/traces" });
+      assert.equal(traces.statusCode, 200);
+      const body = traces.json().traces as Array<{ trace_id: string; agent_id: string }>;
+      assert.equal(body.length, DEMO_SEED_TRACE_IDS.length);
+      assert.ok(body.length >= 6);
+      assert.equal(
+        body.filter((trace) => trace.agent_id === REFERENCE_AGENT_ID).length,
+        3,
+      );
+      assert.equal(
+        body.filter((trace) => trace.agent_id === LIBRARY_AGENT_ID).length,
+        3,
+      );
+    } finally {
+      await app.close();
+      await store.close();
+    }
+  });
+
   it("resolves the laptop defaults and the POST /v1/tasks/run origins", () => {
     const [shop, library] = seedFixtures({});
     assert.equal(shop?.agent_id, REFERENCE_AGENT_ID);

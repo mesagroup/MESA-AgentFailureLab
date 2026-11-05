@@ -1,6 +1,6 @@
 # @mesa/backend
 
-Harness for the Agent Failure Lab. It runs the tasks registered on an agent, injects labeled faults, and is the only writer of `outcome.verifier`. The shopping demo agent is `reference-shop` (tasks T1–T5). The library desk is `external-library` (`kind` `external`, three loan tasks on the library mock). Agent, Run, and Trace records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. See [persistence](../../docs/persistence.md).
+Harness for the Agent Failure Lab. It runs the tasks registered on an agent, injects labeled faults, and is the only writer of `outcome.verifier`. The shopping demo agent is `reference-shop` (tasks T1–T5). The library desk is `external-library` (`kind` `external`, three loan tasks on the library mock). Those two ids are the entire demo agent seed. Boot also inserts three shop traces and three library traces when those ids are missing (`GET /traces`). Agent, Run, and Trace records are stored in Postgres when `DATABASE_URL` is set, and in memory otherwise. See [persistence](../../docs/persistence.md) and [seed endpoints](../../docs/seed-endpoints.md).
 
 The inspectable shop is [`services/mock-shop`](../../services/mock-shop). Do not fold that API into this app.
 
@@ -171,7 +171,7 @@ Container image, from the repo root: `docker build -f apps/backend/Dockerfile -t
 | `POST` | `/attacker/jury-case` | Jury launch. Optional `note`, `task_id` (default T5), `permissions`, `include_baseline` (default true), `fix_kinds`, `parent_run_id`. 409 `world_busy` when the mock-world gate is held |
 | `GET` | `/runs` | Stored runs, newest start first, plus `trace_links` and harness-session `counts`. Memory or Postgres, same as `run_store`. See [Dashboard snapshot](#dashboard-snapshot) |
 | `GET` | `/runs/:runId` | One stored Run. 404 if absent |
-| `GET` | `/traces`, `/traces/:traceId` | Stored traces |
+| `GET` | `/traces`, `/traces/:traceId` | Stored traces. After a fresh boot this is the six demo traces (three shop, three library) |
 
 ### POST /runs
 
