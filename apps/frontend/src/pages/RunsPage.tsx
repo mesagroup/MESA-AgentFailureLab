@@ -6,8 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listAgents, listRuns } from "@/lib/api";
 import { childRunsOf, firstTraceId, runHref, traceHref } from "@/lib/after-fix";
-import { runListClickHref } from "@/lib/run-detail";
-import { formatRunDuration, RUN_PHASE_LABELS, taskForRun, taskTitleForRun } from "@/lib/run-launch";
+import { effectiveRunPrompt, runListClickHref } from "@/lib/run-detail";
+import { formatRunDuration, RUN_PHASE_LABELS, taskTitleForRun } from "@/lib/run-launch";
 import {
   SECURITY_BADGE_LABEL,
   SECURITY_FILTER_COPY,
@@ -119,7 +119,6 @@ export function RunsPage() {
     if (!needle) return typedRuns;
     return typedRuns.filter((run) => {
       const agent = agentMap[run.agent_id];
-      const task = taskForRun(agent, run);
       const haystack = [
         run.run_id,
         run.task_id,
@@ -127,8 +126,8 @@ export function RunsPage() {
         run.phase,
         agent?.name ?? "",
         agent?.agent_id ?? "",
-        task?.title ?? "",
-        task?.prompt ?? "",
+        taskTitleForRun(agent, run),
+        effectiveRunPrompt(run, agent),
         run.error_message ?? "",
         isSecurityRun(run) ? "security" : "",
       ].join(" ").toLowerCase();
@@ -269,7 +268,6 @@ export function RunsPage() {
                   <div className="border-t border-border/20 bg-muted/10 pt-1">
                     {agentRuns.map((run) => {
                       const title = taskTitleForRun(agent, run);
-                      const task = taskForRun(agent, run);
                       return (
                         <div
                           key={run.run_id}
@@ -302,7 +300,7 @@ export function RunsPage() {
                               </div>
                             </div>
                             <p className="text-xs text-muted-foreground line-clamp-1 pl-5">
-                              {task?.prompt ?? run.run_id}
+                              {effectiveRunPrompt(run, agent) || run.run_id}
                             </p>
                           </Link>
                           <RunLineage run={run} peers={agentRuns} />
